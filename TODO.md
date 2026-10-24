@@ -420,8 +420,18 @@ dürfen jederzeit dazwischengeschoben werden.
   - [x] **ich:** `push` läuft als asynchroner `QProcess` statt losgelöst
     über `/bin/sh`; das Verlassen wartet weiter nie, die Ausgabe landet im
     Log, sobald der Push fertig ist.
-  - [ ] **du:** Gerätetest der Meldungen (übernommen, aktuell, kein Server,
-    gesendet, nicht gesendet) und von `notify = errors`.
+  - [x] **du:** Gerätetest der Meldungen (2026-10-24): übernommen,
+    gesendet, aktuell, kein Server und `notify = errors` erscheinen richtig;
+    `QLocale()` ist `de_DE` (System `en_US`).
+  - [x] **ich:** Der Test zeigte zwei Schwächen: Ohne WLAN hieß der Grund
+    „Zeitüberschreitung“ (jetzt „Kein WLAN oder Server nicht erreichbar“),
+    und „übernommen“ kam, obwohl Nickel am Kapitelanfang öffnete. Die
+    Meldung kommt jetzt erst nach der Prüfung, und die zählt nur noch die
+    Seite mit der geholten Stelle, nicht das ganze Kapitel.
+  - [ ] **ich + du:** Öffnen im selben Kapitel: Nickel öffnet am
+    Kapitelanfang (R3-81 geholt, R3-1 geöffnet; Zeile vorher R3-58).
+    Ursache offen; zuerst prüfen, ob ein `pull --write` per USB im selben
+    Kapitel dasselbe zeigt.
   - [ ] **ich (nach dem Test):** Gerätesprache: Das Log zeigt `QLocale()`
     beim Start; folgt sie Nickels Spracheinstellung, kommen die Meldungen
     auch auf Englisch.

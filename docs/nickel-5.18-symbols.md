@@ -199,6 +199,20 @@ on the page with that point (its top in R3-48;
 the push sent `p[58]/text()[1].41` (75 %) and KOReader showed it at the
 bottom of its page. No journal files were left next to the database.
 
+**Device test, same chapter, failed** (same day, with the toasts, PR #25):
+KOReader at R3-81 (`p[81]/text()[1].107`, 81 %), the row at
+`chapter3.xhtml#point(/1/4/118/1:42)`, so the same chapter. The plugin
+wrote `chapter3.xhtml#point(/1/4/164/1:108)` into the row and the
+`Volume` copy, and Nickel opened at **the chapter start**
+(`#point(/1/4/2/1:0)` 3 s later). The offset lies inside the paragraph
+(258 characters), so the point is valid. The one difference to the
+verified run is that the old and the new position share the chapter;
+step 1 and 2 also ended at the chapter heading in that case. Not
+explained yet. Until it is, the check after opening counts only a page
+start at most 40 node steps before the pulled point as reached
+(`near()` in the plugin); otherwise the book is not in line, the plugin
+says so and leaving it does not push.
+
 ## The push path
 
 After the original `leavingReadingExperience()` the position is saved,

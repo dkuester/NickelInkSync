@@ -369,9 +369,47 @@ static QString chapter_of(const QString &position)
     return position.section(QLatin1Char('#'), 0, 0);
 }
 
+// The node path of a position (`…#point(/1/4/100/1:101)` → 1, 4, 100, 1).
+static QList<int> point_path(const QString &position)
+{
+    QList<int> path;
+    const QString point = position.section(QStringLiteral("#point("), 1).section(QLatin1Char(':'), 0, 0);
+    for (const QString &step : point.split(QLatin1Char('/'), Qt::SkipEmptyParts)) {
+        path << step.toInt();
+    }
+    return path;
+}
+
+// Most node-index steps between the start of the page Nickel shows and the
+// pulled point on it: Nickel counts every node, two per paragraph, so 40 is
+// about 20 paragraphs. Opening at the chapter start (`/1/4/2/1:0`) for a
+// point further on is not "near" (device test, same chapter).
+static const int kNearSteps = 40;
+
+// Whether `at` (the start of the page Nickel shows) can be the page with
+// `target`: the same chapter, not after it, and at most kNearSteps nodes
+// before it where the paths first differ below the body.
+static bool near(const QString &at, const QString &target)
+{
+    if (chapter_of(at) != chapter_of(target)) {
+        return false;
+    }
+    const QList<int> a = point_path(at), t = point_path(target);
+    if (a.isEmpty() || t.isEmpty()) {
+        return true;  // not a point: the chapter has to do
+    }
+    for (int i = 0; i < qMin(a.size(), t.size()); ++i) {
+        if (a[i] != t[i]) {
+            return i >= 2 && a[i] < t[i] && (i > 2 || t[i] - a[i] <= kNearSteps);
+        }
+    }
+    return true;
+}
+
 // After opening: Nickel shows a page start, which lies before the pulled
-// point, so "reached" means the same chapter.
-static void check_open(const QString &id, const QString &target)
+// point, so "reached" means near it in the same chapter. Only then is the
+// book in line with the server and `taken` shown.
+static void check_open(const QString &id, const QString &target, const QString &taken)
 {
     ReadingView *view = reading_view();
     if (!view || g_open_id != id) {
@@ -379,11 +417,17 @@ static void check_open(const QString &id, const QString &target)
         return;
     }
     const QString at = current_location(view);
-    if (chapter_of(at) == chapter_of(target)) {
-        log_line(QStringLiteral("after opening: Nickel is at %1, in the pulled chapter").arg(at));
+    if (near(at, target)) {
+        log_line(QStringLiteral("after opening: Nickel is at %1, on the page with the pulled point").arg(at));
         if (g_not_synced == id) {
             g_not_synced.clear();
         }
+        toast(false, QStringLiteral("Fortschritt vom Server übernommen"), taken);
+    } else if (chapter_of(at) == chapter_of(target)) {
+        log_line(QStringLiteral("after opening: Nickel is at %1, in the pulled chapter but not near the point; "
+                                "leaving this book will not push").arg(at));
+        toast(true, QStringLiteral("Fortschritt nicht übernommen"),
+              QStringLiteral("Nickel hat an einer anderen Stelle im Kapitel geöffnet"));
     } else {
         log_line(QStringLiteral("after opening: Nickel is at %1, not in the pulled chapter; "
                                 "leaving this book will not push").arg(at));
@@ -407,8 +451,9 @@ static QStringList book_args(const char *command, const QString &id)
 struct Pulled {
     // The CLI ran and finished with exit 0 (the server answered).
     bool ok = false;
-    // Why not, for the message.
+    // Why not, for the message, and the kind from NICKELINKSYNC_ERROR.
     QString error;
+    QByteArray error_kind;
     // A position would need an answer the plugin cannot give.
     bool unanswered = false;
     // The server's position cannot be taken (NICKELINKSYNC_NOT_TAKEN): why.
@@ -446,12 +491,17 @@ static Pulled pull_and_write(const QString &id)
         p.waitForFinished(1000);
         log_line(QStringLiteral("pull: no answer within %1 s, book opens unchanged").arg(kPullWaitMs / 1000));
         result.error = QStringLiteral("Keine Antwort innerhalb von %1 s").arg(kPullWaitMs / 1000);
+        result.error_kind = "timeout";
         return result;
     }
     const QByteArray out = p.readAll();
     log_line(QStringLiteral("pull %1 (exit %2):\n%3").arg(id).arg(p.exitCode()).arg(QString::fromUtf8(out).trimmed()));
     if (p.exitStatus() != QProcess::NormalExit || p.exitCode() != 0) {
         result.error = error_reason(out);
+        const QList<QList<QByteArray>> errors = machine_lines(out, "ERROR");
+        if (!errors.isEmpty()) {
+            result.error_kind = errors[0].value(0);
+        }
         return result;
     }
     result.ok = true;
@@ -501,14 +551,19 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     // it stayed false for 10 s with Wi-Fi connected (device test). So it
     // only decides how long to wait; the CLI always tries, and fails fast
     // without a network.
-    if (!wait_online(kOpenWifiMs)) {
+    const bool wifi = wait_online(kOpenWifiMs);
+    if (!wifi) {
         log_line(QStringLiteral("Nickel reports no internet; trying anyway"));
     }
     const Pulled p = pull_and_write(id);
     if (!p.ok) {
         log_line(QStringLiteral("open %1 unchanged: the server could not be asked; leaving it will not push").arg(id));
         ReadingController__setVolume(self, volume, bookmark);
-        toast(true, QStringLiteral("Fortschritt konnte nicht vom Server gelesen werden"), p.error, kOpenToastDelayMs);
+        // Without Wi-Fi the CLI only sees a timeout or no route; Nickel's
+        // check is not reliable either way, so the text names both.
+        const bool no_wifi = !wifi && (p.error_kind == "timeout" || p.error_kind == "network");
+        toast(true, QStringLiteral("Fortschritt konnte nicht vom Server gelesen werden"),
+              no_wifi ? QStringLiteral("Kein WLAN oder Server nicht erreichbar") : p.error, kOpenToastDelayMs);
         return;
     }
     if (p.unanswered) {
@@ -538,12 +593,10 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     Content__setPercentRead(copy, QVariant(p.percent));
     ReadingController__setVolume(self, copy, bookmark);
     Volume__dtor(copy);
-    toast(false, QStringLiteral("Fortschritt vom Server übernommen"),
-          p.from.isEmpty() ? QStringLiteral("%1 %").arg(p.percent)
-                           : QStringLiteral("%1 %, von %2").arg(p.percent).arg(p.from),
-          kOpenToastDelayMs);
     const QString target = QString::fromUtf8(p.position);
-    QTimer::singleShot(kCheckOpenMs, qApp, [id, target] { check_open(id, target); });
+    const QString taken = p.from.isEmpty() ? QStringLiteral("%1 %").arg(p.percent)
+                                           : QStringLiteral("%1 %, von %2").arg(p.percent).arg(p.from);
+    QTimer::singleShot(kCheckOpenMs, qApp, [id, target, taken] { check_open(id, target, taken); });
 }
 
 // What a finished push means, for the log and the message.
