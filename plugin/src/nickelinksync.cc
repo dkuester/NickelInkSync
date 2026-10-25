@@ -14,9 +14,12 @@
  *   writes a position to take into the book's row in the database Nickel
  *   holds open (SQLite locking, one backup a day), and hands Nickel a copy
  *   of the Volume with that position (Content::setChapterIdBookmarked,
- *   setPercentRead). Nickel takes the chapter from that Volume and the place
- *   in the chapter from the row it loads again (VolumeManager::getById in
- *   ReadingView::setupReader), so both have to agree. Only for sideloaded
+ *   setPercentRead), and sets the same on the Volume Nickel passed in.
+ *   Nickel takes the chapter from that Volume and the place in the chapter
+ *   from the row it loads again (VolumeManager::getById in
+ *   ReadingView::setupReader), so they have to agree; and within the chapter
+ *   Nickel last saved it opens at the chapter start unless its own Volume
+ *   has the new position as well. Only for sideloaded
  *   books opened without a bookmark (not a link or a search result).
  *
  *   Device tests showed the other ways fail on the Tolino: changing the
@@ -591,12 +594,11 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     Volume__copy(copy, volume);
     Content__setChapterIdBookmarked(copy, QVariant(p.position));
     Content__setPercentRead(copy, QVariant(p.percent));
-    // The Volume Nickel passes in also gets the position: opening within the
-    // chapter Nickel last saved went to the chapter start with only the copy
-    // changed, while the same row written over USB (Nickel restarted, every
-    // in-memory Volume up to date) opened at the point (device tests). The
-    // shared data pointers (second word) show in the log whether the setter
-    // detaches the copy from Nickel's Volume.
+    // The Volume Nickel passes in gets the position too: with only the copy
+    // changed, opening within the chapter Nickel last saved went to the
+    // chapter start; with both, Nickel opens at the point (device tests). The
+    // setter detaches Nickel's Volume from data it shares (the second word,
+    // logged), so nothing else in Nickel changes.
     void *const shared_before = static_cast<void *const *>(volume)[1];
     Volume *original = const_cast<Volume *>(volume);
     Content__setChapterIdBookmarked(original, QVariant(p.position));

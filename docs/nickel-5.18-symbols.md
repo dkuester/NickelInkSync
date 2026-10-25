@@ -218,9 +218,17 @@ says so and leaving it does not push.
 wrote `chapter3.xhtml#point(/1/4/244/1:107)` and Nickel opened at R3-121.
 So the row is right and Nickel can open within the same chapter; what
 differs in the plugin is Nickel's in-memory state, which still holds the
-old position. Next try: the plugin also sets the position on the
-`Volume` Nickel passes to `setVolume` (not only on the copy) and logs
-the shared data pointers of both, to see whether they share data.
+old position.
+
+**Device test, same chapter, verified** (2026-10-25, commit `0a459c1`):
+the plugin now also sets the position on the `Volume` Nickel passes to
+`setVolume`, not only on the copy. Tolino at R3-126
+(`#point(/1/4/252/1:167)`), KOReader at R3-152: the plugin wrote
+`#point(/1/4/306/1:106)`, and 3 s later Nickel stood at
+`#point(/1/4/302/1:170)`, the page with R3-151/152; the toast said
+"übernommen". The setter detached Nickel's `Volume` from its shared data
+(`81c444a0` → `819d0b10`; the copy had `819f3ea0`), so it changes only
+that object, which Nickel evidently uses after `setVolume` returns.
 
 ## The push path
 

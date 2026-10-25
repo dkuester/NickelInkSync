@@ -428,11 +428,18 @@ dürfen jederzeit dazwischengeschoben werden.
     und „übernommen“ kam, obwohl Nickel am Kapitelanfang öffnete. Die
     Meldung kommt jetzt erst nach der Prüfung, und die zählt nur noch die
     Seite mit der geholten Stelle, nicht das ganze Kapitel.
-  - [ ] **ich + du:** Öffnen im selben Kapitel: Nickel öffnet am
+  - [x] **ich + du:** Öffnen im selben Kapitel: Nickel öffnet am
     Kapitelanfang (R3-81 geholt, R3-1 geöffnet; Zeile vorher R3-58).
-    Ursache offen. Per USB öffnet es im selben Kapitel richtig (du,
-    2026-10-25: R3-91 → R3-121), also liegt es an Nickels Speicher. Versuch:
-    auch das `Volume`, das Nickel übergibt, bekommt die Position.
+    Per USB öffnet es im selben Kapitel richtig (du, 2026-10-25: R3-91 →
+    R3-121), also lag es an Nickels Speicher. Jetzt bekommt auch das
+    `Volume`, das Nickel übergibt, die Position: **funktioniert** (du,
+    2026-10-25: R3-152 geholt, Nickel auf der Seite mit R3-151, Meldung
+    „übernommen“).
+  - [ ] **ich:** Direkt nach dem Übernehmen wieder verlassen meldet
+    „Fortschritt nicht gesendet / Braucht eine Bestätigung“: Nickel speichert
+    den Seitenanfang (R3-150), der vor der Server-Stelle (R3-152) liegt, und
+    `confirm = backwards` fragt. Richtig nach der Regel, aber lästig; die
+    Seite mit der Server-Stelle sollte als abgeglichen gelten.
   - [ ] **ich (nach dem Test):** Gerätesprache: Das Log zeigt `QLocale()`
     beim Start; folgt sie Nickels Spracheinstellung, kommen die Meldungen
     auch auf Englisch.
