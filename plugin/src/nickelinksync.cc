@@ -125,8 +125,8 @@ static const size_t kBookmarkBytes = 64;
 static const int kCheckOpenMs = 3000;
 // Toasts: how long they stay (Nickel's own use 1500 ms), and how long after
 // setVolume the one about opening is queued, once the reading view is up.
-static const int kToastMs = 3000;
-static const int kProblemToastMs = 5000;
+static const int kToastMs = 5000;
+static const int kProblemToastMs = 8000;
 static const int kOpenToastDelayMs = 1000;
 // Seconds per request for push, and when the plugin gives up on it.
 static const char kPushTimeout[] = "15";
@@ -450,10 +450,11 @@ static QList<int> point_path(const QString &position)
 }
 
 // Most node-index steps between the start of the page Nickel shows and the
-// pulled point on it: Nickel counts every node, two per paragraph, so 40 is
-// about 20 paragraphs. Opening at the chapter start (`/1/4/2/1:0`) for a
-// point further on is not "near" (device test, same chapter).
-static const int kNearSteps = 40;
+// pulled point on it: Nickel counts every node, two per paragraph, so 12 is
+// about 6 paragraphs. In the device tests the page Nickel opened on started
+// 2 to 4 steps before the point; 40 let the chapter start (`/1/4/2/1:0`)
+// pass for a point at `/1/4/38`.
+static const int kNearSteps = 12;
 
 // Whether `at` (the start of the page Nickel shows) can be the page with
 // `target`: the same chapter, not after it, and at most kNearSteps nodes
@@ -528,6 +529,51 @@ static QString bookmarked(const Volume *volume)
     return Content__getDbValues(volume).value(QStringLiteral("ChapterIDBookmarked")).toString();
 }
 
+// The row of a Volume as Nickel holds it, for the log (empty without
+// Content::getDbValues).
+static QMap<QString, QVariant> row_of(const Volume *volume)
+{
+    return Content__getDbValues ? Content__getDbValues(volume) : QMap<QString, QVariant>();
+}
+
+static QString short_value(const QVariant &value)
+{
+    const QString text = value.toString();
+    return text.size() > 80 ? text.left(80) + QStringLiteral("…") : text;
+}
+
+// Every column with a value, `name=value; …`.
+static QString row_text(const QMap<QString, QVariant> &row)
+{
+    QStringList fields;
+    for (auto it = row.constBegin(); it != row.constEnd(); ++it) {
+        if (!it.value().toString().isEmpty()) {
+            fields << it.key() + QLatin1Char('=') + short_value(it.value());
+        }
+    }
+    return fields.join(QStringLiteral("; "));
+}
+
+// The columns that differ, `name: old -> new; …`, or "none".
+static QString row_diff(const QMap<QString, QVariant> &before, const QMap<QString, QVariant> &after)
+{
+    QStringList keys = before.keys() + after.keys();
+    keys.removeDuplicates();
+    keys.sort();
+    QStringList changed;
+    for (const QString &key : keys) {
+        if (before.value(key).toString() != after.value(key).toString()) {
+            changed << QStringLiteral("%1: %2 -> %3").arg(key, short_value(before.value(key)), short_value(after.value(key)));
+        }
+    }
+    return changed.isEmpty() ? QStringLiteral("none") : changed.join(QStringLiteral("; "));
+}
+
+// The row Nickel opened the current book with; leaving logs what Nickel
+// changed in it (device test: a take fails after the book was left on the
+// page it opened on, without turning a page).
+static QMap<QString, QVariant> g_open_row;
+
 // Loads the book again after the CLI wrote its row, into `fresh` (which
 // then has to be destroyed); false if the symbols are missing or the book
 // is not found. VolumeManager::getById reads only Nickel's cache of the
@@ -550,6 +596,7 @@ static bool reload_volume(const QString &id, Volume *fresh)
     const QString before = Volume__isValid(cached)
         ? QStringLiteral("%1 at %2").arg(shared_data(cached), bookmarked(cached))
         : QStringLiteral("not in the cache");
+    const QMap<QString, QVariant> cached_row = Volume__isValid(cached) ? row_of(cached) : QMap<QString, QVariant>();
     Volume__dtor(cached);
     QElapsedTimer timer;
     timer.start();
@@ -570,6 +617,7 @@ static bool reload_volume(const QString &id, Volume *fresh)
                  .arg(before)
                  .arg(timer.elapsed())
                  .arg(shared_data(fresh), bookmarked(fresh)));
+    log_line(QStringLiteral("cache: columns the reload changed: %1").arg(row_diff(cached_row, row_of(fresh))));
     return true;
 }
 
@@ -679,6 +727,10 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
         ReadingController__setVolume(self, volume, bookmark);
         return;
     }
+    g_open_row = row_of(volume);
+    if (Content__getDbValues) {
+        log_line(QStringLiteral("row at opening: %1").arg(row_text(g_open_row)));
+    }
     if (!Bookmark__isNull(bookmark)) {
         log_line(QStringLiteral("open %1 with a bookmark (link, search): not pulled").arg(id));
         ReadingController__setVolume(self, volume, bookmark);
@@ -745,6 +797,7 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     Volume *original = const_cast<Volume *>(volume);
     Content__setChapterIdBookmarked(original, QVariant(p.position));
     Content__setPercentRead(original, QVariant(p.percent));
+    g_open_row = row_of(copy);
     log_line(QStringLiteral("volume data: Nickel's %1 -> %2, %3 %4")
                  .arg(reinterpret_cast<quintptr>(shared_before), 0, 16)
                  .arg(shared_data(volume))
@@ -814,6 +867,22 @@ static void start_push(const QString &id)
     p->start(QString::fromLatin1(kCli), args);
 }
 
+// What Nickel changed in the book's row while it was open, as its Volume
+// cache holds it after saving (VolumeManager::updateBookmark keeps the
+// cache in step with the database).
+static void log_saved_row(const QString &id)
+{
+    if (!VolumeManager__getById || !Volume__isValid || !Content__getDbValues || g_open_row.isEmpty()) {
+        return;
+    }
+    alignas(8) unsigned char saved[kVolumeBytes];
+    VolumeManager__getById(saved, id, QString());
+    if (Volume__isValid(saved)) {
+        log_line(QStringLiteral("row on leaving, changed since opening: %1").arg(row_diff(g_open_row, row_of(saved))));
+    }
+    Volume__dtor(saved);
+}
+
 extern "C" __attribute__((visibility("default")))
 void _nh_ReadingView__leavingReadingExperience(ReadingView *self)
 {
@@ -826,6 +895,7 @@ void _nh_ReadingView__leavingReadingExperience(ReadingView *self)
         return;
     }
     const QString id = g_open_id;
+    log_saved_row(id);
     if (on_taken_page) {
         log_line(QStringLiteral("left %1 on the page taken from the server (%2): nothing to push").arg(id, g_taken_page));
         toast(false, QStringLiteral("Fortschritt ist aktuell"), QStringLiteral("Noch auf der Seite vom Server"));
