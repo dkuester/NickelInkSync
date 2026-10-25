@@ -247,9 +247,9 @@ symbols are in the Tolino 5.18.264769 list. Not tried yet.
 **Second correction** (2026-10-25, commit `594c477`): the first opening
 after a restart worked too (R3-179 pulled, Nickel on the page with
 R3-178, 94 s after the start), so "first opening" is not the rule
-either. Of six runs, two failed: 24.10. 18:39 (29 s after the start) and
+either. Of five runs that took a position, two failed: 24.10. 18:39 (29 s after the start) and
 25.10. 13:47 (70 s after the start); both were the next pull after one
-that had taken a position, the four that worked were not. Neither "soon
+that had taken a position, the three that worked were not. Neither "soon
 after the start" nor "a take after a take" is shown yet; the rows in the
 backups differ only in the usual fields (position, percentage, times,
 estimates, `CurrentChapterProgress`).
