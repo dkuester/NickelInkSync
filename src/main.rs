@@ -9,6 +9,7 @@ use nickelinksync::db::{Book, Device, Write};
 use nickelinksync::epub::Epub;
 use nickelinksync::hash::partial_md5;
 use nickelinksync::kosync::{self, Client, Progress, Update};
+use nickelinksync::not_in_line::NotInLine;
 use nickelinksync::position::{
   from_xpointer, to_xpointer, PointFlavor, Position, Translated, XPointer,
 };
@@ -42,6 +43,12 @@ enum Command {
     /// Only show what would be sent
     #[arg(long)]
     dry_run: bool,
+    /// For the plugin: print the outcome as lines `NICKELINKSYNC_SENT<tab>
+    /// percent`, `NICKELINKSYNC_IN_SYNC`, `NICKELINKSYNC_NOT_SENT<tab>reason`,
+    /// `NICKELINKSYNC_UNANSWERED<tab>n` and `NICKELINKSYNC_ERROR<tab>kind<tab>
+    /// message`
+    #[arg(long)]
+    emit: bool,
   },
   /// Show what a newer position on the KOSync server would change, and with
   /// --write write it to the device
@@ -56,8 +63,11 @@ enum Command {
     #[arg(long)]
     write: bool,
     /// For the plugin: print each position to take as one line
-    /// `NICKELINKSYNC_POSITION<tab>percent<tab>ChapterIDBookmarked`, and
-    /// `NICKELINKSYNC_UNANSWERED<tab>n` if positions need an answer
+    /// `NICKELINKSYNC_POSITION<tab>percent<tab>ChapterIDBookmarked` followed
+    /// by `NICKELINKSYNC_FROM<tab>device`, `NICKELINKSYNC_UNANSWERED<tab>n`
+    /// if positions need an answer, `NICKELINKSYNC_NOT_TAKEN<tab>reason<tab>
+    /// message` for one that cannot be taken, and `NICKELINKSYNC_ERROR<tab>
+    /// kind<tab>message` if the server could not be asked
     #[arg(long)]
     emit: bool,
   },
@@ -89,27 +99,49 @@ struct Target {
 
 fn main() -> ExitCode {
   let cli = Cli::parse();
-  let result = match cli.command {
-    Command::Status(target) => status(&target),
+  let (result, emit) = match cli.command {
+    Command::Status(target) => (status(&target), false),
     Command::Push {
       target,
       force,
       dry_run,
-    } => push(&target, force, dry_run),
+      emit,
+    } => (push(&target, force, dry_run, emit), emit),
     Command::Pull {
       target,
       force,
       write,
       emit,
-    } => pull(&target, force, write, emit),
+    } => (pull(&target, force, write, emit), emit),
   };
   match result {
     Ok(true) => ExitCode::SUCCESS,
     Ok(false) => ExitCode::FAILURE,
     Err(e) => {
+      if emit {
+        emit_line("ERROR", &["other", &e.to_string()]);
+      }
       eprintln!("nickelinksync: {e}");
       ExitCode::FAILURE
     }
+  }
+}
+
+/// For the plugin: one line `NICKELINKSYNC_<name>` with tab-separated
+/// fields; tabs and line breaks inside a field become spaces.
+fn emit_line(name: &str, fields: &[&str]) {
+  let mut line = format!("NICKELINKSYNC_{name}");
+  for field in fields {
+    line.push('\t');
+    line.extend(field.chars().map(|c| if c.is_control() { ' ' } else { c }));
+  }
+  println!("{line}");
+}
+
+/// For the plugin: the server could not be asked.
+fn emit_error(emit: bool, e: &kosync::Error) {
+  if emit {
+    emit_line("ERROR", &[e.kind(), &e.to_string()]);
   }
 }
 
@@ -287,6 +319,7 @@ fn describe(p: &Progress) -> String {
 
 fn status(target: &Target) -> Result<bool> {
   let session = Session::open(target)?;
+  let not_in_line = NotInLine::load(&session.device.root)?;
   let server = Server::open(target)?;
   match &server {
     Some(s) => println!("Server {} as {}", s.config.server, s.config.user),
@@ -315,6 +348,9 @@ fn status(target: &Target) -> Result<bool> {
         Err(e) => format!("(not translated: {e})"),
       };
       println!("  koreader  {koreader}");
+    }
+    if let Some(at) = not_in_line.get(&book.content_id) {
+      println!("  plugin    not in line: Nickel opened at {at} instead of the server's position");
     }
     let state = match book.read_status {
       2 => "finished",
@@ -449,14 +485,17 @@ fn unanswered_note(unanswered: usize) {
   }
 }
 
-fn push(target: &Target, force: bool, dry_run: bool) -> Result<bool> {
+fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool> {
   let session = Session::open(target)?;
+  let mut not_in_line = NotInLine::load(&session.device.root)?;
+  let mut forced = Vec::new();
   let server = Server::require(target)?;
   let (device, device_id) = server.config.identity(&session.model);
-  server
-    .client
-    .authorize()
-    .map_err(|e| format!("{}: {e}", server.config.server))?;
+  if let Err(e) = server.client.authorize() {
+    emit_error(emit, &e);
+    eprintln!("nickelinksync: {}: {e}", server.config.server);
+    return Ok(false);
+  }
   println!(
     "Server {} as {}, device \"{device}\"",
     server.config.server, server.config.user
@@ -470,14 +509,29 @@ fn push(target: &Target, force: bool, dry_run: bool) -> Result<bool> {
       (Ok(hash), Ok(local)) => (hash, local),
       (Err(e), _) | (_, Err(e)) => {
         println!("  skipped   {e}");
+        if emit {
+          emit_line("NOT_SENT", &["skipped", &e]);
+        }
         continue;
       }
     };
     println!("  hash      {hash}");
+    if let Some(at) = not_in_line.get(&book.content_id) {
+      if !force {
+        println!("  skipped   not in line: Nickel opened at {at} instead of the server's position");
+        println!("            pull takes the server's position; --force sends the device's anyway");
+        if emit {
+          emit_line("NOT_SENT", &["not-in-line", at]);
+        }
+        continue;
+      }
+      forced.push(book.content_id.as_str());
+    }
     let remote = match server.client.progress(&hash) {
       Ok(remote) => remote,
       Err(e) => {
         println!("  failed    {e}");
+        emit_error(emit, &e);
         ok = false;
         continue;
       }
@@ -486,6 +540,9 @@ fn push(target: &Target, force: bool, dry_run: bool) -> Result<bool> {
       match decide(Direction::Push, &local, remote, confirm_setting) {
         Decision::InSync => {
           println!("  in sync   {}", describe(remote));
+          if emit {
+            emit_line("IN_SYNC", &[]);
+          }
           continue;
         }
         Decision::Apply => {}
@@ -493,6 +550,9 @@ fn push(target: &Target, force: bool, dry_run: bool) -> Result<bool> {
         Decision::Keep => {
           println!("  skipped   server is newer: {}", describe(remote));
           println!("            --force sends the device position anyway");
+          if emit {
+            emit_line("NOT_SENT", &["server-newer", &describe(remote)]);
+          }
           continue;
         }
         Decision::Ask { backwards, .. } => {
@@ -528,10 +588,19 @@ fn push(target: &Target, force: bool, dry_run: bool) -> Result<bool> {
       continue;
     }
     match server.client.update(&update) {
-      Ok(Some(t)) => println!("  sent      {what} at {}", format_timestamp(t)),
-      Ok(None) => println!("  sent      {what}"),
+      Ok(t) => {
+        match t {
+          Some(t) => println!("  sent      {what} at {}", format_timestamp(t)),
+          None => println!("  sent      {what}"),
+        }
+        if emit {
+          let percent = (update.percentage * 100.0).round().clamp(0.0, 100.0);
+          emit_line("SENT", &[&percent.to_string()]);
+        }
+      }
       Err(e) => {
         println!("  failed    {e}");
+        emit_error(emit, &e);
         ok = false;
         if matches!(e, kosync::Error::Unauthorized) {
           break;
@@ -540,14 +609,21 @@ fn push(target: &Target, force: bool, dry_run: bool) -> Result<bool> {
     }
   }
   unanswered_note(unanswered);
+  if emit && unanswered > 0 {
+    emit_line("UNANSWERED", &[&unanswered.to_string()]);
+  }
   if dry_run {
     println!("\nDry run: nothing was sent.");
+  } else if ok {
+    // Sent with --force: the server holds the device's position now.
+    not_in_line.remove(forced)?;
   }
   Ok(ok)
 }
 
 fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
   let session = Session::open(target)?;
+  let mut not_in_line = NotInLine::load(&session.device.root)?;
   let server = Server::require(target)?;
   println!("Server {} as {}", server.config.server, server.config.user);
   let confirm_setting = server.config.confirm;
@@ -560,6 +636,9 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
       Ok(hash) => hash,
       Err(e) => {
         println!("  skipped   {e}");
+        if emit {
+          emit_line("NOT_TAKEN", &["skipped", &e]);
+        }
         continue;
       }
     };
@@ -571,6 +650,7 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
       }
       Err(e) => {
         println!("  failed    {e}");
+        emit_error(emit, &e);
         ok = false;
         if matches!(e, kosync::Error::Unauthorized) {
           break;
@@ -584,9 +664,27 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
     );
     // Without a device position there is nothing on the device to keep.
     let local = session.local(book).ok().map(|(local, _)| local);
-    let decision = match &local {
-      Some(local) => decide(Direction::Pull, local, &remote, confirm_setting),
-      None => Decision::Apply,
+    // After a failed take Nickel's DateLastRead says nothing about reading.
+    let left_by_nickel = not_in_line.get(&book.content_id);
+    let decision = match (&local, left_by_nickel) {
+      (Some(_), Some(at)) if book.position.as_deref() == Some(at) => {
+        println!(
+          "  plugin    Nickel opened here instead of the server's position, nothing read since"
+        );
+        Decision::Apply
+      }
+      (Some(local), Some(_)) => {
+        println!(
+          "  plugin    read on since Nickel missed the server's position: the time does not count"
+        );
+        let undated = Local {
+          last_read: None,
+          ..local.clone()
+        };
+        decide(Direction::Pull, &undated, &remote, confirm_setting)
+      }
+      (Some(local), None) => decide(Direction::Pull, local, &remote, confirm_setting),
+      (None, _) => Decision::Apply,
     };
     let apply = match (decision, &local) {
       (Decision::InSync, _) => {
@@ -622,6 +720,9 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
       Ok(t) => t,
       Err(e) => {
         println!("  skipped   not translated: {e}");
+        if emit {
+          emit_line("NOT_TAKEN", &["not-translated", &e]);
+        }
         continue;
       }
     };
@@ -640,7 +741,9 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
       .map(|_| iso_timestamp(remote.timestamp - 1));
     let percent = (remote.percentage * 100.0).round().clamp(0.0, 100.0) as i64;
     if emit {
-      println!("NICKELINKSYNC_POSITION\t{percent}\t{}", translated.position);
+      let position = translated.position.to_string();
+      emit_line("POSITION", &[&percent.to_string(), &position]);
+      emit_line("FROM", &[&remote.device]);
     }
     writes.push(Write {
       content_id: book.content_id.clone(),
@@ -652,7 +755,7 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
   unanswered_note(unanswered);
   if emit && unanswered > 0 {
     // For the plugin: a position needs an answer it cannot give.
-    println!("NICKELINKSYNC_UNANSWERED\t{unanswered}");
+    emit_line("UNANSWERED", &[&unanswered.to_string()]);
   }
   if !write && target.live {
     println!("\nNothing was written to the device database (Nickel is running).");
@@ -675,6 +778,7 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
         return Err("--write with --live needs --content-id".into());
       }
       let made = session.device.write_live(&writes, &dir, &stamp[..8])?;
+      not_in_line.remove(writes.iter().map(|w| w.content_id.as_str()))?;
       println!(
         "\nWrote {} position(s) to the device database while Nickel runs.",
         writes.len()
@@ -686,6 +790,7 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
     }
     let backup = dir.join(format!("KoboReader-{stamp}.sqlite"));
     session.device.write_positions(&writes, &backup)?;
+    not_in_line.remove(writes.iter().map(|w| w.content_id.as_str()))?;
     println!("\nWrote {} position(s) to the device.", writes.len());
     println!("Backup of the database: {}", backup.display());
     println!("Eject the device before you open the book.");

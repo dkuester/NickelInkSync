@@ -342,9 +342,16 @@ fn live_pull_emits_the_position_and_never_writes() {
     out.contains("Nothing was written to the device database (Nickel is running)."),
     "{out}"
   );
+  // Who stored it, for the plugin's message.
+  assert!(
+    out.contains(&format!(
+      "NICKELINKSYNC_POSITION\t90\t{AHEAD_ON_DEVICE}\nNICKELINKSYNC_FROM\tKOReader\n"
+    )),
+    "{out}"
+  );
   // Only with --emit.
   let (_, out) = s.run(&base);
-  assert!(!out.contains("NICKELINKSYNC_POSITION"), "{out}");
+  assert!(!out.contains("NICKELINKSYNC_"), "{out}");
   let stored: String = nickel
     .query_row(
       "SELECT ChapterIDBookmarked FROM content WHERE ContentID = ?1",
@@ -440,4 +447,208 @@ fn live_pull_tells_the_plugin_about_an_unanswered_question() {
   assert!(out.contains("\nNICKELINKSYNC_UNANSWERED\t1\n"), "{out}");
   assert!(!out.contains("NICKELINKSYNC_POSITION"), "{out}");
   assert!(s.backups().is_empty());
+}
+
+/// The machine line the plugin turns into its message, and the exit code it
+/// checks first.
+fn emitted(s: &Setup, args: &[&str]) -> (bool, String) {
+  let (output, out) = s.run(args);
+  (output.status.success(), out)
+}
+
+#[test]
+fn live_pull_tells_the_plugin_why_the_server_was_not_asked() {
+  let s = Setup::tolino("live-errors");
+  let args = ["pull", "--live", "--content-id", BOOK, "--write", "--emit"];
+  // Wrong password.
+  s.server.config(&s.root, "wrong");
+  let (ok, out) = emitted(&s, &args);
+  assert!(!ok);
+  assert!(
+    out.contains("\nNICKELINKSYNC_ERROR\tauth\tunauthorized: check user and password\n"),
+    "{out}"
+  );
+  // Nobody listening.
+  let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+  let url = format!("http://{}", closed.local_addr().unwrap());
+  drop(closed);
+  fs::write(
+    &s.config,
+    format!("server = {url}\nuser = alice\npassword = secret\n"),
+  )
+  .unwrap();
+  let (ok, out) = emitted(&s, &args);
+  assert!(!ok);
+  assert!(out.contains("\nNICKELINKSYNC_ERROR\tnetwork\t"), "{out}");
+  // No usable configuration: one line from the CLI itself.
+  fs::write(
+    &s.config,
+    "server = x\nuser = alice\npassword = secret\nnotify = loud\n",
+  )
+  .unwrap();
+  let (ok, out) = emitted(&s, &args);
+  assert!(!ok);
+  assert!(
+    out.contains("NICKELINKSYNC_ERROR\tother\t") && out.contains("`notify` must be"),
+    "{out}"
+  );
+  assert!(s.backups().is_empty());
+}
+
+#[test]
+fn live_pull_tells_the_plugin_about_a_position_it_cannot_take() {
+  let s = Setup::tolino("live-not-taken");
+  s.server.store(
+    &hash("book-a.epub"),
+    "/body[1]/DocFragment[999]/body[1]/p[1]/text()[1].0",
+    0.9,
+    LAST_READ + 60,
+  );
+  let args = ["pull", "--live", "--content-id", BOOK, "--write", "--emit"];
+  let (ok, out) = emitted(&s, &args);
+  assert!(ok, "{out}");
+  assert!(
+    out.contains("\nNICKELINKSYNC_NOT_TAKEN\tnot-translated\t"),
+    "{out}"
+  );
+  assert!(!out.contains("NICKELINKSYNC_POSITION"), "{out}");
+}
+
+#[test]
+fn live_push_tells_the_plugin_what_happened() {
+  let s = Setup::tolino("live-push");
+  let _nickel = nickel_running(&s, "OEBPS/xhtml/xhtml-0-81.xhtml#point(/1/2/1/1:0)");
+  let args = ["push", "--live", "--content-id", BOOK, "--emit"];
+  // The server has nothing: sent.
+  let (ok, out) = emitted(&s, &args);
+  assert!(ok, "{out}");
+  let sent: Vec<&str> = out
+    .lines()
+    .filter(|l| l.starts_with("NICKELINKSYNC_"))
+    .collect();
+  assert_eq!(sent.len(), 1, "{out}");
+  assert!(sent[0].starts_with("NICKELINKSYNC_SENT\t"), "{out}");
+  assert!(
+    sent[0]["NICKELINKSYNC_SENT\t".len()..]
+      .parse::<u32>()
+      .is_ok(),
+    "{out}"
+  );
+  assert_eq!(s.server.puts().len(), 1);
+  // Again: nothing new.
+  let (ok, out) = emitted(&s, &args);
+  assert!(ok, "{out}");
+  assert!(out.contains("\nNICKELINKSYNC_IN_SYNC\n"), "{out}");
+  // KOReader has read on since: kept, and the plugin says why.
+  s.server
+    .store(&hash("book-a.epub"), AHEAD, 0.9, 2_000_000_000);
+  let (ok, out) = emitted(&s, &args);
+  assert!(ok, "{out}");
+  assert!(
+    out.contains("\nNICKELINKSYNC_NOT_SENT\tserver-newer\t"),
+    "{out}"
+  );
+  assert_eq!(s.server.puts().len(), 1);
+  // Wrong password.
+  s.server.config(&s.root, "wrong");
+  let (ok, out) = emitted(&s, &args);
+  assert!(!ok);
+  assert!(out.contains("NICKELINKSYNC_ERROR\tauth\t"), "{out}");
+  // Only with --emit.
+  let (_, out) = s.run(&["push", "--live", "--content-id", BOOK]);
+  assert!(!out.contains("NICKELINKSYNC_"), "{out}");
+}
+
+/// Where the fake Tolino's book-a.epub stands.
+const STORED: &str = "OEBPS/xhtml/xhtml-0-81.xhtml#point(/1/2/1/1:0)";
+
+/// The plugin's list of books Nickel did not open at the server's position.
+fn not_in_line(s: &Setup, entries: &str) -> PathBuf {
+  let dir = s.root.join(".adds/NickelInkSync");
+  fs::create_dir_all(&dir).unwrap();
+  let path = dir.join("not-in-line.tsv");
+  fs::write(&path, entries).unwrap();
+  path
+}
+
+#[test]
+fn a_book_not_in_line_is_never_pushed() {
+  let s = Setup::tolino("nil-push");
+  let list = not_in_line(&s, &format!("{BOOK}\t{STORED}\n"));
+  let args = ["push", "--live", "--content-id", BOOK, "--emit"];
+  let (output, out) = s.run(&args);
+  assert!(output.status.success(), "{out}");
+  assert!(
+    out.contains("  skipped   not in line: Nickel opened at"),
+    "{out}"
+  );
+  assert!(
+    out.contains(&format!(
+      "\nNICKELINKSYNC_NOT_SENT\tnot-in-line\t{STORED}\n"
+    )),
+    "{out}"
+  );
+  assert!(s.server.puts().is_empty());
+  let (_, out) = s.run(&["status", "--content-id", BOOK]);
+  assert!(
+    out.contains("  plugin    not in line: Nickel opened at"),
+    "{out}"
+  );
+  // --force sends it, and then it is in line.
+  let (output, out) = s.run(&[&args[..], &["--force"]].concat());
+  assert!(output.status.success(), "{out}");
+  assert!(out.contains("NICKELINKSYNC_SENT\t"), "{out}");
+  assert_eq!(s.server.puts().len(), 1);
+  assert!(!list.exists());
+}
+
+#[test]
+fn pull_takes_the_server_position_where_nickel_left_the_book() {
+  let s = Setup::tolino("nil-pull");
+  // The device looks newer: Nickel saved its own place on leaving.
+  s.server
+    .store(&hash("book-a.epub"), AHEAD, 0.9, LAST_READ - 3600);
+  let args = ["pull", "--content-id", BOOK, "--write"];
+  let (_, out) = s.run(&args);
+  assert!(out.contains("  keep      device is newer"), "{out}");
+  let list = not_in_line(
+    &s,
+    &format!("{BOOK}\t{STORED}\nfile:///mnt/onboard/other.epub\tx.xhtml\n"),
+  );
+  let (output, out) = s.run(&args);
+  assert!(output.status.success(), "{out}");
+  assert!(out.contains("  plugin    Nickel opened here"), "{out}");
+  assert_eq!(s.row(BOOK).0, AHEAD_ON_DEVICE);
+  // Written: off the list, the other book stays.
+  assert_eq!(
+    fs::read_to_string(&list).unwrap(),
+    "file:///mnt/onboard/other.epub\tx.xhtml\n"
+  );
+}
+
+#[test]
+fn pull_after_reading_on_from_where_nickel_left_the_book() {
+  let s = Setup::tolino("nil-read-on");
+  s.server
+    .store(&hash("book-a.epub"), AHEAD, 0.9, LAST_READ - 3600);
+  // Nickel opened at the start of spine item 81; read on from there.
+  not_in_line(
+    &s,
+    &format!("{BOOK}\tOEBPS/xhtml/xhtml-0-80.xhtml#point(/1/2/1/1:0)\n"),
+  );
+  let (output, out) = s.run(&["pull", "--content-id", BOOK, "--write"]);
+  assert!(output.status.success(), "{out}");
+  // The time does not count, the place does: the server is further on.
+  assert!(out.contains("  plugin    read on since"), "{out}");
+  assert_eq!(s.row(BOOK).0, AHEAD_ON_DEVICE);
+  // A server position behind the device still asks (confirm = backwards).
+  s.server.store(
+    &hash("book-a.epub"),
+    "/body[1]/DocFragment[5]/body[1]/p[1]/text()[1].0",
+    0.03,
+    LAST_READ - 3600,
+  );
+  not_in_line(&s, &format!("{BOOK}\t{STORED}\n"));
+  let (_, out) = s.run(&["pull", "--content-id", BOOK, "--write", "--emit"]);
+  assert!(out.contains("NICKELINKSYNC_UNANSWERED\t1"), "{out}");
 }

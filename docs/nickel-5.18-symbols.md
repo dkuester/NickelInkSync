@@ -199,6 +199,66 @@ on the page with that point (its top in R3-48;
 the push sent `p[58]/text()[1].41` (75 %) and KOReader showed it at the
 bottom of its page. No journal files were left next to the database.
 
+**Device test, same chapter, failed** (same day, with the toasts, PR #25):
+KOReader at R3-81 (`p[81]/text()[1].107`, 81 %), the row at
+`chapter3.xhtml#point(/1/4/118/1:42)`, so the same chapter. The plugin
+wrote `chapter3.xhtml#point(/1/4/164/1:108)` into the row and the
+`Volume` copy, and Nickel opened at **the chapter start**
+(`#point(/1/4/2/1:0)` 3 s later). The offset lies inside the paragraph
+(258 characters), so the point is valid. The one difference to the
+verified run is that the old and the new position share the chapter;
+step 1 and 2 also ended at the chapter heading in that case. Not
+explained yet. Until it is, the check after opening counts only a page
+start at most 40 node steps before the pulled point as reached
+(`near()` in the plugin); otherwise the book is not in line, the plugin
+says so and leaving it does not push.
+
+**USB check, same chapter, works** (2026-10-25): the Tolino at R3-91
+(`#point(/1/4/182/1:167)`), KOReader at R3-122; `pull --write` over USB
+wrote `chapter3.xhtml#point(/1/4/244/1:107)` and Nickel opened at R3-121.
+So the row is right and Nickel can open within the same chapter; what
+differs in the plugin is Nickel's in-memory state, which still holds the
+old position.
+
+**Device test, same chapter, verified** (2026-10-25, commit `0a459c1`):
+the plugin now also sets the position on the `Volume` Nickel passes to
+`setVolume`, not only on the copy. Tolino at R3-126
+(`#point(/1/4/252/1:167)`), KOReader at R3-152: the plugin wrote
+`#point(/1/4/306/1:106)`, and 3 s later Nickel stood at
+`#point(/1/4/302/1:170)`, the page with R3-151/152; the toast said
+"übernommen". The setter detached Nickel's `Volume` from its shared data
+(`81c444a0` → `819d0b10`; the copy had `819f3ea0`), so it changes only
+that object, which Nickel evidently uses after `setVolume` returns.
+
+**Correction, same day:** the next run (commit `3fe3010`) opened at the
+chapter start again, with Nickel's `Volume` set as well. Lined up, every
+run that worked was the **second** opening of Book R since Nickel
+started, every one that failed the first (24.10. 18:10 ok / 18:39 failed,
+25.10. 13:35 ok / 13:47 failed); the shared chapter was a coincidence.
+A likely cause: Nickel keeps a cache of the `Volume`s
+(`Repository::refreshCache<Volume>(QString const&)`, `Cache<Volume>`),
+which a write from outside Nickel, like the CLI's, does not reach.
+Kobalt (MIT, a CREngine reader for Kobo) writes progress through Nickel
+instead (`VolumeManager::updateBookmark` on a `Volume` from `getById`,
+`VolumeManager::updateFields` in a `DatabaseAdapter` transaction) and
+refreshes that cache when it cannot verify the write. All of these
+symbols are in the Tolino 5.18.264769 list. Not tried yet.
+
+**Second correction** (2026-10-25, commit `594c477`): the first opening
+after a restart worked too (R3-179 pulled, Nickel on the page with
+R3-178, 94 s after the start), so "first opening" is not the rule
+either. Of five runs that took a position, two failed: 24.10. 18:39 (29 s after the start) and
+25.10. 13:47 (70 s after the start); both were the next pull after one
+that had taken a position, the three that worked were not. Neither "soon
+after the start" nor "a take after a take" is shown yet; the rows in the
+backups differ only in the usual fields (position, percentage, times,
+estimates, `CurrentChapterProgress`).
+
+Meanwhile a book Nickel opened elsewhere goes on
+`.adds/NickelInkSync/not-in-line.tsv` (`src/not_in_line.rs`): never
+pushed, and the next pull takes the server's position regardless of the
+`DateLastRead` Nickel saved.
+
 ## The push path
 
 After the original `leavingReadingExperience()` the position is saved,
@@ -220,3 +280,32 @@ to fire too early.
 Not checked yet (Kobo pass, N1). Signatures change between Qt5 and Qt6
 (for example `Content::getId` has no argument on 4.x), so every symbol
 above has to be checked again in the 4.46 `libnickel`.
+
+## Messages on the screen
+
+The plugin shows each outcome of a pull or push as one of Nickel's toasts,
+the short boxes Nickel itself shows (e.g. after a rating).
+
+| Purpose | Symbol | Signature (checked) |
+|---|---|---|
+| Toast | `_ZN20MainWindowController5toastERK7QStringS2_i` | `void MainWindowController::toast(QString const& primary, QString const& secondary, int ms)` |
+
+The function is two instructions: `adds r0, #0x14` and a tail call to
+`N3ToasterController::queueMeSomeToast(QString const&, QString const&,
+int)`, so `this` is the `MainWindowController` (from `sharedInstance()`)
+and the controller at offset `0x14` queues the toast. Nothing writes
+`r0` for a result, and callers ignore it: `void`. `queueMeSomeToast`
+builds a `QueuedToast` (two `QString`s and the `int`) and, unless the
+queue is full (`ApplicationSettings::numMaxToasts()`), shows it through
+`N3ToasterController::displayToast`, which creates an `N3ToastView` with
+both lines, places it in `uiGeometry()` and starts a `QTimer` with
+`QueuedToast::getDuration()`: the `int` is how long the toast stays, in
+milliseconds. Nickel's own `RatingControls::showFeedbackToast` passes
+1500. The plugin uses 3000 for results and 5000 for problems. Optional:
+without it the plugin works as before, silently.
+
+The texts are German only for now: no way was found yet to tell the
+device language with certainty. The plugin logs `QLocale()` and
+`QLocale::system()` at start, so a device test can show whether they
+follow Nickel's language setting (`MainWindowController::updateLocale
+(QLocale const&)` exists).

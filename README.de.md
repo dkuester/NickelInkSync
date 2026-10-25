@@ -60,7 +60,8 @@ es sie gibt. Standardort: `~/.config/nickelinksync/config.ini` (oder
 `$XDG_CONFIG_HOME/nickelinksync/config.ini`, oder der Pfad in
 `$NICKELINKSYNC_CONFIG`). Das Format steht im [englischen README](README.md#configuration):
 `server`, `user`, `password` (oder `key` = MD5 des Passworts), optional
-`device`, `device_id` und `confirm`.
+`device`, `device_id`, `confirm` und `notify` (nur für das Tolino-Plugin,
+siehe unten).
 
 `confirm` legt fest, wann `push` und `pull` „Gerät oder Server?“ fragen,
 statt die neuere Position gewinnen zu lassen:
@@ -115,6 +116,27 @@ das Buch unverändert, und beim Verlassen wird dann nichts gesendet, damit eine
 ältere Tolino-Position nie eine neuere auf dem Server überschreibt. Beim
 Verlassen wartet es nie: Der Push folgt, sobald das WLAN da ist, nach 15
 Sekunden mit dem WLAN-Dialog des Tolino.
+
+Öffnet Nickel ein Buch nicht an der Position, die das Plugin geschrieben
+hat (beobachtet beim ersten Öffnen nach dem Start des Tolino), vermerkt
+das Plugin es in `.adds/NickelInkSync/not-in-line.tsv`. Ein solches Buch
+wird nie gesendet, weder vom Plugin noch mit `push` am Rechner (außer mit
+`--force`), weil die Stelle, die Nickel gespeichert hat, nicht deine ist;
+der nächste `pull`, beim Öffnen oder per USB, übernimmt wieder die
+Server-Position, auch wenn „zuletzt gelesen“ auf dem Tolino jetzt neuer
+aussieht.
+
+Jedes Ergebnis zeigt das Plugin als kurze Meldung unten auf dem Bildschirm
+(vorerst auf Deutsch), etwa „Fortschritt vom Server übernommen“ mit Prozent
+und dem Gerät, von dem die Position kam, oder „Fortschritt konnte nicht vom
+Server gelesen werden“ mit dem Grund (keine Verbindung, Zeitüberschreitung,
+Anmeldung abgelehnt). `notify` in `config.ini` legt fest, welche:
+
+| Wert | Zeigt |
+|---|---|
+| `all` (Standard) | jedes Ergebnis, auch „Fortschritt ist aktuell“, wenn nichts zu übernehmen oder zu senden war (etwa wenn du ein Buch auf der Seite verlässt, auf der es mit der Server-Position geöffnet wurde) |
+| `errors` | nur, was schiefging oder unterblieb: Server nicht erreicht, Position nicht übernommen, nicht gesendet |
+| `none` | nichts; im Log steht weiterhin alles |
 
 **Deinstallieren:** eine leere Datei `.adds/NickelInkSync/uninstall`
 anlegen, auswerfen und den Tolino aus- und wieder einschalten (die Datei
@@ -174,6 +196,28 @@ legt es mit dem Geräteprogramm in `dist/NickelInkSync/` zusammen. Mit
 |---|---|
 | Fehler und Ideen | [Issues](https://github.com/dkuester/NickelInkSync/issues). Bitte Gerätemodell und Firmware-Version angeben. |
 | Mitwirken | Pull-Requests gegen `main`. |
+
+## Danksagung
+
+NickelInkSync baut auf der Arbeit dieser Projekte und ihrer Maintainer auf.
+Die Tabelle mit Lizenzen und Links steht im [englischen README](README.md#credits).
+
+- **Code, den es nutzt:** [NickelHook](https://github.com/pgaskin/NickelHook)
+  von Patrick Gaskin (MIT), die Grundlage des Plugins, und dessen Qt6-Port im
+  [Branch `qt6-support`](https://github.com/nicoverbruggen/NickelHook/tree/qt6-support)
+  von Nico Verbruggen (MIT), das Submodul des Plugins; dazu die Rust-Crates
+  aus `Cargo.toml` (clap, md-5, quick-xml, rusqlite mit SQLite, serde, ureq
+  mit rustls, zip).
+- **Ideen und Dokumentation, kein Code** (nachgebaut nach dem beschriebenen
+  Verhalten): [KOReader](https://github.com/koreader/koreader) (Prüfsumme,
+  XPointer, Fortschritts-Sync) und
+  [koreader-sync-server](https://github.com/koreader/koreader-sync-server)
+  (KOSync-Protokoll), beide AGPL-3.0;
+  [BookOrbit](https://github.com/bookorbit/bookorbit) (AGPL-3.0, Zuordnung
+  über die KOReader-Prüfsumme); [Kobalt](https://github.com/nicoverbruggen/kobalt)
+  von Nico Verbruggen (MIT, Nickels Buch-Cache und Schreiben über Nickel
+  selbst); die [Amazon-Ion-1.0-Spezifikation](https://amazon-ion.github.io/ion-docs/)
+  (KFX, Kindle-Machbarkeit).
 
 ## Lizenz
 

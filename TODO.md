@@ -406,6 +406,68 @@ dürfen jederzeit dazwischengeschoben werden.
     R3-58, beim Verlassen gesendet, KOReader zeigt es. **Weg B funktioniert.**
   - [ ] **ich (später, O3/O4):** Rückfrage im Plugin als Dialog, statt eine
     Position, die eine Antwort braucht, liegen zu lassen.
+- [~] **N5 Meldungen im Plugin** · PR #25
+  - [x] **ich:** Nickels Toast (`MainWindowController::toast`, per
+    Disassembly geprüft: `void`, das `int` ist die Anzeigedauer in ms) für
+    jedes Ergebnis beim Öffnen und Verlassen, vorerst nur auf Deutsch.
+    Neuer Schlüssel `notify = all | errors | none` (Standard `all`); die CLI
+    prüft ihn nur, das Plugin liest ihn selbst.
+  - [x] **ich:** CLI nennt das Ergebnis in Maschinenzeilen:
+    `pull --emit` zusätzlich `NICKELINKSYNC_FROM`, `NICKELINKSYNC_NOT_TAKEN`
+    und `NICKELINKSYNC_ERROR<tab>Art<tab>Meldung` (timeout, network, auth,
+    server, other); neu `push --emit` mit `SENT`, `IN_SYNC`, `NOT_SENT`,
+    `UNANSWERED`, `ERROR`.
+  - [x] **ich:** `push` läuft als asynchroner `QProcess` statt losgelöst
+    über `/bin/sh`; das Verlassen wartet weiter nie, die Ausgabe landet im
+    Log, sobald der Push fertig ist.
+  - [x] **du:** Gerätetest der Meldungen (2026-10-24): übernommen,
+    gesendet, aktuell, kein Server und `notify = errors` erscheinen richtig;
+    `QLocale()` ist `de_DE` (System `en_US`).
+  - [x] **ich:** Der Test zeigte zwei Schwächen: Ohne WLAN hieß der Grund
+    „Zeitüberschreitung“ (jetzt „Kein WLAN oder Server nicht erreichbar“),
+    und „übernommen“ kam, obwohl Nickel am Kapitelanfang öffnete. Die
+    Meldung kommt jetzt erst nach der Prüfung, und die zählt nur noch die
+    Seite mit der geholten Stelle, nicht das ganze Kapitel.
+  - [x] **ich + du:** Öffnen im selben Kapitel: Nickel öffnet am
+    Kapitelanfang (R3-81 geholt, R3-1 geöffnet; Zeile vorher R3-58).
+    Per USB öffnet es im selben Kapitel richtig (du, 2026-10-25: R3-91 →
+    R3-121), also lag es an Nickels Speicher. Jetzt bekommt auch das
+    `Volume`, das Nickel übergibt, die Position: **funktioniert** (du,
+    2026-10-25: R3-152 geholt, Nickel auf der Seite mit R3-151, Meldung
+    „übernommen“).
+  - [x] **ich:** Direkt nach dem Übernehmen wieder verlassen meldet
+    „Fortschritt nicht gesendet / Braucht eine Bestätigung“: Nickel speichert
+    den Seitenanfang (R3-150), der vor der Server-Stelle (R3-152) liegt, und
+    `confirm = backwards` fragt. Richtig nach der Regel, aber lästig. Jetzt
+    merkt sich das Plugin die Seite, auf der es nach dem Übernehmen steht;
+    wer auf ihr verlässt, sendet nichts („Fortschritt ist aktuell / Noch
+    auf der Seite vom Server“). Wer weiterblättert, sendet wie bisher.
+  - [x] **du:** Gerätetest dazu (2026-10-25): Das Übernehmen misslang
+    wieder (R3-1 statt R3-170), obwohl auch Nickels `Volume` gesetzt war.
+    Muster über alle Läufe: Das **erste** Öffnen eines Buchs nach dem Start
+    von Nickel misslingt, das zweite klappt. Das Gleich-Kapitel war Zufall.
+    Die Sicherungen griffen, aber danach galt das Gerät als neuer (Nickel
+    hatte R3-1 mit neuer Zeit gespeichert); nur `confirm = backwards`
+    verhinderte, dass R3-8 gesendet wurde.
+  - [x] **ich (A):** Dauerhafte Sperre `.adds/NickelInkSync/not-in-line.tsv`:
+    Das Plugin trägt ein Buch ein, wenn Nickel es nicht an der geholten
+    Stelle öffnet, und streicht es, wenn es klappt. Die CLI sendet es nie
+    (auch nicht am Rechner, außer `--force`), und `pull` übernimmt die
+    Server-Position ohne Rücksicht auf Nickels `DateLastRead`, ohne
+    Rückfrage, solange die Zeile noch Nickels Stelle hält.
+  - [~] **du:** Gerätetest der Sperre (2026-10-25, `594c477`): Diesmal
+    klappte das Übernehmen beim ersten Öffnen nach dem Start (R3-179 geholt,
+    Seite mit R3-178), also wurde die Sperre selbst nicht ausgelöst.
+    Verlassen auf der übernommenen Seite sendete nichts („aktuell“),
+    Weiterlesen bis R3-186 sendete. Die Sperre bei einem misslungenen
+    Öffnen ist am Gerät noch nicht getestet.
+  - [ ] **ich:** Ursache des ersten Öffnens: Nickels `Volume`-Cache
+    (`Repository::refreshCache<Volume>`), Vorbild Kobalt (MIT): Position
+    über Nickel schreiben (`VolumeManager::updateBookmark`/`updateFields`)
+    oder den Cache nach dem Schreiben der CLI auffrischen.
+  - [ ] **ich (nach dem Test):** Gerätesprache: Das Log zeigt `QLocale()`
+    beim Start; folgt sie Nickels Spracheinstellung, kommen die Meldungen
+    auch auf Englisch.
 
 ## Optional (später)
 

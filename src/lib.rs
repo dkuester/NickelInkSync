@@ -15,5 +15,6 @@ pub mod kfx;
 pub mod kindle;
 pub mod kosync;
 pub mod krds;
+pub mod not_in_line;
 pub mod position;
 pub mod sync;

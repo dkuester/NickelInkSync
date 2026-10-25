@@ -72,6 +72,9 @@ password = your password
 
 # When to ask before overwriting a position: never, backwards (default), always
 # confirm = backwards
+
+# Messages of the Tolino plugin: all (default), errors, none
+# notify = all
 ```
 
 - The password is only read from this file, never from the command line.
@@ -97,6 +100,8 @@ password = your password
   you reached in KOReader. In a terminal you answer `d` (device) or `s`
   (server), Enter skips the book. Without a terminal nothing is overwritten
   and the book is reported. `--force` overwrites without asking.
+- `notify` is only read by the Tolino plugin (see below): which messages
+  it shows on the screen.
 - Lines starting with `#` or `;` are comments; unknown keys are an error.
 
 ## Plugin for the Tolino (experimental)
@@ -131,6 +136,26 @@ keeps one backup of the database a day in `.adds/NickelInkSync/backups/`
 then sends nothing, so an older Tolino position never overwrites a newer
 one on the server. Leaving a book never waits: the push follows when
 Wi-Fi is up, after 15 seconds with the Tolino's Wi-Fi dialog.
+
+If Nickel does not open a book at the position the plugin wrote (seen on
+the first opening after the Tolino starts), the plugin notes it in
+`.adds/NickelInkSync/not-in-line.tsv`. Such a book is never sent, not by
+the plugin and not by `push` on the computer (unless `--force`), because
+the place Nickel saved is not yours; the next `pull`, on opening or over
+USB, takes the server's position again, even though the Tolino's
+"last read" now looks newer.
+
+Each outcome shows as a short message at the bottom of the screen (in
+German for now), for example "Fortschritt vom Server übernommen" with the
+percentage and the device that sent it, or "Fortschritt konnte nicht vom
+Server gelesen werden" with the reason (no connection, timeout, login
+refused). `notify` in `config.ini` picks which:
+
+| Value | Shows |
+|---|---|
+| `all` (default) | every outcome, also "Fortschritt ist aktuell" when there was nothing to take or send (for example when you leave a book on the page the server's position opened it on) |
+| `errors` | only what went wrong or was left undone: server not reached, position not taken, position not sent |
+| `none` | nothing; the log still has everything |
 
 **Uninstall:** create an empty file `.adds/NickelInkSync/uninstall`, eject
 and power the Tolino off and on again (the file is only checked when the
@@ -188,6 +213,30 @@ Each CI run uploads the same file as the artifact `nickelinksync-armv7-musleabih
 |---|---|
 | Bugs and ideas | [Issues](https://github.com/dkuester/NickelInkSync/issues). Please include your device model and firmware version. |
 | Contributing | Pull requests against `main`. |
+
+## Credits
+
+NickelInkSync builds on the work of these projects and their maintainers.
+
+**Code it uses**
+
+| Project | By | License | What for |
+|---|---|---|---|
+| [NickelHook](https://github.com/pgaskin/NickelHook) | Patrick Gaskin | MIT | Hooking Nickel; the plugin is built on it |
+| [NickelHook, branch `qt6-support`](https://github.com/nicoverbruggen/NickelHook/tree/qt6-support) | Nico Verbruggen | MIT | Qt6 port of NickelHook for firmware 5.x, the plugin's submodule |
+| Rust crates: [clap](https://github.com/clap-rs/clap), [md-5](https://github.com/RustCrypto/hashes), [quick-xml](https://github.com/tafia/quick-xml), [rusqlite](https://github.com/rusqlite/rusqlite) (with [SQLite](https://sqlite.org)), [serde](https://github.com/serde-rs/serde), [ureq](https://github.com/algesten/ureq) (with [rustls](https://github.com/rustls/rustls)), [zip](https://github.com/zip-rs/zip2) | their authors | MIT / Apache-2.0, SQLite public domain | The CLI (see `Cargo.toml`) |
+
+**Ideas and documentation, no code** (re-implemented from the described
+behavior; the AGPL-3.0 projects are references only, see
+[SCOPE.md](SCOPE.md#license))
+
+| Project | By | License | What for |
+|---|---|---|---|
+| [KOReader](https://github.com/koreader/koreader) | the KOReader developers | AGPL-3.0 | The partial MD5 book hash, XPointers, the reading-progress sync |
+| [koreader-sync-server](https://github.com/koreader/koreader-sync-server) | the KOReader developers | AGPL-3.0 | The KOSync protocol |
+| [BookOrbit](https://github.com/bookorbit/bookorbit) | the BookOrbit developers | AGPL-3.0 | Matching books by the KOReader hash; the planned manual book mapping |
+| [Kobalt](https://github.com/nicoverbruggen/kobalt) | Nico Verbruggen | MIT | How Nickel caches books (`Cache<Volume>`) and how to write progress through Nickel itself |
+| [Amazon Ion 1.0](https://amazon-ion.github.io/ion-docs/) | Amazon | specification | Reading KFX books (Kindle feasibility check) |
 
 ## License
 
