@@ -430,8 +430,9 @@ dürfen jederzeit dazwischengeschoben werden.
     Seite mit der geholten Stelle, nicht das ganze Kapitel.
   - [ ] **ich + du:** Öffnen im selben Kapitel: Nickel öffnet am
     Kapitelanfang (R3-81 geholt, R3-1 geöffnet; Zeile vorher R3-58).
-    Ursache offen; zuerst prüfen, ob ein `pull --write` per USB im selben
-    Kapitel dasselbe zeigt.
+    Ursache offen. Per USB öffnet es im selben Kapitel richtig (du,
+    2026-10-25: R3-91 → R3-121), also liegt es an Nickels Speicher. Versuch:
+    auch das `Volume`, das Nickel übergibt, bekommt die Position.
   - [ ] **ich (nach dem Test):** Gerätesprache: Das Log zeigt `QLocale()`
     beim Start; folgt sie Nickels Spracheinstellung, kommen die Meldungen
     auch auf Englisch.

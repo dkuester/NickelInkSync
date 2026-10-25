@@ -591,6 +591,20 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     Volume__copy(copy, volume);
     Content__setChapterIdBookmarked(copy, QVariant(p.position));
     Content__setPercentRead(copy, QVariant(p.percent));
+    // The Volume Nickel passes in also gets the position: opening within the
+    // chapter Nickel last saved went to the chapter start with only the copy
+    // changed, while the same row written over USB (Nickel restarted, every
+    // in-memory Volume up to date) opened at the point (device tests). The
+    // shared data pointers (second word) show in the log whether the setter
+    // detaches the copy from Nickel's Volume.
+    void *const shared_before = static_cast<void *const *>(volume)[1];
+    Volume *original = const_cast<Volume *>(volume);
+    Content__setChapterIdBookmarked(original, QVariant(p.position));
+    Content__setPercentRead(original, QVariant(p.percent));
+    log_line(QStringLiteral("volume data: Nickel's %1 -> %2, copy %3")
+                 .arg(reinterpret_cast<quintptr>(shared_before), 0, 16)
+                 .arg(reinterpret_cast<quintptr>(static_cast<void *const *>(volume)[1]), 0, 16)
+                 .arg(reinterpret_cast<quintptr>(reinterpret_cast<void *const *>(copy)[1]), 0, 16));
     ReadingController__setVolume(self, copy, bookmark);
     Volume__dtor(copy);
     const QString target = QString::fromUtf8(p.position);

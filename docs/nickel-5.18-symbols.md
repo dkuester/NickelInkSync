@@ -213,6 +213,15 @@ start at most 40 node steps before the pulled point as reached
 (`near()` in the plugin); otherwise the book is not in line, the plugin
 says so and leaving it does not push.
 
+**USB check, same chapter, works** (2026-10-25): the Tolino at R3-91
+(`#point(/1/4/182/1:167)`), KOReader at R3-122; `pull --write` over USB
+wrote `chapter3.xhtml#point(/1/4/244/1:107)` and Nickel opened at R3-121.
+So the row is right and Nickel can open within the same chapter; what
+differs in the plugin is Nickel's in-memory state, which still holds the
+old position. Next try: the plugin also sets the position on the
+`Volume` Nickel passes to `setVolume` (not only on the copy) and logs
+the shared data pointers of both, to see whether they share data.
+
 ## The push path
 
 After the original `leavingReadingExperience()` the position is saved,
