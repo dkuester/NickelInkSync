@@ -31,7 +31,7 @@ moves to `r1`. A by-value return shows as `mov r4, r0` at entry and
 | Copy the book | `_ZN6VolumeC1ERKS_`, `_ZN6VolumeD1Ev` | `Volume::Volume(Volume const&)`, `Volume::~Volume()` |
 | Set the position | `_ZN7Content22setChapterIdBookmarkedERK8QVariant` | `void Content::setChapterIdBookmarked(QVariant const&)` (stored as `QByteArray`) |
 | Set the percentage | `_ZN7Content14setPercentReadERK8QVariant` | `void Content::setPercentRead(QVariant const&)` (stored as `int`) |
-| Book loaded again | `_ZN13VolumeManager7getByIdERK7QStringS2_` | `static Volume VolumeManager::getById(QString const& id, QString const&)` (by value: result pointer in `r0`, which it also returns; the arguments in `r1`, `r2`) |
+| Book loaded again | `_ZN13VolumeManager7getByIdERK7QStringS2_` | `static Volume VolumeManager::getById(QString const& id, QString const& db)` (by value: result pointer in `r0`, which it also returns; the arguments in `r1`, `r2`). Reads Nickel's `Volume` cache, not the database: see [Nickel's Volume cache](#step-5-nickels-volume-cache) |
 
 How they connect, from the call graph of the whole library:
 
@@ -40,8 +40,10 @@ How they connect, from the call graph of the whole library:
   context.bookmark)`. That passes both on to `ReadingView::setVolume`,
   which compares the bookmark with `HasNull<Bookmark>::null()` and calls
   `ReadingView::setupReader(QString const&)`. **`setupReader` loads the
-  book again from the database** (`VolumeManager::getById`, via the PLT)
-  and sets up the reader state from that. On the Tolino the chapter to
+  book again** (`VolumeManager::getById(id, QString())`, via the PLT; only
+  when the `Volume` it holds is not valid) and sets up the reader state
+  from that. `getById` answers from Nickel's `Volume` cache once that
+  exists, not from the database. On the Tolino the chapter to
   open comes from the `Volume` passed to `setVolume`, the place in the
   chapter from the one `getById` loads (device test below). A bookmark,
   if given (a link, a search result), takes precedence.
@@ -258,6 +260,78 @@ Meanwhile a book Nickel opened elsewhere goes on
 `.adds/NickelInkSync/not-in-line.tsv` (`src/not_in_line.rs`): never
 pushed, and the next pull takes the server's position regardless of the
 `DateLastRead` Nickel saved.
+
+### Step 5: Nickel's Volume cache
+
+The disassembly confirms the cache (2026-10-25). After the CLI has
+written the row, the plugin drops Nickel's `Volume` cache and loads the
+book again before it calls the original `setVolume`; the reloaded
+`Volume` (with the position set as well) is what Nickel opens from.
+
+| Purpose | Symbol | Signature (checked) |
+|---|---|---|
+| Drop the cache | `_ZN12Qt6Migration19Qt6RepositoryAccessI6VolumeE10purgeCacheERK7QString` | `void Qt6Migration::Qt6RepositoryAccess<Volume>::purgeCache(QString const& db)`; `this` is never read (the first instruction overwrites `r0`), the plugin passes a zeroed object of its own |
+| Load the book again | `_ZN13VolumeManager7getByIdERK7QStringS2_` | as above; fills the cache again on a miss |
+| Found? | `_ZNK6Volume7isValidEv` | `bool Volume::isValid() const` (the ID is not empty) |
+| Row, for the log | `_ZNK7Content11getDbValuesEv` | `QMap<QString, QVariant> Content::getDbValues() const` (by value; keys are the column names, e.g. `ChapterIDBookmarked`) |
+| (not used) | `_ZN10Repository12refreshCacheI6VolumeEEP5CacheIT_ERK7QString` | `static Cache<Volume>* Repository::refreshCache<Volume>(QString const& db)` |
+| (not used) | `_ZNK6Device9getDbNameEv` | `QString const& Device::getDbName() const` (a reference, `d + 0x70`) |
+
+What the code does:
+
+- **`VolumeManager::getById(id, db)`** locks
+  `Repository::getMutex<Volume>()::mutex`, takes
+  `Repository::getCache<Volume>(db)` and only if there is none calls
+  `refreshCache<Volume>(db)`; then
+  `Cache<Volume>::retrieveOneVeryFast(Volume::cacheKey(id))` and copies
+  the `Volume` out (vtable, shared data with a reference added, flags). So
+  once the cache exists, `getById` never reads the database again, and a
+  row the CLI wrote stays invisible to Nickel.
+- **`refreshCache<Volume>(db)`** is static (the database name in `r0`;
+  a Qt 6 `QString` has its data pointer at `+4` and its size at `+8`). It
+  reads every row the `Volume` where clause selects
+  (`DatabaseAdapter::createRetrieveStatement`, `retrieve<Volume>`) into a
+  new `Cache<Volume>`, replaces the entry in the global
+  `QHash<uint, QObject*>` and `deleteLater()`s the old cache. It takes no
+  lock of its own. Its callers in Nickel are `getById`, `getByIdBytes`,
+  `find`, `forEach`, `retrieveFiltered`, `create<Volume>` and
+  `addTransient<Volume>`; `getById` (read in full) calls it only on a cache
+  miss, with the mutex held. Calling it from the plugin would bypass that
+  mutex, so the plugin does not.
+- **`Repository::purgeCache<Volume>(db)`** takes the cache out of the hash
+  under the mutex and `deleteLater()`s it. Nickel's migrations call it
+  after writing the content table with plain SQL
+  (`Qt6DbMigration::restoreSideloadedSyncTimes`,
+  `correctBackfilledAdobeDrmFlags`), the same situation as the CLI's
+  write. It is **not exported** by the Tolino build 5.18.264769.
+  `Qt6Migration::Qt6RepositoryAccess<Volume>::purgeCache(QString const&)`
+  is: an inlined copy, instruction for instruction (same mutex: both load
+  it from GOT slot `0x2bc2b58` in the Kobo build; same `cacheKey`,
+  `QHash::take`, `deleteLater`).
+- **The database name.** `Repository::cacheKey(table, db)` replaces a
+  `db` equal to `Device::getCurrentDevice().getDbName()` with an empty
+  string, so `QString()` and `getDbName()` give the same cache.
+  `ReadingView::setupReader` passes `QString()`; the plugin does too.
+
+The plugin's order: `getById` once for the log (the cached `Volume`'s
+shared data and `ChapterIDBookmarked`), `purgeCache`, `getById` again
+(which rebuilds the cache from the database, under the mutex, and logs
+how long it took), then the position on that `Volume` and on Nickel's,
+then the original `setVolume`. Three seconds later the log names where
+Nickel stands and whether the cache was reloaded. All four symbols are
+optional; without them the plugin hands Nickel a copy as in step 4.
+
+Not tried, in case this is not enough: writing the position through
+Nickel instead of the CLI, as Kobalt does on the Kobo (concept only):
+`VolumeManager::updateBookmark(Volume&, QString const&, int, QDateTime
+const&, int)` (`_ZN13VolumeManager14updateBookmarkER6VolumeRK7QStringiRK9QDateTimei`),
+`Content::setPercentRead`, `VolumeManager::updateFields(QString const&,
+QMap<QString, QVariant> const&, QMap<QString, QVariant> const&, QString
+const&)` (`_ZN13VolumeManager12updateFieldsERK7QStringRK4QMapIS0_8QVariantES7_S2_`)
+between `DatabaseAdapter::beginTransaction(QString)` and
+`endTransaction(QString, bool)` (`_ZN15DatabaseAdapter16beginTransactionE7QString`,
+`_ZN15DatabaseAdapter14endTransactionE7QStringb`). All are in the Tolino
+list; their signatures still need checking before use.
 
 ## The push path
 

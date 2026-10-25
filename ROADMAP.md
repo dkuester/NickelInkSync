@@ -151,6 +151,12 @@ its own.
   `config.ini` (`all`, `errors`, `none`). Verified on the Tolino, also
   opening within the chapter last read. Still to do: English texts (the
   plugin logs `QLocale()`, `de_DE` so far).
+- **Reliable take on opening, Tolino plugin** (S): two of five device runs
+  opened at the chapter start, because Nickel's in-memory `Volume` cache
+  does not see the row the CLI writes. The plugin now drops that cache and
+  loads the book again before Nickel opens it; device test pending. If
+  that is not enough: write the position through Nickel itself
+  (`VolumeManager::updateBookmark`, as Kobalt does on the Kobo).
 - **NickelHook plugin, Qt5 (Kobo 4.x)** (L): push on book close, pull on open,
   jump via Nickel's own navigation. Blocker: find the libnickel symbol for
   "open at position" on 4.46; verification is on-device only.

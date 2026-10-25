@@ -461,10 +461,25 @@ dürfen jederzeit dazwischengeschoben werden.
     Verlassen auf der übernommenen Seite sendete nichts („aktuell“),
     Weiterlesen bis R3-186 sendete. Die Sperre bei einem misslungenen
     Öffnen ist am Gerät noch nicht getestet.
-  - [ ] **ich:** Ursache des ersten Öffnens: Nickels `Volume`-Cache
-    (`Repository::refreshCache<Volume>`), Vorbild Kobalt (MIT): Position
-    über Nickel schreiben (`VolumeManager::updateBookmark`/`updateFields`)
-    oder den Cache nach dem Schreiben der CLI auffrischen.
+  - [~] **ich:** Ursache der misslungenen Übernahmen: Nickels
+    `Volume`-Cache. Per Disassembly geprüft: `VolumeManager::getById` liest
+    nur den Cache, sobald es ihn gibt, nie die Datenbank; was die CLI von
+    außen schreibt, sieht Nickel also nicht. Jetzt leert das Plugin nach dem
+    Schreiben den Cache (`Qt6RepositoryAccess<Volume>::purgeCache`, wie
+    Nickels eigene Migrationen nach einem SQL-Schreiben, unter Nickels
+    Mutex; `Repository::purgeCache<Volume>` fehlt im Tolino-Build), lädt
+    das Buch mit `getById` neu (das füllt den Cache aus der Datenbank) und
+    öffnet mit diesem `Volume`. Das Log zeigt Cache-Stand vorher und
+    nachher und 3 s nach dem Öffnen die Stelle. PR folgt.
+  - [ ] **du:** Gerätetest dazu, mehrere Läufe: Übernahme direkt nach
+    einer Übernahme, Übernahme innerhalb von 60 s nach einem Neustart,
+    Übernahme nach einem Öffnen ohne Übernahme.
+  - [ ] **ich (nur falls das nicht reicht):** Position über Nickel selbst
+    schreiben, Vorbild Kobalt (MIT, nur das Konzept):
+    `VolumeManager::updateBookmark`, `updateFields` in einer
+    `DatabaseAdapter`-Transaktion; die CLI entscheidet dann nur noch
+    (`pull --live --emit` ohne `--write`), die Tagessicherung bleibt vor
+    jedem Schreiben.
   - [ ] **ich (nach dem Test):** Gerätesprache: Das Log zeigt `QLocale()`
     beim Start; folgt sie Nickels Spracheinstellung, kommen die Meldungen
     auch auf Englisch.

@@ -130,15 +130,17 @@ Wi-Fi on when it needs it; there is no need for the Tolino's own
 "Sync now" (that is the Tolino cloud). Opening a book waits at most about
 10 seconds for Wi-Fi (no dialog) and 15 seconds for the server. To open
 at the server's position, the plugin writes it into the book's row in the
-device database just before Nickel opens the book, while Nickel runs; it
+device database just before Nickel opens the book, while Nickel runs, and
+has Nickel read that row again (Nickel keeps the books in memory); it
 keeps one backup of the database a day in `.adds/NickelInkSync/backups/`
 (the two newest). Without Wi-Fi the book opens unchanged, and leaving it
 then sends nothing, so an older Tolino position never overwrites a newer
 one on the server. Leaving a book never waits: the push follows when
 Wi-Fi is up, after 15 seconds with the Tolino's Wi-Fi dialog.
 
-If Nickel does not open a book at the position the plugin wrote (seen on
-the first opening after the Tolino starts), the plugin notes it in
+If Nickel still does not open a book at the position the plugin wrote
+(seen in two of five device tests before the plugin had Nickel read the
+row again), the plugin notes it in
 `.adds/NickelInkSync/not-in-line.tsv`. Such a book is never sent, not by
 the plugin and not by `push` on the computer (unless `--force`), because
 the place Nickel saved is not yours; the next `pull`, on opening or over

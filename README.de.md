@@ -110,15 +110,17 @@ ist nicht nötig (das ist die Tolino-Cloud). Beim Öffnen eines Buchs wartet es
 höchstens etwa 10 Sekunden auf das WLAN (ohne Dialog) und 15 Sekunden auf
 den Server. Damit das Buch an der Server-Position öffnet, schreibt das Plugin
 sie kurz vor dem Öffnen in die Zeile des Buchs in der Gerätedatenbank,
-während Nickel läuft; einmal am Tag sichert es die Datenbank nach
+während Nickel läuft, und lässt Nickel diese Zeile neu lesen (Nickel hält
+die Bücher im Speicher); einmal am Tag sichert es die Datenbank nach
 `.adds/NickelInkSync/backups/` (die zwei neuesten bleiben). Ohne WLAN öffnet
 das Buch unverändert, und beim Verlassen wird dann nichts gesendet, damit eine
 ältere Tolino-Position nie eine neuere auf dem Server überschreibt. Beim
 Verlassen wartet es nie: Der Push folgt, sobald das WLAN da ist, nach 15
 Sekunden mit dem WLAN-Dialog des Tolino.
 
-Öffnet Nickel ein Buch nicht an der Position, die das Plugin geschrieben
-hat (beobachtet beim ersten Öffnen nach dem Start des Tolino), vermerkt
+Öffnet Nickel ein Buch trotzdem nicht an der Position, die das Plugin
+geschrieben hat (in zwei von fünf Gerätetests, bevor das Plugin Nickel die
+Zeile neu lesen ließ), vermerkt
 das Plugin es in `.adds/NickelInkSync/not-in-line.tsv`. Ein solches Buch
 wird nie gesendet, weder vom Plugin noch mit `push` am Rechner (außer mit
 `--force`), weil die Stelle, die Nickel gespeichert hat, nicht deine ist;
