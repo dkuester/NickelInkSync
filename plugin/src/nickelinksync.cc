@@ -36,6 +36,10 @@
  *   server's point, so the push would only ask. Not
  *   while the background pull of that book still runs: then the reading view
  *   was only covered (a dialog), and its position is about to change. And
+ *   never a book on the not-in-line list (kNotInLine): Nickel opened it
+ *   elsewhere than at the pulled position, which also survives a restart;
+ *   the CLI refuses the push and takes the server's position on the next
+ *   pull (src/not_in_line.rs). And
  *   not when the book was opened without a pull (no network), or Nickel did
  *   not open the pulled chapter: the device position would then overwrite a
  *   newer one on the server (device test).
@@ -90,6 +94,10 @@ static const char kCli[]    = "/mnt/onboard/.adds/NickelInkSync/nickelinksync";
 static const char kConfig[] = "/mnt/onboard/.adds/NickelInkSync/config.ini";
 static const char kLog[]    = "/mnt/onboard/.adds/NickelInkSync/NickelInkSync.log";
 static const char kBackups[] = "/mnt/onboard/.adds/NickelInkSync/backups";
+// Books Nickel did not open at the pulled position (src/not_in_line.rs):
+// `ContentID<tab>where Nickel opened` per line. The CLI never pushes them
+// and takes the server's position on the next pull.
+static const char kNotInLine[] = "/mnt/onboard/.adds/NickelInkSync/not-in-line.tsv";
 static const char kOnboard[] = "/mnt/onboard";
 static const char kSideloaded[] = "file:///mnt/onboard/";
 static const qint64 kLogMaxBytes = 128 * 1024;
@@ -273,6 +281,9 @@ static QString skip_reason(const QByteArray &reason)
     if (reason == "server-newer") {
         return QStringLiteral("Der Server hat einen neueren Stand");
     }
+    if (reason == "not-in-line") {
+        return QStringLiteral("Beim Öffnen nicht abgeglichen");
+    }
     if (reason == "not-translated") {
         return QStringLiteral("Die Position vom Server passt nicht zu diesem Buch");
     }
@@ -380,6 +391,36 @@ static QString chapter_of(const QString &position)
     return position.section(QLatin1Char('#'), 0, 0);
 }
 
+// Puts a book on the not-in-line list with the place Nickel opened it at,
+// or with an empty `at` takes it off.
+static void set_not_in_line(const QString &id, const QString &at)
+{
+    QFile f(QString::fromLatin1(kNotInLine));
+    QStringList lines;
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        for (const QString &line : QString::fromUtf8(f.readAll()).split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
+            if (line.section(QLatin1Char('\t'), 0, 0) != id) {
+                lines << line;
+            }
+        }
+        f.close();
+    }
+    if (!at.isEmpty()) {
+        lines << id + QLatin1Char('\t') + at;
+    }
+    if (lines.isEmpty()) {
+        if (f.exists()) {
+            f.remove();
+        }
+        return;
+    }
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        f.write((lines.join(QLatin1Char('\n')) + QLatin1Char('\n')).toUtf8());
+    } else {
+        log_line(QStringLiteral("could not write %1: %2").arg(QString::fromLatin1(kNotInLine), f.errorString()));
+    }
+}
+
 // The node path of a position (`…#point(/1/4/100/1:101)` → 1, 4, 100, 1).
 static QList<int> point_path(const QString &position)
 {
@@ -435,15 +476,18 @@ static void check_open(const QString &id, const QString &target, const QString &
         }
         g_taken_id = id;
         g_taken_page = at;
+        set_not_in_line(id, QString());
         toast(false, QStringLiteral("Fortschritt vom Server übernommen"), taken);
     } else if (chapter_of(at) == chapter_of(target)) {
         log_line(QStringLiteral("after opening: Nickel is at %1, in the pulled chapter but not near the point; "
-                                "leaving this book will not push").arg(at));
+                                "not pushed until a pull brings it in line").arg(at));
+        set_not_in_line(id, at);
         toast(true, QStringLiteral("Fortschritt nicht übernommen"),
               QStringLiteral("Nickel hat an einer anderen Stelle im Kapitel geöffnet"));
     } else {
         log_line(QStringLiteral("after opening: Nickel is at %1, not in the pulled chapter; "
-                                "leaving this book will not push").arg(at));
+                                "not pushed until a pull brings it in line").arg(at));
+        set_not_in_line(id, at);
         toast(true, QStringLiteral("Fortschritt nicht übernommen"),
               QStringLiteral("Nickel hat ein anderes Kapitel geöffnet"));
     }

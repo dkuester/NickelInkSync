@@ -117,6 +117,15 @@ das Buch unverändert, und beim Verlassen wird dann nichts gesendet, damit eine
 Verlassen wartet es nie: Der Push folgt, sobald das WLAN da ist, nach 15
 Sekunden mit dem WLAN-Dialog des Tolino.
 
+Öffnet Nickel ein Buch nicht an der Position, die das Plugin geschrieben
+hat (beobachtet beim ersten Öffnen nach dem Start des Tolino), vermerkt
+das Plugin es in `.adds/NickelInkSync/not-in-line.tsv`. Ein solches Buch
+wird nie gesendet, weder vom Plugin noch mit `push` am Rechner (außer mit
+`--force`), weil die Stelle, die Nickel gespeichert hat, nicht deine ist;
+der nächste `pull`, beim Öffnen oder per USB, übernimmt wieder die
+Server-Position, auch wenn „zuletzt gelesen“ auf dem Tolino jetzt neuer
+aussieht.
+
 Jedes Ergebnis zeigt das Plugin als kurze Meldung unten auf dem Bildschirm
 (vorerst auf Deutsch), etwa „Fortschritt vom Server übernommen“ mit Prozent
 und dem Gerät, von dem die Position kam, oder „Fortschritt konnte nicht vom

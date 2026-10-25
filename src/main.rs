@@ -9,6 +9,7 @@ use nickelinksync::db::{Book, Device, Write};
 use nickelinksync::epub::Epub;
 use nickelinksync::hash::partial_md5;
 use nickelinksync::kosync::{self, Client, Progress, Update};
+use nickelinksync::not_in_line::NotInLine;
 use nickelinksync::position::{
   from_xpointer, to_xpointer, PointFlavor, Position, Translated, XPointer,
 };
@@ -318,6 +319,7 @@ fn describe(p: &Progress) -> String {
 
 fn status(target: &Target) -> Result<bool> {
   let session = Session::open(target)?;
+  let not_in_line = NotInLine::load(&session.device.root)?;
   let server = Server::open(target)?;
   match &server {
     Some(s) => println!("Server {} as {}", s.config.server, s.config.user),
@@ -346,6 +348,9 @@ fn status(target: &Target) -> Result<bool> {
         Err(e) => format!("(not translated: {e})"),
       };
       println!("  koreader  {koreader}");
+    }
+    if let Some(at) = not_in_line.get(&book.content_id) {
+      println!("  plugin    not in line: Nickel opened at {at} instead of the server's position");
     }
     let state = match book.read_status {
       2 => "finished",
@@ -482,6 +487,8 @@ fn unanswered_note(unanswered: usize) {
 
 fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool> {
   let session = Session::open(target)?;
+  let mut not_in_line = NotInLine::load(&session.device.root)?;
+  let mut forced = Vec::new();
   let server = Server::require(target)?;
   let (device, device_id) = server.config.identity(&session.model);
   if let Err(e) = server.client.authorize() {
@@ -509,6 +516,17 @@ fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool>
       }
     };
     println!("  hash      {hash}");
+    if let Some(at) = not_in_line.get(&book.content_id) {
+      if !force {
+        println!("  skipped   not in line: Nickel opened at {at} instead of the server's position");
+        println!("            pull takes the server's position; --force sends the device's anyway");
+        if emit {
+          emit_line("NOT_SENT", &["not-in-line", at]);
+        }
+        continue;
+      }
+      forced.push(book.content_id.as_str());
+    }
     let remote = match server.client.progress(&hash) {
       Ok(remote) => remote,
       Err(e) => {
@@ -596,12 +614,16 @@ fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool>
   }
   if dry_run {
     println!("\nDry run: nothing was sent.");
+  } else if ok {
+    // Sent with --force: the server holds the device's position now.
+    not_in_line.remove(forced)?;
   }
   Ok(ok)
 }
 
 fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
   let session = Session::open(target)?;
+  let mut not_in_line = NotInLine::load(&session.device.root)?;
   let server = Server::require(target)?;
   println!("Server {} as {}", server.config.server, server.config.user);
   let confirm_setting = server.config.confirm;
@@ -642,9 +664,27 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
     );
     // Without a device position there is nothing on the device to keep.
     let local = session.local(book).ok().map(|(local, _)| local);
-    let decision = match &local {
-      Some(local) => decide(Direction::Pull, local, &remote, confirm_setting),
-      None => Decision::Apply,
+    // After a failed take Nickel's DateLastRead says nothing about reading.
+    let left_by_nickel = not_in_line.get(&book.content_id);
+    let decision = match (&local, left_by_nickel) {
+      (Some(_), Some(at)) if book.position.as_deref() == Some(at) => {
+        println!(
+          "  plugin    Nickel opened here instead of the server's position, nothing read since"
+        );
+        Decision::Apply
+      }
+      (Some(local), Some(_)) => {
+        println!(
+          "  plugin    read on since Nickel missed the server's position: the time does not count"
+        );
+        let undated = Local {
+          last_read: None,
+          ..local.clone()
+        };
+        decide(Direction::Pull, &undated, &remote, confirm_setting)
+      }
+      (Some(local), None) => decide(Direction::Pull, local, &remote, confirm_setting),
+      (None, _) => Decision::Apply,
     };
     let apply = match (decision, &local) {
       (Decision::InSync, _) => {
@@ -738,6 +778,7 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
         return Err("--write with --live needs --content-id".into());
       }
       let made = session.device.write_live(&writes, &dir, &stamp[..8])?;
+      not_in_line.remove(writes.iter().map(|w| w.content_id.as_str()))?;
       println!(
         "\nWrote {} position(s) to the device database while Nickel runs.",
         writes.len()
@@ -749,6 +790,7 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
     }
     let backup = dir.join(format!("KoboReader-{stamp}.sqlite"));
     session.device.write_positions(&writes, &backup)?;
+    not_in_line.remove(writes.iter().map(|w| w.content_id.as_str()))?;
     println!("\nWrote {} position(s) to the device.", writes.len());
     println!("Backup of the database: {}", backup.display());
     println!("Eject the device before you open the book.");

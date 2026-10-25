@@ -442,7 +442,24 @@ dürfen jederzeit dazwischengeschoben werden.
     merkt sich das Plugin die Seite, auf der es nach dem Übernehmen steht;
     wer auf ihr verlässt, sendet nichts („Fortschritt ist aktuell / Noch
     auf der Seite vom Server“). Wer weiterblättert, sendet wie bisher.
-  - [ ] **du:** Gerätetest dazu.
+  - [x] **du:** Gerätetest dazu (2026-10-25): Das Übernehmen misslang
+    wieder (R3-1 statt R3-170), obwohl auch Nickels `Volume` gesetzt war.
+    Muster über alle Läufe: Das **erste** Öffnen eines Buchs nach dem Start
+    von Nickel misslingt, das zweite klappt. Das Gleich-Kapitel war Zufall.
+    Die Sicherungen griffen, aber danach galt das Gerät als neuer (Nickel
+    hatte R3-1 mit neuer Zeit gespeichert); nur `confirm = backwards`
+    verhinderte, dass R3-8 gesendet wurde.
+  - [x] **ich (A):** Dauerhafte Sperre `.adds/NickelInkSync/not-in-line.tsv`:
+    Das Plugin trägt ein Buch ein, wenn Nickel es nicht an der geholten
+    Stelle öffnet, und streicht es, wenn es klappt. Die CLI sendet es nie
+    (auch nicht am Rechner, außer `--force`), und `pull` übernimmt die
+    Server-Position ohne Rücksicht auf Nickels `DateLastRead`, ohne
+    Rückfrage, solange die Zeile noch Nickels Stelle hält.
+  - [ ] **du:** Gerätetest der Sperre.
+  - [ ] **ich:** Ursache des ersten Öffnens: Nickels `Volume`-Cache
+    (`Repository::refreshCache<Volume>`), Vorbild Kobalt (MIT): Position
+    über Nickel schreiben (`VolumeManager::updateBookmark`/`updateFields`)
+    oder den Cache nach dem Schreiben der CLI auffrischen.
   - [ ] **ich (nach dem Test):** Gerätesprache: Das Log zeigt `QLocale()`
     beim Start; folgt sie Nickels Spracheinstellung, kommen die Meldungen
     auch auf Englisch.

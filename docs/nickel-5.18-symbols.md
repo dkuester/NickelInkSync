@@ -230,6 +230,25 @@ the plugin now also sets the position on the `Volume` Nickel passes to
 (`81c444a0` → `819d0b10`; the copy had `819f3ea0`), so it changes only
 that object, which Nickel evidently uses after `setVolume` returns.
 
+**Correction, same day:** the next run (commit `3fe3010`) opened at the
+chapter start again, with Nickel's `Volume` set as well. Lined up, every
+run that worked was the **second** opening of Book R since Nickel
+started, every one that failed the first (24.10. 18:10 ok / 18:39 failed,
+25.10. 13:35 ok / 13:47 failed); the shared chapter was a coincidence.
+A likely cause: Nickel keeps a cache of the `Volume`s
+(`Repository::refreshCache<Volume>(QString const&)`, `Cache<Volume>`),
+which a write from outside Nickel, like the CLI's, does not reach.
+Kobalt (MIT, a CREngine reader for Kobo) writes progress through Nickel
+instead (`VolumeManager::updateBookmark` on a `Volume` from `getById`,
+`VolumeManager::updateFields` in a `DatabaseAdapter` transaction) and
+refreshes that cache when it cannot verify the write. All of these
+symbols are in the Tolino 5.18.264769 list. Not tried yet.
+
+Meanwhile a book Nickel opened elsewhere goes on
+`.adds/NickelInkSync/not-in-line.tsv` (`src/not_in_line.rs`): never
+pushed, and the next pull takes the server's position regardless of the
+`DateLastRead` Nickel saved.
+
 ## The push path
 
 After the original `leavingReadingExperience()` the position is saved,
