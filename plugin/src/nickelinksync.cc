@@ -12,9 +12,14 @@
  *   Before Nickel opens the book, the plugin switches Wi-Fi on (silently,
  *   at most kOpenWifiMs), asks the CLI (`pull --live --write --emit`), which
  *   writes a position to take into the book's row in the database Nickel
- *   holds open (SQLite locking, one backup a day), and hands Nickel a copy
- *   of the Volume with that position (Content::setChapterIdBookmarked,
- *   setPercentRead), and sets the same on the Volume Nickel passed in.
+ *   holds open (SQLite locking, one backup a day). Nickel reads its Volumes
+ *   from an in-memory cache that a write from outside does not reach, so
+ *   the plugin then drops that cache the way Nickel does after writing the
+ *   table itself, loads the book again (which fills the cache from the
+ *   database), hands Nickel that Volume with the position set as well
+ *   (Content::setChapterIdBookmarked, setPercentRead), and sets the same on
+ *   the Volume Nickel passed in. Without the cache symbols it hands Nickel
+ *   a copy of that Volume instead, as before.
  *   Nickel takes the chapter from that Volume and the place in the chapter
  *   from the row it loads again (VolumeManager::getById in
  *   ReadingView::setupReader), so they have to agree; and within the chapter
@@ -69,10 +74,12 @@
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
 #include <QLocale>
+#include <QMap>
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QString>
@@ -159,6 +166,16 @@ static void (*WirelessWorkflowManager__connectWireless)(WirelessWorkflowManager 
 // secondary line for `ms` milliseconds; returns nothing (a tail call to
 // N3ToasterController::queueMeSomeToast, see docs/nickel-5.18-symbols.md).
 static void (*MainWindowController__toast)(MainWindowController *, const QString &, const QString &, int);
+// Optional: without them the plugin opens with a copy of Nickel's Volume,
+// as before. Nickel's Volume cache (docs/nickel-5.18-symbols.md):
+// Qt6RepositoryAccess<Volume>::purgeCache(QString const& db) drops it under
+// Nickel's Volume mutex and never reads `this`; VolumeManager::getById is
+// static and returns the Volume by value (hidden result pointer in r0).
+static void (*Qt6RepositoryAccess__purgeVolumeCache)(void *, const QString &);
+static void (*VolumeManager__getById)(Volume *result, const QString &id, const QString &db);
+static bool (*Volume__isValid)(const Volume *);
+// Optional, for the log only: the columns of the row (by value).
+static QMap<QString, QVariant> (*Content__getDbValues)(const Volume *);
 
 // `notify` in config.ini.
 enum class Notify { All, Errors, None };
@@ -461,7 +478,7 @@ static bool near(const QString &at, const QString &target)
 // After opening: Nickel shows a page start, which lies before the pulled
 // point, so "reached" means near it in the same chapter. Only then is the
 // book in line with the server and `taken` shown.
-static void check_open(const QString &id, const QString &target, const QString &taken)
+static void check_open(const QString &id, const QString &target, const QString &taken, bool reloaded)
 {
     ReadingView *view = reading_view();
     if (!view || g_open_id != id) {
@@ -469,6 +486,8 @@ static void check_open(const QString &id, const QString &target, const QString &
         return;
     }
     const QString at = current_location(view);
+    log_line(QStringLiteral("after opening (%1): Nickel is at %2, pulled %3")
+                 .arg(QLatin1String(reloaded ? "cache reloaded" : "copy, cache not reloaded"), at, target));
     if (near(at, target)) {
         log_line(QStringLiteral("after opening: Nickel is at %1, on the page with the pulled point").arg(at));
         if (g_not_synced == id) {
@@ -491,6 +510,67 @@ static void check_open(const QString &id, const QString &target, const QString &
         toast(true, QStringLiteral("Fortschritt nicht übernommen"),
               QStringLiteral("Nickel hat ein anderes Kapitel geöffnet"));
     }
+}
+
+// The shared data of a Volume (its second word), for the log: two Volumes
+// with the same one are copies of each other.
+static QString shared_data(const Volume *volume)
+{
+    return QString::number(reinterpret_cast<quintptr>(static_cast<void *const *>(volume)[1]), 16);
+}
+
+// ChapterIDBookmarked of a Volume, for the log.
+static QString bookmarked(const Volume *volume)
+{
+    if (!Content__getDbValues) {
+        return QStringLiteral("?");
+    }
+    return Content__getDbValues(volume).value(QStringLiteral("ChapterIDBookmarked")).toString();
+}
+
+// Loads the book again after the CLI wrote its row, into `fresh` (which
+// then has to be destroyed); false if the symbols are missing or the book
+// is not found. VolumeManager::getById reads only Nickel's cache of the
+// Volumes once that exists, so the written row does not reach Nickel
+// (two of five device runs opened at the chapter start). Nickel's own
+// migrations drop that cache after writing the table with plain SQL; the
+// plugin does the same and calls getById, which fills the cache again from
+// the database (Repository::refreshCache<Volume>, under the same mutex).
+// The database name is QString(), as in ReadingView::setupReader;
+// Repository::cacheKey treats Device::getDbName() the same.
+static bool reload_volume(const QString &id, Volume *fresh)
+{
+    if (!Qt6RepositoryAccess__purgeVolumeCache || !VolumeManager__getById || !Volume__isValid) {
+        log_line(QStringLiteral("cache: symbols missing, opening with a copy of Nickel's Volume"));
+        return false;
+    }
+    const QString db;
+    alignas(8) unsigned char cached[kVolumeBytes];
+    VolumeManager__getById(cached, id, db);
+    const QString before = Volume__isValid(cached)
+        ? QStringLiteral("%1 at %2").arg(shared_data(cached), bookmarked(cached))
+        : QStringLiteral("not in the cache");
+    Volume__dtor(cached);
+    QElapsedTimer timer;
+    timer.start();
+    // purgeCache never reads `this`; an object of its own is still safer
+    // than a null pointer.
+    alignas(8) static unsigned char access[16];
+    Qt6RepositoryAccess__purgeVolumeCache(access, db);
+    VolumeManager__getById(fresh, id, db);
+    if (!Volume__isValid(fresh)) {
+        Volume__dtor(fresh);
+        log_line(QStringLiteral("cache: before %1; dropped, but the book was not found again (%2 ms): "
+                                "opening with a copy of Nickel's Volume")
+                     .arg(before)
+                     .arg(timer.elapsed()));
+        return false;
+    }
+    log_line(QStringLiteral("cache: before %1; reloaded in %2 ms: %3 at %4")
+                 .arg(before)
+                 .arg(timer.elapsed())
+                 .arg(shared_data(fresh), bookmarked(fresh)));
+    return true;
 }
 
 // The common arguments for one book: device, configuration, book, live.
@@ -646,8 +726,14 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
         return;
     }
     log_line(QStringLiteral("open %1 at %2 (%3 %)").arg(id, QString::fromUtf8(p.position)).arg(p.percent));
+    // The Volume Nickel opens from: loaded again after the cache is dropped,
+    // or a copy of the one it passed in. Both get the position set, so the
+    // chapter does not depend on the row being read back right.
     alignas(8) unsigned char copy[kVolumeBytes];
-    Volume__copy(copy, volume);
+    const bool reloaded = reload_volume(id, copy);
+    if (!reloaded) {
+        Volume__copy(copy, volume);
+    }
     Content__setChapterIdBookmarked(copy, QVariant(p.position));
     Content__setPercentRead(copy, QVariant(p.percent));
     // The Volume Nickel passes in gets the position too: with only the copy
@@ -659,16 +745,17 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     Volume *original = const_cast<Volume *>(volume);
     Content__setChapterIdBookmarked(original, QVariant(p.position));
     Content__setPercentRead(original, QVariant(p.percent));
-    log_line(QStringLiteral("volume data: Nickel's %1 -> %2, copy %3")
+    log_line(QStringLiteral("volume data: Nickel's %1 -> %2, %3 %4")
                  .arg(reinterpret_cast<quintptr>(shared_before), 0, 16)
-                 .arg(reinterpret_cast<quintptr>(static_cast<void *const *>(volume)[1]), 0, 16)
-                 .arg(reinterpret_cast<quintptr>(reinterpret_cast<void *const *>(copy)[1]), 0, 16));
+                 .arg(shared_data(volume))
+                 .arg(QLatin1String(reloaded ? "reloaded" : "copy"))
+                 .arg(shared_data(copy)));
     ReadingController__setVolume(self, copy, bookmark);
     Volume__dtor(copy);
     const QString target = QString::fromUtf8(p.position);
     const QString taken = p.from.isEmpty() ? QStringLiteral("%1 %").arg(p.percent)
                                            : QStringLiteral("%1 %, von %2").arg(p.percent).arg(p.from);
-    QTimer::singleShot(kCheckOpenMs, qApp, [id, target, taken] { check_open(id, target, taken); });
+    QTimer::singleShot(kCheckOpenMs, qApp, [id, target, taken, reloaded] { check_open(id, target, taken, reloaded); });
 }
 
 // What a finished push means, for the log and the message.
@@ -775,10 +862,13 @@ static int nickelinksync_init()
     g_notify = read_notify();
     // The messages are German; the locale is logged to learn whether the
     // device language can be told from it.
-    log_line(QStringLiteral("active, CLI and configuration in %1; notify = %2, toasts %3, locale %4 (system %5)")
+    const bool cache = Qt6RepositoryAccess__purgeVolumeCache && VolumeManager__getById && Volume__isValid;
+    log_line(QStringLiteral("active, CLI and configuration in %1; notify = %2, toasts %3, volume cache %4, "
+                            "locale %5 (system %6)")
                  .arg(QString::fromLatin1(kDir))
                  .arg(QLatin1String(g_notify == Notify::All ? "all" : g_notify == Notify::Errors ? "errors" : "none"))
                  .arg(QLatin1String(MainWindowController__toast ? "available" : "missing"))
+                 .arg(QLatin1String(cache ? "available" : "missing"))
                  .arg(QLocale().name(), QLocale::system().name()));
     g_active = true;
     return 0;
@@ -827,6 +917,10 @@ static struct nh_dlsym NickelInkSyncDlsym[] = {
     {.name = "_ZN23WirelessWorkflowManager20isInternetAccessibleEv", .out = nh_symoutptr(WirelessWorkflowManager__isInternetAccessible), .desc = "Wi-Fi", .optional = true},
     {.name = "_ZN23WirelessWorkflowManager15connectWirelessEbb", .out = nh_symoutptr(WirelessWorkflowManager__connectWireless), .desc = "Wi-Fi", .optional = true},
     {.name = "_ZN20MainWindowController5toastERK7QStringS2_i", .out = nh_symoutptr(MainWindowController__toast), .desc = "Messages", .optional = true},
+    {.name = "_ZN12Qt6Migration19Qt6RepositoryAccessI6VolumeE10purgeCacheERK7QString", .out = nh_symoutptr(Qt6RepositoryAccess__purgeVolumeCache), .desc = "Volume cache", .optional = true},
+    {.name = "_ZN13VolumeManager7getByIdERK7QStringS2_", .out = nh_symoutptr(VolumeManager__getById), .desc = "Volume cache", .optional = true},
+    {.name = "_ZNK6Volume7isValidEv", .out = nh_symoutptr(Volume__isValid), .desc = "Volume cache", .optional = true},
+    {.name = "_ZNK7Content11getDbValuesEv", .out = nh_symoutptr(Content__getDbValues), .desc = "Log", .optional = true},
     {0},
 };
 
