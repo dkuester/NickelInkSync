@@ -471,9 +471,20 @@ dürfen jederzeit dazwischengeschoben werden.
     das Buch mit `getById` neu (das füllt den Cache aus der Datenbank) und
     öffnet mit diesem `Volume`. Das Log zeigt Cache-Stand vorher und
     nachher und 3 s nach dem Öffnen die Stelle. PR #26.
-  - [ ] **du:** Gerätetest dazu, mehrere Läufe: Übernahme direkt nach
-    einer Übernahme, Übernahme innerhalb von 60 s nach einem Neustart,
-    Übernahme nach einem Öffnen ohne Übernahme.
+  - [x] **du:** Gerätetest dazu (2026-10-25, vier Übernahmen): Der Cache
+    wird jedes Mal neu geladen und hält danach die geholte Position, aber
+    zwei Übernahmen öffneten trotzdem am Kapitelanfang (14:56 Kapitel 1 →
+    2, 15:02 im Kapitel 2, beide kurz nach einem Neustart). Der Cache war
+    also nicht die ganze Ursache. Gemeinsam ist den Fehlschlägen (auch
+    13:47): Das Buch wurde vorher auf der Seite verlassen, auf der es
+    geöffnet hatte, ohne zu blättern. Und die Prüfung ließ um 14:56 den
+    Kapitelanfang als „übernommen“ durch (36 Schritte bei Grenze 40).
+  - [x] **ich:** Grenze in `near()` auf 12 Schritte (die richtigen Seiten
+    lagen 2 bis 4 davor), Toasts länger (5 s, Probleme 8 s), und das Log
+    zeigt die Zeile beim Öffnen, die Spalten, die das Neuladen ändert, und
+    die Spalten, die Nickel bis zum Verlassen ändert.
+  - [ ] **du:** Gezielter Gerätetest: Übernahme → ohne Blättern verlassen
+    → Übernahme, und Übernahme → blättern → verlassen → Übernahme.
   - [ ] **ich (nur falls das nicht reicht):** Position über Nickel selbst
     schreiben, Vorbild Kobalt (MIT, nur das Konzept):
     `VolumeManager::updateBookmark`, `updateFields` in einer

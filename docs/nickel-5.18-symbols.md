@@ -321,6 +321,34 @@ then the original `setVolume`. Three seconds later the log names where
 Nickel stands and whether the cache was reloaded. All four symbols are
 optional; without them the plugin hands Nickel a copy as in step 4.
 
+**Device test of step 5** (Shine Color 5.18, Book R, 2026-10-25): the
+cache is reloaded every time (90–270 ms), and the reloaded `Volume`
+always holds the pulled position, yet two of four takes opened at the
+chapter start:
+
+| Time | Before (cache) | Pulled | Nickel 3 s later |
+|---|---|---|---|
+| 14:50 | ch. 1 `/1/4/190/1:0` | ch. 1 `/1/4/216/1:53` | `/1/4/214/1:83`, right |
+| 14:54 (15 s after a restart) | ch. 1 `/1/4/224/1:132` | ch. 1 `/1/4/244/1:0` | `/1/4/240/1:45`, right |
+| 14:56 (17 s after a restart) | ch. 1 `/1/4/240/1:45` | ch. 2 `/1/4/38/1:161` | `/1/4/2/1:0`, chapter start |
+| 15:02 (17 s after a restart) | ch. 2 `/1/4/2/1:0` | ch. 2 `/1/4/82/1:225` | `/1/4/2/1:0`, chapter start |
+
+So the cache is not the whole cause. The pulled points are valid (each
+lies inside its paragraph). What the failures share, here and on
+25.10. 13:47: the book had last been left on the page it opened on,
+without turning a page; before the takes that worked, it had been read
+on and pushed. Since 15:02 failed after a restart, whatever carries this
+is stored. The CLI writes only `ChapterIDBookmarked`, `___PercentRead`
+and `DateLastRead`; Nickel's save writes more (the backups also differ in
+`CurrentChapterProgress`). The plugin now logs the row at opening, the
+columns the reload changed, and the columns Nickel changed by the time
+the book is left, to find the one that matters.
+
+The check after opening let the chapter start pass at 14:56
+(`/1/4/2` is 36 node steps before `/1/4/38`, the limit was 40); the
+pages that were right started 2 to 4 steps before the point, so the
+limit is now 12.
+
 Not tried, in case this is not enough: writing the position through
 Nickel instead of the CLI, as Kobalt does on the Kobo (concept only):
 `VolumeManager::updateBookmark(Volume&, QString const&, int, QDateTime
@@ -375,7 +403,8 @@ queue is full (`ApplicationSettings::numMaxToasts()`), shows it through
 both lines, places it in `uiGeometry()` and starts a `QTimer` with
 `QueuedToast::getDuration()`: the `int` is how long the toast stays, in
 milliseconds. Nickel's own `RatingControls::showFeedbackToast` passes
-1500. The plugin uses 3000 for results and 5000 for problems. Optional:
+1500. The plugin uses 5000 for results and 8000 for problems (3000 and
+5000 were too short to read on the device). Optional:
 without it the plugin works as before, silently.
 
 The texts are German only for now: no way was found yet to tell the
