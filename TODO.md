@@ -470,7 +470,7 @@ dürfen jederzeit dazwischengeschoben werden.
     Mutex; `Repository::purgeCache<Volume>` fehlt im Tolino-Build), lädt
     das Buch mit `getById` neu (das füllt den Cache aus der Datenbank) und
     öffnet mit diesem `Volume`. Das Log zeigt Cache-Stand vorher und
-    nachher und 3 s nach dem Öffnen die Stelle. PR folgt.
+    nachher und 3 s nach dem Öffnen die Stelle. PR #26.
   - [ ] **du:** Gerätetest dazu, mehrere Läufe: Übernahme direkt nach
     einer Übernahme, Übernahme innerhalb von 60 s nach einem Neustart,
     Übernahme nach einem Öffnen ohne Übernahme.
