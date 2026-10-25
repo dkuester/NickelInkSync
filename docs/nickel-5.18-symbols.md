@@ -349,6 +349,17 @@ The check after opening let the chapter start pass at 14:56
 pages that were right started 2 to 4 steps before the point, so the
 limit is now 12.
 
+**Second device test of step 5** (same day, 15:14–15:32, with the row
+diffs): turning pages or not makes no difference, and no column does
+either. Nickel opened at 15:18 (chapter start, failed) and 15:19 (right)
+with the same row, and leaving changes only `ChapterIDBookmarked`,
+`___PercentRead` and `DateLastRead`, the columns the CLI writes as well.
+What separates the outcomes since the cache reload is Wi-Fi: all 6 takes
+with Wi-Fi already on worked; of 5 where the plugin first waited for
+Wi-Fi (`wait_online`, a local `QEventLoop` inside the hooked `setVolume`),
+3 failed. The guess: Nickel's events keep running during that wait and
+prepare the opening from the old state. Not proven yet.
+
 Not tried, in case this is not enough: writing the position through
 Nickel instead of the CLI, as Kobalt does on the Kobo (concept only):
 `VolumeManager::updateBookmark(Volume&, QString const&, int, QDateTime
@@ -404,7 +415,9 @@ both lines, places it in `uiGeometry()` and starts a `QTimer` with
 `QueuedToast::getDuration()`: the `int` is how long the toast stays, in
 milliseconds. Nickel's own `RatingControls::showFeedbackToast` passes
 1500. The plugin uses 5000 for results and 8000 for problems (3000 and
-5000 were too short to read on the device). Optional:
+5000 were too short to read on the device). The Tolino cuts the primary
+line after about 24 characters and the secondary after about 45, so the
+plugin's texts stay below that. Optional:
 without it the plugin works as before, silently.
 
 The texts are German only for now: no way was found yet to tell the

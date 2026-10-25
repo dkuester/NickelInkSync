@@ -483,8 +483,18 @@ dürfen jederzeit dazwischengeschoben werden.
     lagen 2 bis 4 davor), Toasts länger (5 s, Probleme 8 s), und das Log
     zeigt die Zeile beim Öffnen, die Spalten, die das Neuladen ändert, und
     die Spalten, die Nickel bis zum Verlassen ändert.
-  - [ ] **du:** Gezielter Gerätetest: Übernahme → ohne Blättern verlassen
-    → Übernahme, und Übernahme → blättern → verlassen → Übernahme.
+  - [x] **du:** Gezielter Gerätetest (2026-10-25, 15:14–15:32): Blättern
+    ist es nicht, und keine Spalte der Zeile unterscheidet Erfolg und
+    Fehlschlag (15:18 und 15:19 öffneten mit derselben Zeile). Seit dem
+    Cache-Neuladen klappten alle 6 Übernahmen mit schon eingeschaltetem
+    WLAN; von 5, bei denen das Plugin erst aufs WLAN wartete (lokale
+    Ereignisschleife mitten in `setVolume`), schlugen 3 fehl.
+  - [x] **ich:** Toast-Texte gekürzt: Der Tolino schneidet die erste Zeile
+    nach etwa 24 Zeichen ab, die zweite nach etwa 45.
+  - [ ] **du:** Gerätetest WLAN aus / WLAN an vor dem Öffnen, je drei
+    Übernahmen ohne Neustart.
+  - [ ] **ich (falls nur „WLAN aus“ fehlschlägt):** nicht mehr mitten in
+    `setVolume` aufs WLAN warten.
   - [ ] **ich (nur falls das nicht reicht):** Position über Nickel selbst
     schreiben, Vorbild Kobalt (MIT, nur das Konzept):
     `VolumeManager::updateBookmark`, `updateFields` in einer
