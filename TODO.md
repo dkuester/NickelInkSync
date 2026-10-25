@@ -455,7 +455,12 @@ dürfen jederzeit dazwischengeschoben werden.
     (auch nicht am Rechner, außer `--force`), und `pull` übernimmt die
     Server-Position ohne Rücksicht auf Nickels `DateLastRead`, ohne
     Rückfrage, solange die Zeile noch Nickels Stelle hält.
-  - [ ] **du:** Gerätetest der Sperre.
+  - [~] **du:** Gerätetest der Sperre (2026-10-25, `594c477`): Diesmal
+    klappte das Übernehmen beim ersten Öffnen nach dem Start (R3-179 geholt,
+    Seite mit R3-178), also wurde die Sperre selbst nicht ausgelöst.
+    Verlassen auf der übernommenen Seite sendete nichts („aktuell“),
+    Weiterlesen bis R3-186 sendete. Die Sperre bei einem misslungenen
+    Öffnen ist am Gerät noch nicht getestet.
   - [ ] **ich:** Ursache des ersten Öffnens: Nickels `Volume`-Cache
     (`Repository::refreshCache<Volume>`), Vorbild Kobalt (MIT): Position
     über Nickel schreiben (`VolumeManager::updateBookmark`/`updateFields`)

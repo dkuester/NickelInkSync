@@ -214,6 +214,30 @@ Each CI run uploads the same file as the artifact `nickelinksync-armv7-musleabih
 | Bugs and ideas | [Issues](https://github.com/dkuester/NickelInkSync/issues). Please include your device model and firmware version. |
 | Contributing | Pull requests against `main`. |
 
+## Credits
+
+NickelInkSync builds on the work of these projects and their maintainers.
+
+**Code it uses**
+
+| Project | By | License | What for |
+|---|---|---|---|
+| [NickelHook](https://github.com/pgaskin/NickelHook) | Patrick Gaskin | MIT | Hooking Nickel; the plugin is built on it |
+| [NickelHook, branch `qt6-support`](https://github.com/nicoverbruggen/NickelHook/tree/qt6-support) | Nico Verbruggen | MIT | Qt6 port of NickelHook for firmware 5.x, the plugin's submodule |
+| Rust crates: [clap](https://github.com/clap-rs/clap), [md-5](https://github.com/RustCrypto/hashes), [quick-xml](https://github.com/tafia/quick-xml), [rusqlite](https://github.com/rusqlite/rusqlite) (with [SQLite](https://sqlite.org)), [serde](https://github.com/serde-rs/serde), [ureq](https://github.com/algesten/ureq) (with [rustls](https://github.com/rustls/rustls)), [zip](https://github.com/zip-rs/zip2) | their authors | MIT / Apache-2.0, SQLite public domain | The CLI (see `Cargo.toml`) |
+
+**Ideas and documentation, no code** (re-implemented from the described
+behavior; the AGPL-3.0 projects are references only, see
+[SCOPE.md](SCOPE.md#license))
+
+| Project | By | License | What for |
+|---|---|---|---|
+| [KOReader](https://github.com/koreader/koreader) | the KOReader developers | AGPL-3.0 | The partial MD5 book hash, XPointers, the reading-progress sync |
+| [koreader-sync-server](https://github.com/koreader/koreader-sync-server) | the KOReader developers | AGPL-3.0 | The KOSync protocol |
+| [BookOrbit](https://github.com/bookorbit/bookorbit) | the BookOrbit developers | AGPL-3.0 | Matching books by the KOReader hash; the planned manual book mapping |
+| [Kobalt](https://github.com/nicoverbruggen/kobalt) | Nico Verbruggen | MIT | How Nickel caches books (`Cache<Volume>`) and how to write progress through Nickel itself |
+| [Amazon Ion 1.0](https://amazon-ion.github.io/ion-docs/) | Amazon | specification | Reading KFX books (Kindle feasibility check) |
+
 ## License
 
 [MIT](LICENSE)
