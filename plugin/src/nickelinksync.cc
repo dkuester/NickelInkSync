@@ -240,6 +240,8 @@ static Notify read_notify()
     return notify;
 }
 
+// The Tolino cuts the primary line after about 24 characters and the
+// secondary after about 45 (device test), so both are kept short.
 // Shows one of Nickel's toasts after `delay_ms`, if `notify` allows it: a
 // `problem` (something went wrong or was left undone) unless `none`, any
 // other only with `all`.
@@ -277,13 +279,13 @@ static QString error_reason(const QByteArray &out)
     const QList<QList<QByteArray>> errors = machine_lines(out, "ERROR");
     const QByteArray kind = errors.isEmpty() ? QByteArray() : errors[0].value(0);
     if (kind == "timeout") {
-        return QStringLiteral("Der Server hat nicht rechtzeitig geantwortet");
+        return QStringLiteral("Server antwortet nicht");
     }
     if (kind == "network") {
         return QStringLiteral("Keine Verbindung zum Server");
     }
     if (kind == "auth") {
-        return QStringLiteral("Anmeldung abgelehnt: Benutzer und Passwort prüfen");
+        return QStringLiteral("Anmeldung abgelehnt");
     }
     if (kind == "server") {
         return QStringLiteral("Unerwartete Antwort vom Server");
@@ -296,18 +298,18 @@ static QString error_reason(const QByteArray &out)
 static QString skip_reason(const QByteArray &reason)
 {
     if (reason == "server-newer") {
-        return QStringLiteral("Der Server hat einen neueren Stand");
+        return QStringLiteral("Server hat einen neueren Stand");
     }
     if (reason == "not-in-line") {
         return QStringLiteral("Beim Öffnen nicht abgeglichen");
     }
     if (reason == "not-translated") {
-        return QStringLiteral("Die Position vom Server passt nicht zu diesem Buch");
+        return QStringLiteral("Position passt nicht zum Buch");
     }
-    return QStringLiteral("Buch oder Position auf dem Gerät nicht lesbar");
+    return QStringLiteral("Buch oder Position nicht lesbar");
 }
 
-static const QString kUnansweredReason = QStringLiteral("Braucht eine Bestätigung (confirm in config.ini)");
+static const QString kUnansweredReason = QStringLiteral("Braucht Bestätigung (confirm)");
 
 static bool online()
 {
@@ -497,19 +499,19 @@ static void check_open(const QString &id, const QString &target, const QString &
         g_taken_id = id;
         g_taken_page = at;
         set_not_in_line(id, QString());
-        toast(false, QStringLiteral("Fortschritt vom Server übernommen"), taken);
+        toast(false, QStringLiteral("Fortschritt übernommen"), taken);
     } else if (chapter_of(at) == chapter_of(target)) {
         log_line(QStringLiteral("after opening: Nickel is at %1, in the pulled chapter but not near the point; "
                                 "not pushed until a pull brings it in line").arg(at));
         set_not_in_line(id, at);
-        toast(true, QStringLiteral("Fortschritt nicht übernommen"),
-              QStringLiteral("Nickel hat an einer anderen Stelle im Kapitel geöffnet"));
+        toast(true, QStringLiteral("Nicht übernommen"),
+              QStringLiteral("Andere Stelle im Kapitel geöffnet"));
     } else {
         log_line(QStringLiteral("after opening: Nickel is at %1, not in the pulled chapter; "
                                 "not pushed until a pull brings it in line").arg(at));
         set_not_in_line(id, at);
-        toast(true, QStringLiteral("Fortschritt nicht übernommen"),
-              QStringLiteral("Nickel hat ein anderes Kapitel geöffnet"));
+        toast(true, QStringLiteral("Nicht übernommen"),
+              QStringLiteral("Anderes Kapitel geöffnet"));
     }
 }
 
@@ -668,7 +670,7 @@ static Pulled pull_and_write(const QString &id)
     p.start(QString::fromLatin1(kCli), args);
     if (!p.waitForStarted(3000)) {
         log_line(QStringLiteral("pull: could not start the CLI: %1").arg(p.errorString()));
-        result.error = QStringLiteral("NickelInkSync konnte nicht starten");
+        result.error = QStringLiteral("NickelInkSync startet nicht");
         return result;
     }
     if (!p.waitForFinished(kPullWaitMs)) {
@@ -753,20 +755,20 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
         // Without Wi-Fi the CLI only sees a timeout or no route; Nickel's
         // check is not reliable either way, so the text names both.
         const bool no_wifi = !wifi && (p.error_kind == "timeout" || p.error_kind == "network");
-        toast(true, QStringLiteral("Fortschritt konnte nicht vom Server gelesen werden"),
-              no_wifi ? QStringLiteral("Kein WLAN oder Server nicht erreichbar") : p.error, kOpenToastDelayMs);
+        toast(true, QStringLiteral("Laden fehlgeschlagen"),
+              no_wifi ? QStringLiteral("Kein WLAN oder kein Server") : p.error, kOpenToastDelayMs);
         return;
     }
     if (p.unanswered) {
         log_line(QStringLiteral("open %1 unchanged: the position needs an answer (confirm); leaving it will not push").arg(id));
         ReadingController__setVolume(self, volume, bookmark);
-        toast(true, QStringLiteral("Fortschritt nicht übernommen"), kUnansweredReason, kOpenToastDelayMs);
+        toast(true, QStringLiteral("Nicht übernommen"), kUnansweredReason, kOpenToastDelayMs);
         return;
     }
     if (!p.not_taken.isEmpty()) {
         log_line(QStringLiteral("open %1 unchanged: the server's position cannot be taken; leaving it will not push").arg(id));
         ReadingController__setVolume(self, volume, bookmark);
-        toast(true, QStringLiteral("Fortschritt nicht übernommen"), skip_reason(p.not_taken), kOpenToastDelayMs);
+        toast(true, QStringLiteral("Nicht übernommen"), skip_reason(p.not_taken), kOpenToastDelayMs);
         return;
     }
     if (!p.found) {
@@ -774,7 +776,7 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
         g_not_synced.clear();
         ReadingController__setVolume(self, volume, bookmark);
         toast(false, QStringLiteral("Fortschritt ist aktuell"),
-              QStringLiteral("Der Server hat keinen neueren Stand"), kOpenToastDelayMs);
+              QStringLiteral("Server hat nichts Neueres"), kOpenToastDelayMs);
         return;
     }
     log_line(QStringLiteral("open %1 at %2 (%3 %)").arg(id, QString::fromUtf8(p.position)).arg(p.percent));
@@ -816,8 +818,8 @@ static void push_finished(const QString &id, QProcess *p)
 {
     const QByteArray out = p->readAll();
     log_line(QStringLiteral("push %1 (exit %2):\n%3").arg(id).arg(p->exitCode()).arg(QString::fromUtf8(out).trimmed()));
-    const QString failed = QStringLiteral("Fortschritt konnte nicht gesendet werden");
-    const QString not_sent = QStringLiteral("Fortschritt nicht gesendet");
+    const QString failed = QStringLiteral("Senden fehlgeschlagen");
+    const QString not_sent = QStringLiteral("Nicht gesendet");
     if (p->exitStatus() != QProcess::NormalExit || p->exitCode() != 0) {
         toast(true, failed, error_reason(out));
         return;
@@ -825,14 +827,14 @@ static void push_finished(const QString &id, QProcess *p)
     const QList<QList<QByteArray>> sent = machine_lines(out, "SENT");
     const QList<QList<QByteArray>> skipped = machine_lines(out, "NOT_SENT");
     if (!sent.isEmpty()) {
-        toast(false, QStringLiteral("Fortschritt zum Server gesendet"),
+        toast(false, QStringLiteral("Fortschritt gesendet"),
               QStringLiteral("%1 %").arg(QString::fromUtf8(sent[0].value(0))));
     } else if (!skipped.isEmpty()) {
         toast(true, not_sent, skip_reason(skipped[0].value(0)));
     } else if (!machine_lines(out, "UNANSWERED").isEmpty()) {
         toast(true, not_sent, kUnansweredReason);
     } else if (!machine_lines(out, "IN_SYNC").isEmpty()) {
-        toast(false, QStringLiteral("Fortschritt ist aktuell"), QStringLiteral("Der Server hat schon diesen Stand"));
+        toast(false, QStringLiteral("Fortschritt ist aktuell"), QStringLiteral("Server hat schon diesen Stand"));
     }
 }
 
@@ -852,8 +854,8 @@ static void start_push(const QString &id)
     QObject::connect(p, &QProcess::errorOccurred, p, [p](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart) {
             log_line(QStringLiteral("push: could not start the CLI: %1").arg(p->errorString()));
-            toast(true, QStringLiteral("Fortschritt konnte nicht gesendet werden"),
-                  QStringLiteral("NickelInkSync konnte nicht starten"));
+            toast(true, QStringLiteral("Senden fehlgeschlagen"),
+                  QStringLiteral("NickelInkSync startet nicht"));
             p->deleteLater();
         }
     });
@@ -903,7 +905,7 @@ void _nh_ReadingView__leavingReadingExperience(ReadingView *self)
     }
     if (g_not_synced == id) {
         log_line(QStringLiteral("left %1, which is not in line with the server: not pushed").arg(id));
-        toast(true, QStringLiteral("Fortschritt nicht gesendet"), QStringLiteral("Beim Öffnen nicht abgeglichen"));
+        toast(true, QStringLiteral("Nicht gesendet"), QStringLiteral("Beim Öffnen nicht abgeglichen"));
         return;
     }
     when_online(
@@ -911,7 +913,7 @@ void _nh_ReadingView__leavingReadingExperience(ReadingView *self)
         [id] { start_push(id); },
         [] {
             log_line(QStringLiteral("push: nothing sent"));
-            toast(true, QStringLiteral("Fortschritt konnte nicht gesendet werden"), QStringLiteral("Kein WLAN"));
+            toast(true, QStringLiteral("Senden fehlgeschlagen"), QStringLiteral("Kein WLAN"));
         });
 }
 
