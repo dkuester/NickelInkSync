@@ -491,8 +491,15 @@ dürfen jederzeit dazwischengeschoben werden.
     Ereignisschleife mitten in `setVolume`), schlugen 3 fehl.
   - [x] **ich:** Toast-Texte gekürzt: Der Tolino schneidet die erste Zeile
     nach etwa 24 Zeichen ab, die zweite nach etwa 45.
-  - [ ] **du:** Gerätetest WLAN aus / WLAN an vor dem Öffnen, je drei
-    Übernahmen ohne Neustart.
+  - [x] **du:** Gerätetest WLAN aus / WLAN an (2026-10-25, 15:44–15:49):
+    drei Übernahmen richtig, zwei davon mit Warten (7 s und 1 s); einmal
+    kam kein WLAN (richtig behandelt). Stand mit Cache-Neuladen: ohne
+    Warten 7 von 7 richtig, mit Warten 4 von 7. Nicht eindeutig.
+  - [x] **ich:** Testschalter: Gibt es `.adds/NickelInkSync/debug-open-wait`,
+    wartet das Plugin bei jedem Öffnen 10 s in einer lokalen
+    Ereignisschleife, auch bei verbundenem WLAN.
+  - [ ] **du (26.10.):** Gerätetest mit Schalter: fünf Übernahmen mit der
+    Datei, fünf ohne, WLAN jeweils schon verbunden.
   - [ ] **ich (falls nur „WLAN aus“ fehlschlägt):** nicht mehr mitten in
     `setVolume` aufs WLAN warten.
   - [ ] **ich (nur falls das nicht reicht):** Position über Nickel selbst

@@ -360,6 +360,13 @@ Wi-Fi (`wait_online`, a local `QEventLoop` inside the hooked `setVolume`),
 3 failed. The guess: Nickel's events keep running during that wait and
 prepare the opening from the old state. Not proven yet.
 
+**Third device test** (15:44–15:49): three takes right, two of them
+after a wait for Wi-Fi (7 s and 1 s). With the cache reload, 7 of 7 takes
+without a wait and 4 of 7 with one were right: suggestive, not proven.
+For a controlled test, the empty file
+`.adds/NickelInkSync/debug-open-wait` makes every opening wait 10 s in a
+local event loop before the pull, with Wi-Fi already up.
+
 Not tried, in case this is not enough: writing the position through
 Nickel instead of the CLI, as Kobalt does on the Kobo (concept only):
 `VolumeManager::updateBookmark(Volume&, QString const&, int, QDateTime

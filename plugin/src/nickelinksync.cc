@@ -105,6 +105,11 @@ static const char kBackups[] = "/mnt/onboard/.adds/NickelInkSync/backups";
 // `ContentID<tab>where Nickel opened` per line. The CLI never pushes them
 // and takes the server's position on the next pull.
 static const char kNotInLine[] = "/mnt/onboard/.adds/NickelInkSync/not-in-line.tsv";
+// Device test only: if this file exists, opening a book waits kDebugOpenWaitMs
+// in a local event loop before the pull, as it does while waiting for
+// Wi-Fi, to tell whether that wait makes Nickel open at the chapter start.
+static const char kDebugOpenWait[] = "/mnt/onboard/.adds/NickelInkSync/debug-open-wait";
+static const int kDebugOpenWaitMs = 10000;
 static const char kOnboard[] = "/mnt/onboard";
 static const char kSideloaded[] = "file:///mnt/onboard/";
 static const qint64 kLogMaxBytes = 128 * 1024;
@@ -744,6 +749,12 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     // it stayed false for 10 s with Wi-Fi connected (device test). So it
     // only decides how long to wait; the CLI always tries, and fails fast
     // without a network.
+    if (QFileInfo::exists(QString::fromLatin1(kDebugOpenWait))) {
+        log_line(QStringLiteral("debug-open-wait: waiting %1 s in a local event loop").arg(kDebugOpenWaitMs / 1000));
+        QEventLoop loop;
+        QTimer::singleShot(kDebugOpenWaitMs, &loop, &QEventLoop::quit);
+        loop.exec();
+    }
     const bool wifi = wait_online(kOpenWifiMs);
     if (!wifi) {
         log_line(QStringLiteral("Nickel reports no internet; trying anyway"));
