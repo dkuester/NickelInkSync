@@ -435,11 +435,14 @@ dürfen jederzeit dazwischengeschoben werden.
     `Volume`, das Nickel übergibt, die Position: **funktioniert** (du,
     2026-10-25: R3-152 geholt, Nickel auf der Seite mit R3-151, Meldung
     „übernommen“).
-  - [ ] **ich:** Direkt nach dem Übernehmen wieder verlassen meldet
+  - [x] **ich:** Direkt nach dem Übernehmen wieder verlassen meldet
     „Fortschritt nicht gesendet / Braucht eine Bestätigung“: Nickel speichert
     den Seitenanfang (R3-150), der vor der Server-Stelle (R3-152) liegt, und
-    `confirm = backwards` fragt. Richtig nach der Regel, aber lästig; die
-    Seite mit der Server-Stelle sollte als abgeglichen gelten.
+    `confirm = backwards` fragt. Richtig nach der Regel, aber lästig. Jetzt
+    merkt sich das Plugin die Seite, auf der es nach dem Übernehmen steht;
+    wer auf ihr verlässt, sendet nichts („Fortschritt ist aktuell / Noch
+    auf der Seite vom Server“). Wer weiterblättert, sendet wie bisher.
+  - [ ] **du:** Gerätetest dazu.
   - [ ] **ich (nach dem Test):** Gerätesprache: Das Log zeigt `QLocale()`
     beim Start; folgt sie Nickels Spracheinstellung, kommen die Meldungen
     auch auf Englisch.

@@ -150,8 +150,7 @@ its own.
   leaving a book as one of Nickel's toasts, chosen by `notify` in
   `config.ini` (`all`, `errors`, `none`). Verified on the Tolino, also
   opening within the chapter last read. Still to do: English texts (the
-  plugin logs `QLocale()`, `de_DE` so far), and a book left right after a
-  pull should count as in line instead of asking.
+  plugin logs `QLocale()`, `de_DE` so far).
 - **NickelHook plugin, Qt5 (Kobo 4.x)** (L): push on book close, pull on open,
   jump via Nickel's own navigation. Blocker: find the libnickel symbol for
   "open at position" on 4.46; verification is on-device only.

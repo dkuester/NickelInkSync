@@ -31,7 +31,9 @@
  *   The original saves the position (saveProgress); after it returns, the CLI
  *   pushes that book in the background (`push --live --emit`, an
  *   asynchronous QProcess whose output goes to the log), once Wi-Fi is up.
- *   Leaving never waits for it. Not
+ *   Leaving never waits for it. Not on the page the server's position was
+ *   taken on: Nickel saves that page's start, which lies before the
+ *   server's point, so the push would only ask. Not
  *   while the background pull of that book still runs: then the reading view
  *   was only covered (a dialog), and its position is about to change. And
  *   not when the book was opened without a pull (no network), or Nickel did
@@ -161,6 +163,12 @@ static QString g_open_id;
 // The book that was not brought in line with the server when it was
 // opened, or whose pulled chapter Nickel did not open: not pushed.
 static QString g_not_synced;
+// The page Nickel opened a book on after taking the server's position
+// (its start, as Nickel saves it), and that book. Leaving on that page
+// sends nothing: the page start lies before the server's point, and the
+// push would ask (confirm = backwards) although nothing was read.
+static QString g_taken_id;
+static QString g_taken_page;
 
 static void log_line(const QString &msg)
 {
@@ -425,6 +433,8 @@ static void check_open(const QString &id, const QString &target, const QString &
         if (g_not_synced == id) {
             g_not_synced.clear();
         }
+        g_taken_id = id;
+        g_taken_page = at;
         toast(false, QStringLiteral("Fortschritt vom Server übernommen"), taken);
     } else if (chapter_of(at) == chapter_of(target)) {
         log_line(QStringLiteral("after opening: Nickel is at %1, in the pulled chapter but not near the point; "
@@ -539,6 +549,8 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     const QString id = Content__getId(volume, QString());
     g_open_id = id;
     g_not_synced.clear();
+    g_taken_id.clear();
+    g_taken_page.clear();
     if (!id.startsWith(QString::fromLatin1(kSideloaded))) {
         ReadingController__setVolume(self, volume, bookmark);
         return;
@@ -674,12 +686,20 @@ static void start_push(const QString &id)
 extern "C" __attribute__((visibility("default")))
 void _nh_ReadingView__leavingReadingExperience(ReadingView *self)
 {
+    // Still on the page taken from the server? Asked before Nickel leaves.
+    const bool on_taken_page = g_active && !g_taken_page.isEmpty() && g_taken_id == g_open_id
+                               && current_location(self) == g_taken_page;
     // First Nickel saves the position.
     ReadingView__leavingReadingExperience(self);
     if (!g_active || !g_open_id.startsWith(QString::fromLatin1(kSideloaded))) {
         return;
     }
     const QString id = g_open_id;
+    if (on_taken_page) {
+        log_line(QStringLiteral("left %1 on the page taken from the server (%2): nothing to push").arg(id, g_taken_page));
+        toast(false, QStringLiteral("Fortschritt ist aktuell"), QStringLiteral("Noch auf der Seite vom Server"));
+        return;
+    }
     if (g_not_synced == id) {
         log_line(QStringLiteral("left %1, which is not in line with the server: not pushed").arg(id));
         toast(true, QStringLiteral("Fortschritt nicht gesendet"), QStringLiteral("Beim Öffnen nicht abgeglichen"));

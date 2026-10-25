@@ -145,7 +145,7 @@ refused). `notify` in `config.ini` picks which:
 
 | Value | Shows |
 |---|---|
-| `all` (default) | every outcome, also "Fortschritt ist aktuell" when there was nothing to take or send |
+| `all` (default) | every outcome, also "Fortschritt ist aktuell" when there was nothing to take or send (for example when you leave a book on the page the server's position opened it on) |
 | `errors` | only what went wrong or was left undone: server not reached, position not taken, position not sent |
 | `none` | nothing; the log still has everything |
 

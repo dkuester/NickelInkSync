@@ -125,7 +125,7 @@ Anmeldung abgelehnt). `notify` in `config.ini` legt fest, welche:
 
 | Wert | Zeigt |
 |---|---|
-| `all` (Standard) | jedes Ergebnis, auch „Fortschritt ist aktuell“, wenn nichts zu übernehmen oder zu senden war |
+| `all` (Standard) | jedes Ergebnis, auch „Fortschritt ist aktuell“, wenn nichts zu übernehmen oder zu senden war (etwa wenn du ein Buch auf der Seite verlässt, auf der es mit der Server-Position geöffnet wurde) |
 | `errors` | nur, was schiefging oder unterblieb: Server nicht erreicht, Position nicht übernommen, nicht gesendet |
 | `none` | nichts; im Log steht weiterhin alles |
 
