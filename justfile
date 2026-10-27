@@ -47,3 +47,8 @@ package: build-device plugin
   chmod 755 dist/NickelInkSync/.adds/NickelInkSync/nickelinksync
   cp plugin/config.ini.example dist/NickelInkSync/.adds/NickelInkSync/config.ini.example
   find dist/NickelInkSync -type f | sort
+
+# Nickel VM: Kobo firmware 6.0 in Tolino mode under qemu-user, with a KOSync
+# mock (docs/nickel-vm.md). `just vm image`, `just vm up`, `just vm shot`, ...
+vm *args:
+  vm/vm.sh {{ args }}
