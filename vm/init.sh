@@ -26,7 +26,10 @@ echo 0 > time_to_full_now
 cd /
 
 # Nothing may power off the container or hand the user partition to USB.
-for f in /sbin/poweroff /sbin/reboot /sbin/halt /usr/bin/export-usb.sh; do
+# Wi-Fi is vm/wifi/wifi.py in a sidecar: the real wpa_supplicant, dhcpcd
+# and dhcpcd-dbus would only fail without the hardware.
+for f in /sbin/poweroff /sbin/reboot /sbin/halt /usr/bin/export-usb.sh \
+        /usr/sbin/wpa_supplicant /sbin/dhcpcd /usr/libexec/dhcpcd-dbus; do
     mount --bind /vm/stub.sh "$f"
 done
 
@@ -49,7 +52,16 @@ export QT_USE_SYSTEM_LINE_METRICS=1
 echo "PLATFORM=$PLATFORM PRODUCT=$PRODUCT"
 
 mkdir -p /run/dbus
+rm -f /run/dbus/pid /run/dbus/system_bus_socket /run/dbus/vm-wifi-ready
 dbus-daemon --system --fork
+if [ -n "$VM_DBUS_MONITOR" ]; then
+    while [ ! -S /run/dbus/system_bus_socket ]; do sleep 0.2; done
+    dbus-monitor --system > /state/dbus-monitor.txt 2>&1 &
+fi
+# Nickel asks name.marples.roy.dhcpcd at once; wait for the sidecar to own it.
+i=0
+while [ ! -e /run/dbus/vm-wifi-ready ] && [ $i -lt 120 ]; do sleep 0.5; i=$((i + 1)); done
+[ -e /run/dbus/vm-wifi-ready ] || echo "vm: no Wi-Fi sidecar, starting without Wi-Fi"
 DBUS_SESSION_BUS_ADDRESS=$(dbus-daemon --session --print-address --fork)
 export DBUS_SESSION_BUS_ADDRESS
 

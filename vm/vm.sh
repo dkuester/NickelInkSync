@@ -14,9 +14,13 @@
 #   vm/vm.sh shot [FILE]      save the screen as PNG (default vm/state/screen.png)
 #   vm/vm.sh log              plugin log and Nickel's syslog lines of the plugin
 #   vm/vm.sh syslog           the whole syslog
+#   vm/vm.sh wifi             the fake Wi-Fi's log
 #   vm/vm.sh kosync           the mock server's documents (vm/state/kosync.json)
 #   vm/vm.sh shell            a shell in the VM
 #
+# NICKEL_VM_QT_LOGGING sets Nickel's QT_LOGGING_RULES (e.g. "wifi.*=true"),
+# VM_WIFI_TRACE=1 logs every call to the fake Wi-Fi, VM_DBUS_MONITOR=1 writes
+# the system bus to vm/state/dbus-monitor.txt.
 # NICKEL_VM_BRAND=kobo starts a Kobo Clara Colour instead (before the first `up`).
 set -euo pipefail
 
@@ -36,6 +40,11 @@ NET=nickel-vm
 VM=nickel-vm
 KOSYNC=nickel-vm-kosync
 KOSYNC_PORT=8765
+WIFI=nickel-vm-wifi
+WIFI_IMAGE=localhost/nickel-vm-wifi
+# Shared with the Wi-Fi sidecar: the system bus, wpa_supplicant's control
+# socket and /tmp, where wpa_ctrl clients bind their reply sockets.
+SHARED=(-v nickel-vm-dbus:/run/dbus -v nickel-vm-wpa:/run/wpa_supplicant -v nickel-vm-tmp:/tmp)
 
 log() { echo "vm: $*" >&2; }
 
@@ -71,6 +80,8 @@ image() {
         arm-kobo-linux-gnueabihf-gcc -O2 -Wall -shared -fPIC -o /out/vmshim.so /src/vmshim.c -ldl
         arm-kobo-linux-gnueabihf-gcc -O2 -Wall -o /out/vmtouch /src/vmtouch.c
     '
+    log "building the Wi-Fi sidecar"
+    docker build -q -t "$WIFI_IMAGE" "$VM_DIR/wifi" >/dev/null
     log "ready: vm/vm.sh up"
 }
 
@@ -99,12 +110,15 @@ start_kosync() {
 }
 
 start_nickel() {
-    docker rm -f "$VM" >/dev/null 2>&1 || true
+    docker rm -f "$WIFI" "$VM" >/dev/null 2>&1 || true
     local first=0
     [ -f "$STATE/onboard/.kobo/KoboReader.sqlite" ] || first=1
     docker run -d --name "$VM" --privileged --platform linux/arm/v7 --network "$NET" \
-        -v "$VM_DIR:/vm:ro" -v "$BUILD:/vmbin:ro" -v "$STATE:/state" \
+        -e QT_LOGGING_RULES="${NICKEL_VM_QT_LOGGING:-}" -e VM_DBUS_MONITOR="${VM_DBUS_MONITOR:-}" \
+        -v "$VM_DIR:/vm:ro" -v "$BUILD:/vmbin:ro" -v "$STATE:/state" "${SHARED[@]}" \
         "$IMAGE" /vm/init.sh >/dev/null
+    docker run -d --name "$WIFI" --network "container:$VM" --cap-add NET_ADMIN "${SHARED[@]}" \
+        -e VM_WIFI_TRACE="${VM_WIFI_TRACE:-}" "$WIFI_IMAGE" >/dev/null
     log "starting Nickel (about a minute under emulation)"
     if ! wait_for 'MainWindowController::pushView' 180; then
         log "Nickel did not show a view; see: vm/vm.sh syslog"
@@ -131,7 +145,7 @@ up() {
 }
 
 down() {
-    docker rm -f "$VM" "$KOSYNC" >/dev/null 2>&1 || true
+    docker rm -f "$WIFI" "$VM" "$KOSYNC" >/dev/null 2>&1 || true
 }
 
 install() {
@@ -189,7 +203,8 @@ case "$cmd" in
         docker exec "$VM" sh -c 'logread' | grep -F '(NickelInkSync)' || true
         ;;
     syslog) docker exec "$VM" sh -c 'logread' ;;
+    wifi) docker logs "$WIFI" ;;
     kosync) cat "$STATE/kosync.json" 2>/dev/null || echo '{}' ;;
     shell) docker exec -it "$VM" sh ;;
-    *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//' ;;
+    *) sed -n '2,/^set -euo/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//' ;;
 esac
