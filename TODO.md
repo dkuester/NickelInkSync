@@ -119,8 +119,9 @@ dürfen jederzeit dazwischengeschoben werden.
     `config.ini` (Standard `paragraph`): `push` sendet den Absatzanfang,
     höchstens etwa eine halbe Seite zurück, sonst den Satzanfang; Ausgabe
     nennt die Verschiebung (`transfer::step_back`).
-  - [ ] **du:** Mit `position = paragraph` noch einmal: lesen, `push`,
-    in KOReader öffnen; ist die Stelle so besser zu finden?
+  - [x] **du:** Mit `position = paragraph` geprüft (2026-10-28): Vampire
+    Hunter D sendet den Absatzanfang (`p[26]`, 103 Zeichen zurück);
+    KOReader blieb auf derselben Seite, passt.
   - [ ] **ich:** Etappe 4: Kindle in `status`/`push` (nur lesend, `.yjf`,
     ohne Jailbreak).
 - [ ] **D2 Desktop-Client mit grafischer Oberfläche** · direkt nach D1.
