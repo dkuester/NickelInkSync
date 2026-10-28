@@ -59,15 +59,17 @@ another checksum than the original EPUB that KOReader opens. A mapping
 links such a book to its original EPUB:
 
 ```sh
+nickelinksync map suggest --device /Volumes/KOBOeReader --library ~/Calibre\ Library
 nickelinksync map add --device /Volumes/KOBOeReader --book "Heat 2" --epub ~/Books/heat-2.epub
-nickelinksync map add --device /Volumes/Kindle --book heat-2 --epub ~/Books/heat-2.epub
+nickelinksync map add --device /Volumes/Kindle --book heat-2
 nickelinksync map list
 nickelinksync map remove 1a2b3c4d
 ```
 
 | Command | What it does |
 |---|---|
-| `map add` | Maps one book on the device (`--book <text>` or `--content-id`) to the original EPUB and says how many chapters of the two files match. A file identical to the EPUB needs no mapping and is not stored. Mapping the same device book again replaces the old mapping. |
+| `map suggest` | For each book on the device (or those `--book`/`--content-id` select): already mapped, the same file as one in the library (no mapping needed), or up to three candidates from the library with their score, and the `map add` command for the best one. Stores nothing. |
+| `map add` | Maps one book on the device (`--book <text>` or `--content-id`) to the original EPUB given with `--epub` and says how many chapters of the two files match. Without `--epub` it shows the suggestions from the library and asks which one to take (only in a terminal). A file identical to the EPUB needs no mapping and is not stored. Mapping the same device book again replaces the old mapping. |
 | `map list` | Shows every mapping and checks its EPUB: a mapping whose EPUB is missing or has changed since is reported as broken. |
 | `map remove` | Removes the mapping with this checksum or Kindle `content_id` (or a unique start of it). |
 
@@ -75,6 +77,21 @@ A Kobo or Tolino book is recognized by the checksum of its file, so moving
 or renaming it on the device keeps the mapping; a Kindle book by its
 `content_id`. Neither the device nor the EPUB is changed. **Not yet:**
 `status`, `push` and `pull` do not use the mappings so far.
+
+**Library.** The original EPUBs come from a folder given with `--library`
+or as `library` in the configuration file. If it holds a Calibre library
+(`metadata.db`), titles, authors and EPUB paths come from Calibre's
+database, opened read-only as an immutable file; otherwise every `*.epub`
+below the folder (not `*.kepub.epub`) is read, with title and authors from
+its OPF. NickelInkSync never writes into the library.
+
+**Score.** Suggestions compare the title (word overlap with the EPUB's
+title or file name; a Kindle book's title is the name of the file it was
+sent as), the authors, and for the best candidates the chapters (spine
+items found by path, or KFX sections against spine items): title × 0.7 +
+author × 0.3, then 0.8 × that + 0.2 × chapters. Accents and umlauts are
+folded, numbers count, so "Volume 1" and "Volume 2" differ. Candidates
+below 50 % are not shown; below 80 % the best one is marked "uncertain".
 
 The mappings are kept in `mappings.json` in the data directory
 `~/.local/share/nickelinksync/` (or `$XDG_DATA_HOME/nickelinksync`, or
@@ -104,6 +121,9 @@ password = your password
 
 # Messages of the Tolino plugin: all (default), errors, none
 # notify = all
+
+# Folder with the original EPUBs, a Calibre library or any folder (book mapping)
+# library = ~/Calibre Library
 ```
 
 - The password is only read from this file, never from the command line.
@@ -131,6 +151,9 @@ password = your password
   and the book is reported. `--force` overwrites without asking.
 - `notify` is only read by the Tolino plugin (see below): which messages
   it shows on the screen.
+- `library` is only used by `map suggest` and `map add`, which need no
+  server settings: a file with only `library` is enough for them. A
+  leading `~/` is your home folder.
 - Lines starting with `#` or `;` are comments; unknown keys are an error.
 
 ## Plugin for the Tolino (experimental)

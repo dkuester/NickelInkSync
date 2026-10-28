@@ -118,8 +118,9 @@ fixtures only.
   [SCOPE.md](SCOPE.md#license)). Test case: *Heat 2* on the two reference
   devices. Stage 1 done: the mapping store (`mappings.json` in the data
   directory, keyed by the device file's checksum or the Kindle
-  `content_id`) and `map add|list|remove`. Next: a library of originals
-  (Calibre or a folder) with suggestions, then `status`/`push`/`pull`
+  `content_id`) and `map add|list|remove`. Stage 2 done: a library of
+  originals (Calibre `metadata.db` read-only, or a folder of EPUBs) and
+  `map suggest` with a readable score. Next: `status`/`push`/`pull`
   through the mapping, then the Kindle in `status`/`push`.
 - **Desktop client with a graphical UI** (L): right after the CLI
   mapping, on the same library: devices and books, creating mappings,

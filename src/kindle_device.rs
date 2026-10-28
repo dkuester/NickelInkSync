@@ -23,6 +23,9 @@ pub struct KindleBook {
   /// EPUB's `dc:title`.
   pub title: Option<String>,
   pub author: Option<String>,
+  /// Number of KFX sections (one per spine item of the EPUB it was made
+  /// from).
+  pub sections: usize,
 }
 
 impl KindleBook {
@@ -68,6 +71,7 @@ pub fn books(root: &Path) -> io::Result<(Vec<KindleBook>, Vec<Unreadable>)> {
           content_id: content_id.to_ascii_uppercase(),
           title: parsed.meta("title").map(str::to_string),
           author: parsed.meta("author").map(str::to_string),
+          sections: parsed.sections.len(),
           kfx,
         });
       }

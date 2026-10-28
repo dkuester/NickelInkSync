@@ -6,9 +6,12 @@
 //! the password), and optionally `device`, `device_id`, `confirm`
 //! (`never`, `backwards` or `always`, default `backwards`) and `notify`
 //! (`all`, `errors` or `none`, default `all`; only the device plugin uses
-//! it, for its messages on the screen). The password is only ever read from
-//! this file, never from the command line.
+//! it, for its messages on the screen) and `library` (the folder with the
+//! original EPUBs, a Calibre library or any folder; a leading `~/` is the
+//! home folder). The password is only ever read from this file, never from
+//! the command line.
 
+use std::collections::HashMap;
 use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -55,7 +58,22 @@ pub struct Config {
   pub confirm: Confirm,
   /// Which messages the device plugin shows; the CLI only checks it.
   pub notify: Notify,
+  /// Folder with the original EPUBs (Calibre library or plain folder).
+  pub library: Option<PathBuf>,
 }
+
+/// Every key the file may hold.
+const KEYS: [&str; 9] = [
+  "server",
+  "user",
+  "password",
+  "key",
+  "device",
+  "device_id",
+  "confirm",
+  "notify",
+  "library",
+];
 
 /// `notify`: which messages the device plugin shows on the screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -126,33 +144,35 @@ impl Config {
     Self::parse(path, &text)
   }
 
+  /// Only the `library` setting of the file at `path`, without needing
+  /// the server settings (the book mapping works without a server). A
+  /// missing file has none.
+  pub fn library_setting(path: &Path) -> Result<Option<PathBuf>, Error> {
+    let text = match std::fs::read_to_string(path) {
+      Ok(text) => text,
+      Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+      Err(e) => return Err(Error::Io(path.to_path_buf(), e)),
+    };
+    Ok(
+      entries(path, &text)?
+        .remove("library")
+        .map(|l| expand_home(&l)),
+    )
+  }
+
   /// `path` is only used in error messages.
   pub fn parse(path: &Path, text: &str) -> Result<Self, Error> {
-    let syntax = |line, e: String| Error::Syntax(path.to_path_buf(), line, e);
-    let (mut server, mut user, mut password, mut key) = (None, None, None, None);
-    let (mut device, mut device_id, mut confirm, mut notify) = (None, None, None, None);
-    for (n, line) in text.lines().enumerate() {
-      let line = line.trim();
-      if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
-        continue;
-      }
-      let Some((name, value)) = line.split_once('=') else {
-        return Err(syntax(n + 1, "expected `key = value`".into()));
-      };
-      let value = Some(value.trim().to_string()).filter(|v| !v.is_empty());
-      let slot = match name.trim() {
-        "server" => &mut server,
-        "user" => &mut user,
-        "password" => &mut password,
-        "key" => &mut key,
-        "device" => &mut device,
-        "device_id" => &mut device_id,
-        "confirm" => &mut confirm,
-        "notify" => &mut notify,
-        other => return Err(syntax(n + 1, format!("unknown key `{other}`"))),
-      };
-      *slot = value;
-    }
+    let mut entries = entries(path, text)?;
+    let mut take = |key| entries.remove(key);
+    let (server, user, password, key) =
+      (take("server"), take("user"), take("password"), take("key"));
+    let (device, device_id, confirm, notify) = (
+      take("device"),
+      take("device_id"),
+      take("confirm"),
+      take("notify"),
+    );
+    let library = take("library").map(|l| expand_home(&l));
     let missing = |key| Error::Missing(path.to_path_buf(), key);
     let key = match (password, key) {
       (Some(_), Some(_)) => {
@@ -197,6 +217,7 @@ impl Config {
       device_id,
       confirm,
       notify,
+      library,
     })
   }
 
@@ -206,6 +227,39 @@ impl Config {
     let name = self.device.clone().unwrap_or_else(|| model.to_string());
     let id = self.device_id.clone().unwrap_or_else(|| device_id(&name));
     (name, id)
+  }
+}
+
+/// The non-empty `key = value` pairs, with a syntax error for a line
+/// without `=` and for an unknown key; a later line wins.
+fn entries(path: &Path, text: &str) -> Result<HashMap<&'static str, String>, Error> {
+  let syntax = |line, e: String| Error::Syntax(path.to_path_buf(), line, e);
+  let mut entries = HashMap::new();
+  for (n, line) in text.lines().enumerate() {
+    let line = line.trim();
+    if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
+      continue;
+    }
+    let Some((name, value)) = line.split_once('=') else {
+      return Err(syntax(n + 1, "expected `key = value`".into()));
+    };
+    let name = name.trim();
+    let Some(&key) = KEYS.iter().find(|&&k| k == name) else {
+      return Err(syntax(n + 1, format!("unknown key `{name}`")));
+    };
+    match value.trim() {
+      "" => entries.remove(key),
+      value => entries.insert(key, value.to_string()),
+    };
+  }
+  Ok(entries)
+}
+
+/// `~/…` with the home folder.
+fn expand_home(path: &str) -> PathBuf {
+  match (path.strip_prefix("~/"), std::env::var_os("HOME")) {
+    (Some(rest), Some(home)) => PathBuf::from(home).join(rest),
+    _ => PathBuf::from(path),
   }
 }
 
@@ -303,6 +357,18 @@ mod tests {
     assert!(e.contains("line 2: unknown key `usr`"), "{e}");
     let e = parse("server s\n").unwrap_err().to_string();
     assert!(e.contains("line 1"), "{e}");
+  }
+
+  #[test]
+  fn library_setting() {
+    let c = parse("server=s\nuser=u\npassword=p\nlibrary = /books/Calibre Library").unwrap();
+    assert_eq!(c.library, Some(PathBuf::from("/books/Calibre Library")));
+    let c = parse("server=s\nuser=u\npassword=p\nlibrary =").unwrap();
+    assert_eq!(c.library, None);
+    if let Some(home) = std::env::var_os("HOME") {
+      let c = parse("server=s\nuser=u\npassword=p\nlibrary = ~/Calibre").unwrap();
+      assert_eq!(c.library, Some(PathBuf::from(home).join("Calibre")));
+    }
   }
 
   #[test]

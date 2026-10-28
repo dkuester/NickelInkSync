@@ -85,12 +85,22 @@ dürfen jederzeit dazwischengeschoben werden.
     gleicher Datei und den Kindle-Fixtures (`tests/mapping.rs`).
   - [ ] **du:** Etappe 1 am Gerät ausprobieren (siehe PR): Heat 2 vom
     Kobo und vom Tolino auf die Original-EPUB abbilden, `map list`.
-  - [ ] **ich:** Bibliothek mit Originalen (`library =` in `config.ini`,
-    `--library`): Calibre-`metadata.db` nur lesend (`immutable=1`), sonst
-    `*.epub` rekursiv mit Titel/Autor aus der OPF; nie hineinschreiben.
-  - [ ] **ich:** `map suggest`: Vorschläge aus Titel und Autor (beim
-    Kindle auch `content_id`) mit nachvollziehbarer Bewertung; Bücher mit
-    gleicher Prüfsumme wie in der Bibliothek brauchen keine Zuordnung.
+  - [x] **ich:** Bibliothek mit Originalen (`library =` in `config.ini`,
+    `--library`, `src/library.rs`): Calibre-`metadata.db` nur lesend
+    (`immutable=1`), sonst `*.epub` rekursiv mit Titel/Autor aus der OPF;
+    nie hineinschreiben (Test vergleicht die Dateien vorher und nachher).
+  - [x] **ich:** `map suggest` (`src/suggest.rs`): Titel (auch gegen den
+    Dateinamen, für Send-to-Kindle), Autor und Kapitel, jede Teilbewertung
+    sichtbar; Bücher mit gleicher Prüfsumme wie in der Bibliothek brauchen
+    keine Zuordnung. `map add` ohne `--epub` fragt im Terminal nach dem
+    Vorschlag. Die Kindle-`content_id` wählt das Buch aus, steht aber nicht
+    in der Bibliothek und zählt deshalb nicht zur Bewertung. Tests mit
+    selbst erzeugter Calibre-`metadata.db` (`tests/library.rs`).
+  - [ ] **du:** Etappe 2 mit deiner Calibre-Bibliothek ausprobieren (siehe
+    PR): `map suggest` gegen den Kobo 6.0 und, falls zur Hand, den Kindle.
+  - [ ] **ich:** Etappe 3: `status`/`push`/`pull` über die Zuordnung;
+    Position in die Original-EPUB übersetzen (Kapitel-`href` und
+    Textanker), sonst Kapitelanfang bzw. Prozent, sichtbar gemeldet.
   - [ ] **ich:** `status`/`push`/`pull` nutzen die Zuordnung; Positionen
     werden in der zugeordneten EPUB übersetzt.
 - [ ] **D2 Desktop-Client mit grafischer Oberfläche** · direkt nach D1.

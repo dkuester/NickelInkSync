@@ -70,10 +70,25 @@ mappings live in `mappings.json` in the data directory
 version, written atomically (temporary file, then rename), shared by the
 CLI and the desktop client (D2); a file with a newer format is refused,
 not rewritten. Commands: `nickelinksync map add|list|remove`
-(`src/mapping.rs`, `src/kindle_device.rs`). Still to come: suggestions
-from a library of originals (Calibre `metadata.db` or a folder of EPUBs),
-and `status`/`push`/`pull` through the mapping, with the position
-translated into the original EPUB by chapter href and text.
+(`src/mapping.rs`, `src/kindle_device.rs`).
+
+**Library of originals** (`src/library.rs`): `library` in `config.ini` or
+`--library`. A folder with a Calibre `metadata.db` is read through that
+database only, opened as `file:…?mode=ro&immutable=1` (no journal, no
+lock, nothing written), joining `books`, `data` (format `EPUB`; the file is
+`<books.path>/<data.name>.epub`) and `authors` via `books_authors_link`;
+any other folder is searched for `*.epub` (not `*.kepub.epub`) with title
+and authors from the OPF. **`map suggest`** (`src/suggest.rs`) ranks the
+library against a device book by title (word overlap with the EPUB's title
+or file name: Send-to-Kindle sets the KFX `title` to the stem of the sent
+file), authors and, for the five best, chapters (spine paths, or KFX
+sections against spine items), and checks their checksums: a library EPUB
+with the device file's checksum needs no mapping. The Kindle's
+`content_id` is the key of its mapping and how `--content-id` picks the
+book; it does not appear in the library, so it adds nothing to the score.
+
+Still to come: `status`/`push`/`pull` through the mapping, with the
+position translated into the original EPUB by chapter href and text.
 
 ## License
 
