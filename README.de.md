@@ -61,15 +61,17 @@ Kindle hat eine andere Prüfsumme als das Original-EPUB, das KOReader öffnet.
 Eine Zuordnung verbindet so ein Buch mit seinem Original-EPUB:
 
 ```sh
+nickelinksync map suggest --device /Volumes/KOBOeReader --library ~/Calibre-Bibliothek
 nickelinksync map add --device /Volumes/KOBOeReader --book "Heat 2" --epub ~/Books/heat-2.epub
-nickelinksync map add --device /Volumes/Kindle --book heat-2 --epub ~/Books/heat-2.epub
+nickelinksync map add --device /Volumes/Kindle --book heat-2
 nickelinksync map list
 nickelinksync map remove 1a2b3c4d
 ```
 
 | Befehl | Was er tut |
 |---|---|
-| `map add` | Ordnet ein Buch auf dem Gerät (`--book <Text>` oder `--content-id`) dem Original-EPUB zu und sagt, wie viele Kapitel der beiden Dateien übereinstimmen. Eine Datei, die mit dem EPUB identisch ist, braucht keine Zuordnung und wird nicht gespeichert. Wird dasselbe Buch erneut zugeordnet, ersetzt das die alte Zuordnung. |
+| `map suggest` | Für jedes Buch auf dem Gerät (oder die mit `--book`/`--content-id` gewählten): schon zugeordnet, dieselbe Datei wie eine in der Bibliothek (keine Zuordnung nötig) oder bis zu drei Kandidaten aus der Bibliothek mit Bewertung und dem `map add`-Befehl für den besten. Speichert nichts. |
+| `map add` | Ordnet ein Buch auf dem Gerät (`--book <Text>` oder `--content-id`) dem mit `--epub` angegebenen Original-EPUB zu und sagt, wie viele Kapitel der beiden Dateien übereinstimmen. Ohne `--epub` zeigt es die Vorschläge aus der Bibliothek und fragt, welcher es sein soll (nur im Terminal). Eine Datei, die mit dem EPUB identisch ist, braucht keine Zuordnung und wird nicht gespeichert. Wird dasselbe Buch erneut zugeordnet, ersetzt das die alte Zuordnung. |
 | `map list` | Zeigt alle Zuordnungen und prüft ihr EPUB: Fehlt es oder hat es sich seitdem geändert, wird die Zuordnung als kaputt gemeldet. |
 | `map remove` | Löscht die Zuordnung mit dieser Prüfsumme bzw. Kindle-`content_id` (oder einem eindeutigen Anfang davon). |
 
@@ -78,6 +80,23 @@ Verschieben oder Umbenennen auf dem Gerät behält die Zuordnung. Ein
 Kindle-Buch wird an seiner `content_id` erkannt. Weder Gerät noch EPUB
 werden verändert. **Noch nicht:** `status`, `push` und `pull` nutzen die
 Zuordnungen bisher nicht.
+
+**Bibliothek.** Die Original-EPUBs kommen aus einem Ordner, angegeben mit
+`--library` oder als `library` in der Konfigurationsdatei. Liegt dort eine
+Calibre-Bibliothek (`metadata.db`), kommen Titel, Autoren und EPUB-Pfade
+aus Calibres Datenbank, nur lesend als unveränderliche Datei geöffnet;
+sonst wird jedes `*.epub` unterhalb des Ordners gelesen (nicht
+`*.kepub.epub`), Titel und Autoren aus seiner OPF. NickelInkSync schreibt
+nie in die Bibliothek.
+
+**Bewertung.** Vorschläge vergleichen den Titel (gemeinsame Wörter mit dem
+Titel oder Dateinamen der EPUB; bei einem Kindle-Buch ist der Titel der
+Name der gesendeten Datei), die Autoren und bei den besten Kandidaten die
+Kapitel (Spine-Einträge nach Pfad bzw. KFX-Abschnitte gegen
+Spine-Einträge): Titel × 0,7 + Autor × 0,3, dann 0,8 × das + 0,2 ×
+Kapitel. Akzente und Umlaute werden vereinfacht, Zahlen zählen mit, „Band
+1“ und „Band 2“ unterscheiden sich also. Kandidaten unter 50 % werden nicht
+gezeigt, unter 80 % ist der beste als „uncertain“ markiert.
 
 Die Zuordnungen liegen in `mappings.json` im Datenordner
 `~/.local/share/nickelinksync/` (oder `$XDG_DATA_HOME/nickelinksync`, oder
@@ -91,8 +110,9 @@ es sie gibt. Standardort: `~/.config/nickelinksync/config.ini` (oder
 `$XDG_CONFIG_HOME/nickelinksync/config.ini`, oder der Pfad in
 `$NICKELINKSYNC_CONFIG`). Das Format steht im [englischen README](README.md#configuration):
 `server`, `user`, `password` (oder `key` = MD5 des Passworts), optional
-`device`, `device_id`, `confirm` und `notify` (nur für das Tolino-Plugin,
-siehe unten).
+`device`, `device_id`, `confirm`, `notify` (nur für das Tolino-Plugin,
+siehe unten) und `library` (Ordner mit den Original-EPUBs für die
+Buchzuordnung; dafür genügt eine Datei, die nur `library` enthält).
 
 `confirm` legt fest, wann `push` und `pull` „Gerät oder Server?“ fragen,
 statt die neuere Position gewinnen zu lassen:
