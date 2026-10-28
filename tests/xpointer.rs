@@ -247,6 +247,27 @@ fn long_book_mid_chapter() {
   );
 }
 
+/// Kobo firmware 6.0 stores the offset into the span with a kepub reading
+/// position. Clara BW, 6.0.279225, 2026-10-28: the page started in R2-16
+/// at "alt See hören …" (character 204 of span kobo.17.1, after umlauts, so
+/// characters, not UTF-8 bytes), with R2-17 the first marker on it.
+#[test]
+fn kobo_6_kepub_position_with_offset() {
+  let stored = "OEBPS/text/chapter2.xhtml#kobo.17.1:204";
+  let x = to_xpointer(
+    &mut epub("book-r.kepub.epub"),
+    &Position::parse(stored),
+    PointFlavor::AllNodes,
+  )
+  .unwrap();
+  assert!(x.exact);
+  assert_eq!(
+    x.xpointer,
+    "/body[1]/DocFragment[3]/body[1]/div[1]/div[1]/p[16]/span[1]/text()[1].204"
+  );
+  assert_eq!(Position::parse(stored).to_string(), stored);
+}
+
 /// Tolino highlights there and back, and KOReader's highlights of the same
 /// words back to exactly the Tolino's points.
 #[test]
