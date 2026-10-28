@@ -122,8 +122,19 @@ dürfen jederzeit dazwischengeschoben werden.
   - [x] **du:** Mit `position = paragraph` geprüft (2026-10-28): Vampire
     Hunter D sendet den Absatzanfang (`p[26]`, 103 Zeichen zurück);
     KOReader blieb auf derselben Seite, passt.
-  - [ ] **ich:** Etappe 4: Kindle in `status`/`push` (nur lesend, `.yjf`,
-    ohne Jailbreak).
+  - [x] **ich:** Etappe 4: Kindle in `status`/`push` (nur lesend, ohne
+    Jailbreak), `pull` lehnt ab. Der Paperwhite bietet am Mac nur MTP: die
+    CLI liest eine Kopie (Ordner mit `documents/` oder mit `.kfx` und
+    `.sdr`, z. B. mit OpenMTP). KFX-Leser für echte Send-to-Kindle-Bücher
+    erweitert: eingebettete Schriften (`$418`), Läufe mit Offset in
+    `$609`, geschützte Leerzeichen und `<br/>` als `\n`, Cover-Abschnitt
+    und geteilte Kapitel (Block über den Text gesucht). Gekaufte Bücher
+    (DRM) werden übersprungen. Geprüft an Kopien von „Good Boy“ und „Der
+    wiedergefundene Freund“ (alle bzw. fast alle Blöcke exakt).
+  - [ ] **du:** Kindle-Test: „Good Boy“ auf dem Kindle ein Stück lesen,
+    Buch per OpenMTP kopieren, `map add` und `push`, in KOReader öffnen.
+  - [ ] **ich (später, vor oder in D2):** Kindle direkt per MTP lesen
+    (libmtp), ohne Kopie.
 - [ ] **D2 Desktop-Client mit grafischer Oberfläche** · direkt nach D1.
   Baut auf derselben Bibliothek auf: Geräte und Bücher anzeigen, Zuordnung
   anlegen, Sync auslösen.
@@ -580,11 +591,7 @@ dürfen jederzeit dazwischengeschoben werden.
     Book P und Q und die Book-R-Positionen ergeben KOReaders XPointer;
     nur q5w04 (CDATA) ist nicht exakt (Text weicht ab, gefunden über den
     Text danach).
-  - [!] **ich:** Kindle in die CLI: `status --device` für einen gemounteten
-    Kindle (KFX + `.sdr` lesen, Position übersetzen), nur lesend.
-    Blockiert durch D1 (Buchzuordnung in der CLI): ohne Zuordnung KFX ↔
-    EPUB-Prüfsumme kein Sync.
-    Der Leser und die Übersetzung liegen fertig in der Bibliothek
-    (`kindle::to_xpointer`).
+  - [x] **ich:** Kindle in die CLI: `status`/`push` über die Zuordnung,
+    nur lesend (D1 Etappe 4).
   - [ ] **du:** Prüfen, ob der Kindle eine geänderte `.yjf` übernimmt
     (Flugmodus, damit Amazons Sync nicht dazwischenfunkt).

@@ -415,8 +415,8 @@ mind it.
 ## Kindle (feasibility check, outside scope)
 
 Checked on a **Kindle Paperwhite 11 (PW5), firmware 5.19.2** (jailbroken,
-but everything below needs only the USB mount, so it holds for a stock
-Kindle), with Book A, C, P, Q and R
+but everything below needs only the files under `documents/`, so it holds
+for a stock Kindle), with Book A, C, P, Q and R
 sent through **Send-to-Kindle** (2026-10-24). Read from copies only; the
 format was decoded with our own reader, no Amazon or calibre code.
 Answer: **reading the position over USB and mapping it to KOReader works,
@@ -511,12 +511,14 @@ What it would take, and what is open:
   (`sync_lpr`), so a changed `.yjf` may be ignored or overwritten. The
   Kindle also left `.yjr.bad_file` copies next to the `.yjr` files.
 - **Jailbreak:** assume users have **none**. The test Kindle is
-  jailbroken, but every finding above used only the USB mount, so it holds
-  for a stock Kindle. Any Kindle feature set is split in two:
+  jailbroken, but every finding above used only the files under
+  `documents/`, which a stock Kindle offers over USB (MTP on recent
+  ones), so it holds for a stock Kindle. Any Kindle feature set is split
+  in two:
 
   | | Stock Kindle (default) | Jailbroken Kindle (extra) |
   |---|---|---|
-  | Read the position | desktop CLI over USB, `.yjf` | same, plus `cc.db` (`p_location`, `p_percentFinished`) as root |
+  | Read the position | desktop CLI over USB (a copy, where only MTP is offered), `.yjf` | same, plus `cc.db` (`p_location`, `p_percentFinished`) as root |
   | Book mapping | KFX metadata + manual link to the EPUB hash | same |
   | Write back | desktop CLI over USB, `.yjf` only, if the reader takes it (unchecked) | also `cc.db`, while the framework is stopped |
   | Sync without a cable | no | an on-device daemon or KUAL action (no in-process hook exists on the Kindle) |
@@ -525,6 +527,44 @@ What it would take, and what is open:
   column only adds to it.
 - Only Send-to-Kindle (PDOC KFX) was checked; books sideloaded as AZW3 or
   KFX via calibre store their position in other files (`.azw3f`/`.azw3r`).
+
+**In the CLI** (D1, 2026-10-28): `status` and `push` read a Kindle, or a
+copy of its books, and send each mapped KFX's `lpr` under the mapped
+EPUB's checksum (`src/kindle_device.rs`, `KindleSession` in
+`src/main.rs`); `pull` refuses. Checked on the owner's Paperwhite with
+real books sent from the Calibre library:
+
+- **No USB mount:** the Paperwhite (USB product `0x9981`) offers only
+  **MTP**, which macOS does not mount. The CLI reads a copy instead: a
+  folder with `documents/`, or one with the `.kfx` files and `.sdr`
+  folders up to two levels down (OpenMTP copies). Direct MTP access is
+  open (libmtp).
+- **Store books have DRM:** a book bought in the Kindle store is a
+  `DRMION` container (`\xeaDRMION\xee`), its text unreadable; it is
+  skipped. Only Send-to-Kindle documents work, and those are separate
+  books on the Kindle with their own position.
+- **`content_id`** of a real Send-to-Kindle document is 32 base32
+  characters (`HJ5YDU…`), not hex; read from the metadata.
+- **Embedded fonts** are entities of type `$418` (OpenType data, not
+  Ion) and are skipped like images (`$417`).
+- **Position runs** in `$609` may be `[pid delta, eid, offset]`: a block
+  that goes on after a nested one, from that character.
+- **Text:** the KFX keeps **no-break spaces** (before `–` and `…`, in
+  dates), where the probe books had plain spaces; both count as a space.
+  A `<br/>` is `\n` in the block, a space before it kept, whitespace after
+  it dropped (`that <br/>I` → `that \nI`). A paragraph may be split into
+  two blocks at `<br/><br/>`.
+- **Sections ≠ spine items:** Send-to-Kindle put a **cover section**
+  without text in front and **split a chapter** into two sections (Good
+  Boy: 16 sections, 14 spine items). With differing counts, a block is
+  found by its text in every chapter (the neighbouring blocks deciding
+  between equal texts, then the relative place), also as a part of a
+  longer EPUB block; a position on the cover is the start of the first
+  chapter with text, marked not exact.
+- Result: every text block of *Der wiedergefundene Freund* (292 of 292)
+  and nearly all of *Good Boy* (1203 of 1207; the rest are blurbs and
+  links in the front and back matter, found but not exact) translate
+  exactly; the finished book's `lpr` (`pid` 107449) is the last page.
 
 ## Open technical questions
 

@@ -9,6 +9,8 @@ use nickelinksync::config::{self, Config, LocalSettings, PushPosition};
 use nickelinksync::db::{Book, Device, Write};
 use nickelinksync::epub::Epub;
 use nickelinksync::hash::partial_md5;
+use nickelinksync::kfx::Kfx;
+use nickelinksync::kindle;
 use nickelinksync::kindle_device::{self, KindleBook};
 use nickelinksync::kosync::{self, Client, Progress, Update};
 use nickelinksync::library::{self, Library, LibraryBook};
@@ -622,6 +624,9 @@ fn describe(p: &Progress) -> String {
 }
 
 fn status(target: &Target) -> Result<bool> {
+  if kindle_device::is_kindle(&target.device) {
+    return kindle_status(target);
+  }
   let session = Session::open(target)?;
   let not_in_line = NotInLine::load(&session.device.root)?;
   let server = Server::open(target)?;
@@ -790,6 +795,9 @@ fn unanswered_note(unanswered: usize) {
 }
 
 fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool> {
+  if kindle_device::is_kindle(&target.device) {
+    return kindle_push(target, force, dry_run);
+  }
   let session = Session::open(target)?;
   let mut not_in_line = NotInLine::load(&session.device.root)?;
   let mut forced = Vec::new();
@@ -940,6 +948,12 @@ fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool>
 }
 
 fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
+  if kindle_device::is_kindle(&target.device) {
+    return Err(
+      "a Kindle is only read: its position goes to the server with `push`, nothing comes back"
+        .into(),
+    );
+  }
   let session = Session::open(target)?;
   let mut not_in_line = NotInLine::load(&session.device.root)?;
   let server = Server::require(target)?;
@@ -1535,8 +1549,8 @@ fn map_suggest(
   );
   if suggested + none > 0 {
     println!(
-      "Books that are not mapped sync under their own checksum, which KOReader does not \
-       know for the original EPUB."
+      "Books that are not mapped are not synced while a library is set up (`library` or \
+       --library), and a Kindle book never."
     );
   }
   Ok(true)
@@ -1640,4 +1654,296 @@ fn add_mapping(store: &mut Store, on: OnDevice, epub_path: &std::path::Path) -> 
   }
   println!("Saved in {}", store.path.display());
   Ok(true)
+}
+
+/// A Kindle: a mounted one, or a copy of its `documents` folder (a stock
+/// Kindle on a Mac only offers MTP). Each KFX book syncs under the EPUB it
+/// is mapped to; nothing is written to it.
+struct KindleSession {
+  books: Vec<KindleBook>,
+  store: Store,
+  position: PushPosition,
+}
+
+impl KindleSession {
+  fn open(target: &Target) -> Result<Self> {
+    let root = &target.device;
+    let (books, unreadable) = kindle_device::books(root)?;
+    println!(
+      "Kindle, {} KFX book(s) in {}",
+      books.len(),
+      kindle_device::documents(root).display()
+    );
+    for (path, e) in unreadable {
+      println!("  skipped   {}: {e}", path.display());
+    }
+    let books = kindle_matches(
+      root,
+      books,
+      target.book.as_deref(),
+      target.content_id.as_deref(),
+    );
+    let settings = match target.config.clone().or_else(Config::default_path) {
+      Some(config) => Config::local_settings(&config)?,
+      None => LocalSettings::default(),
+    };
+    let store = match Store::default_path() {
+      Some(path) => Store::load(&path)?,
+      None => Store::default(),
+    };
+    if books.is_empty() {
+      println!("\nNo KFX books.");
+    }
+    Ok(KindleSession {
+      books,
+      store,
+      position: settings.position,
+    })
+  }
+
+  /// The book's mapping, or why it is not synced.
+  fn mapping(&self, book: &KindleBook) -> std::result::Result<&Mapping, String> {
+    let mapping = self.store.for_kindle(&book.content_id).ok_or(
+      "not mapped: a KFX syncs only under the EPUB it is mapped to; see `nickelinksync map suggest`",
+    )?;
+    match mapping.check() {
+      EpubState::Ok => Ok(mapping),
+      state => Err(format!(
+        "not synced: the mapping to {} is {state}; map it again with `map add`",
+        mapping.epub.path
+      )),
+    }
+  }
+
+  /// The position for KOSync in the mapped EPUB, what was not exact about
+  /// it, and the stored position for display.
+  fn local(
+    &self,
+    book: &KindleBook,
+    mapping: &Mapping,
+  ) -> std::result::Result<(Local, Option<String>, String), String> {
+    let state = book.reading_state()?.ok_or("never opened (no .yjf)")?;
+    let lpr = state.last_read.ok_or("never opened (no last page read)")?;
+    let kfx = Kfx::open(&book.kfx).map_err(|e| e.to_string())?;
+    let mut epub =
+      Epub::open(std::path::Path::new(&mapping.epub.path)).map_err(|e| e.to_string())?;
+    let x = kindle::to_xpointer(&kfx, &mut epub, &lpr.position)
+      .map_err(|e| format!("not translated: {e}"))?;
+    let mut notes = Vec::new();
+    if !x.exact {
+      notes.push("block not found exactly".to_string());
+    }
+    let xpointer =
+      match step_back(&mut epub, &x.xpointer, self.position).map_err(|e| e.to_string())? {
+        Some(s) => {
+          notes.push(s.to_string());
+          s.xpointer
+        }
+        None => x.xpointer,
+      };
+    let total = kfx.pid_count().max(1);
+    let shown = format!(
+      "block {}, offset {} (position {} of {total})",
+      lpr.position.eid, lpr.position.offset, lpr.position.pid
+    );
+    let local = Local {
+      xpointer,
+      percentage: (f64::from(lpr.position.pid) / f64::from(total)).clamp(0.0, 1.0),
+      last_read: lpr.time_ms.map(|ms| ms / 1000),
+    };
+    let note = (!notes.is_empty()).then(|| notes.join("; "));
+    Ok((local, note, shown))
+  }
+}
+
+fn kindle_heading(root: &std::path::Path, book: &KindleBook) {
+  println!();
+  let title = book.title.as_deref().unwrap_or("(no title)");
+  match &book.author {
+    Some(author) => println!("{title} — {author}"),
+    None => println!("{title}"),
+  }
+  println!("  file      {}", book.relative_path(root).display());
+  println!("  content   {}", book.content_id);
+}
+
+fn kindle_status(target: &Target) -> Result<bool> {
+  let session = KindleSession::open(target)?;
+  let server = Server::open(target)?;
+  match &server {
+    Some(s) => println!("Server {} as {}", s.config.server, s.config.user),
+    None => println!("Server not configured"),
+  }
+  let mut server_error: Option<String> = None;
+  for book in &session.books {
+    kindle_heading(&target.device, book);
+    let mapping = match session.mapping(book) {
+      Ok(mapping) => mapping,
+      Err(e) => {
+        println!("  sync as   {e}");
+        continue;
+      }
+    };
+    println!(
+      "  sync as   mapped to {} (checksum {})",
+      mapping.epub.path, mapping.epub.hash
+    );
+    let local = match session.local(book, mapping) {
+      Ok((local, note, shown)) => {
+        println!("  position  {shown}");
+        match note {
+          Some(note) => println!("  koreader  {} ({note})", local.xpointer),
+          None => println!("  koreader  {}", local.xpointer),
+        }
+        match local.last_read {
+          Some(t) => println!(
+            "  progress  {}, last read {}",
+            percent(local.percentage),
+            format_timestamp(t)
+          ),
+          None => println!("  progress  {}", percent(local.percentage)),
+        }
+        Some(local)
+      }
+      Err(e) => {
+        println!("  position  ({e})");
+        None
+      }
+    };
+    let Some(server) = &server else {
+      continue;
+    };
+    if let Some(e) = &server_error {
+      println!("  server    (not checked: {e})");
+      continue;
+    }
+    match server.client.progress(&mapping.epub.hash) {
+      Ok(remote) => {
+        match &remote {
+          Some(p) => println!("  server    {}", describe(p)),
+          None => println!("  server    (nothing stored)"),
+        }
+        if let Some(local) = &local {
+          println!(
+            "  sync      {}",
+            sync_note(local, remote.as_ref(), server.config.confirm)
+              .replace("pull would move the device", "the Kindle is only read")
+          );
+        }
+      }
+      Err(e) => {
+        println!("  server    (failed: {e})");
+        server_error = Some(e.to_string());
+      }
+    }
+  }
+  Ok(true)
+}
+
+fn kindle_push(target: &Target, force: bool, dry_run: bool) -> Result<bool> {
+  let session = KindleSession::open(target)?;
+  let server = Server::require(target)?;
+  let (device, device_id) = server.config.identity("Kindle");
+  if let Err(e) = server.client.authorize() {
+    eprintln!("nickelinksync: {}: {e}", server.config.server);
+    return Ok(false);
+  }
+  println!(
+    "Server {} as {}, device \"{device}\"",
+    server.config.server, server.config.user
+  );
+  let confirm_setting = server.config.confirm;
+  let mut unanswered = 0;
+  let mut ok = true;
+  for book in &session.books {
+    kindle_heading(&target.device, book);
+    let mapping = match session.mapping(book) {
+      Ok(mapping) => mapping,
+      Err(e) => {
+        println!("  skipped   {e}");
+        continue;
+      }
+    };
+    let (local, note) = match session.local(book, mapping) {
+      Ok((local, note, _)) => (local, note),
+      Err(e) => {
+        println!("  skipped   {e}");
+        continue;
+      }
+    };
+    let hash = mapping.epub.hash.clone();
+    println!(
+      "  sync as   mapped to {} (checksum {hash})",
+      mapping.epub.path
+    );
+    let remote = match server.client.progress(&hash) {
+      Ok(remote) => remote,
+      Err(e) => {
+        println!("  failed    {e}");
+        ok = false;
+        continue;
+      }
+    };
+    if let Some(remote) = &remote {
+      match decide(Direction::Push, &local, remote, confirm_setting) {
+        Decision::InSync => {
+          println!("  in sync   {}", describe(remote));
+          continue;
+        }
+        Decision::Apply => {}
+        _ if force => {}
+        Decision::Keep => {
+          println!("  skipped   server is newer: {}", describe(remote));
+          println!("            --force sends the Kindle position anyway");
+          continue;
+        }
+        Decision::Ask { backwards, .. } => {
+          let answer = (backwards, confirm_setting);
+          if !confirm(
+            Direction::Push,
+            &local,
+            remote,
+            answer,
+            dry_run,
+            &mut unanswered,
+          )? {
+            continue;
+          }
+        }
+      }
+    }
+    let update = Update {
+      document: hash,
+      progress: local.xpointer,
+      percentage: local.percentage,
+      device: device.clone(),
+      device_id: device_id.clone(),
+    };
+    let what = format!(
+      "{}{} ({})",
+      update.progress,
+      note.map(|n| format!(" ({n})")).unwrap_or_default(),
+      percent(update.percentage)
+    );
+    if dry_run {
+      println!("  would send {what}");
+      continue;
+    }
+    match server.client.update(&update) {
+      Ok(Some(t)) => println!("  sent      {what} at {}", format_timestamp(t)),
+      Ok(None) => println!("  sent      {what}"),
+      Err(e) => {
+        println!("  failed    {e}");
+        ok = false;
+        if matches!(e, kosync::Error::Unauthorized) {
+          break;
+        }
+      }
+    }
+  }
+  unanswered_note(unanswered);
+  if dry_run {
+    println!("\nDry run: nothing was sent.");
+  }
+  Ok(ok)
 }

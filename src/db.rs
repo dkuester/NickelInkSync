@@ -28,7 +28,8 @@ impl fmt::Display for Error {
     match self {
       Error::NotADevice(root) => write!(
         f,
-        "{}: no .kobo/KoboReader.sqlite, not a Kobo or Tolino",
+        "{}: no .kobo/KoboReader.sqlite, not a Kobo or Tolino (nor a Kindle: no documents \
+         folder or .kfx files)",
         root.display()
       ),
       Error::Io(path, e) => write!(f, "{}: {e}", path.display()),

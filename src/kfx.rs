@@ -13,7 +13,7 @@
 //! | `$538` document data | the reading order of the sections |
 //! | `$264` position map | the `eid`s in each section |
 //! | `$265` position ID map | each section's first `pid` and length |
-//! | `$609` section position IDs | each section's runs: `pid` delta and `eid` |
+//! | `$609` section position IDs | each section's runs: `pid` delta, `eid` and, where a block continues, the offset in it |
 //! | `$490` book metadata | `title`, `author`, `content_id`, … |
 //!
 //! A position is a block `eid` and an offset in code points into the
@@ -51,6 +51,8 @@ const INDEX: u32 = 403;
 const INDEX_OFFSET: u32 = 413;
 const INDEX_LENGTH: u32 = 414;
 const RAW_MEDIA: u32 = 417;
+/// `$418`: an embedded font file (OpenType), not Ion.
+const RAW_FONT: u32 = 418;
 const BOOK_METADATA: u32 = 490;
 const CATEGORISED_METADATA: u32 = 491;
 const METADATA_KEY: u32 = 492;
@@ -72,7 +74,10 @@ impl fmt::Display for Error {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
       Error::Io(e) => write!(f, "{e}"),
-      Error::Drm => write!(f, "KFX: the book has DRM"),
+      Error::Drm => write!(
+        f,
+        "KFX: the book has DRM (bought in the Kindle store); only books sent with Send-to-Kindle can be read"
+      ),
       Error::Ion(e) => write!(f, "KFX: {e}"),
       Error::Format(e) => write!(f, "KFX: {e}"),
     }
@@ -120,9 +125,10 @@ pub struct Section {
   /// First `pid` and number of positions (`$265`).
   pub pid_start: u32,
   pub pid_len: u32,
-  /// Runs (`$609`) as (`pid` from the section start, `eid`); the last one,
-  /// `eid` 0, marks the end.
-  pub runs: Vec<(u32, u32)>,
+  /// Runs (`$609`) as (`pid` from the section start, `eid`, offset in the
+  /// block where the run starts, if stored); the last one, `eid` 0, marks
+  /// the end.
+  pub runs: Vec<(u32, u32, Option<u32>)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -255,29 +261,35 @@ impl Kfx {
       }
     }
 
-    let mut runs: HashMap<u32, Vec<(u32, u32)>> = HashMap::new();
+    let mut runs: HashMap<u32, Vec<(u32, u32, Option<u32>)>> = HashMap::new();
     for v in of_type(SECTION_POSITION_IDS).flat_map(|e| &e.values) {
       let Some(name) = v.get(SECTION_NAME).and_then(Value::as_symbol) else {
         continue;
       };
-      // [pid delta, eid], or a bare pid delta for the next eid.
+      // [pid delta, eid], [pid delta, eid, offset in the block] where a
+      // block goes on after a nested one, or a bare pid delta for the next
+      // eid.
       let (mut pid, mut eid) = (0u32, 0u32);
       let mut list = Vec::new();
       for item in v.get(CONTAINS).and_then(Value::as_list).unwrap_or_default() {
-        let delta = match item.as_list() {
+        let (delta, offset) = match item.as_list() {
           Some([delta, id]) => {
             eid = int(id)?;
-            int(delta)?
+            (int(delta)?, None)
+          }
+          Some([delta, id, offset]) => {
+            eid = int(id)?;
+            (int(delta)?, Some(int(offset)?))
           }
           _ => {
             eid += 1;
-            int(item)?
+            (int(item)?, None)
           }
         };
         pid = pid
           .checked_add(delta)
           .ok_or_else(|| broken("pid overflow"))?;
-        list.push((pid, eid));
+        list.push((pid, eid, offset));
       }
       runs.insert(name, list);
     }
@@ -341,6 +353,16 @@ impl Kfx {
     })
   }
 
+  /// The number of positions in the book: the `pid` after the last one.
+  pub fn pid_count(&self) -> u32 {
+    self
+      .sections
+      .iter()
+      .map(|s| s.pid_start + s.pid_len)
+      .max()
+      .unwrap_or(0)
+  }
+
   /// The `pid` of a character, from the position maps; `None` if the
   /// `eid` has no run.
   pub fn pid(&self, eid: u32, offset: u32) -> Option<u32> {
@@ -348,20 +370,24 @@ impl Kfx {
       .sections
       .iter()
       .find(|s| s.eids.contains(&eid) || s.runs.iter().any(|r| r.1 == eid))?;
-    // A block may be split into several runs (around nested blocks); an
-    // offset past its last run counts on from that run's end.
-    let mut left = offset;
+    // A block may be split into several runs (around nested blocks), each
+    // starting where the one before ended unless it says where; an offset
+    // past its last run counts on from that run's end.
+    let mut next = 0;
     let mut past_end = None;
-    for (i, &(start, id)) in section.runs.iter().enumerate() {
+    for (i, &(start, id, at)) in section.runs.iter().enumerate() {
       if id != eid {
         continue;
       }
       let end = section.runs.get(i + 1).map_or(section.pid_len, |r| r.0);
-      if left < end - start {
-        return Some(section.pid_start + start + left);
+      let from = at.unwrap_or(next);
+      if (from..from + (end - start)).contains(&offset) {
+        return Some(section.pid_start + start + (offset - from));
       }
-      left -= end - start;
-      past_end = Some(end + left);
+      next = from + (end - start);
+      if offset >= next {
+        past_end = Some(end + (offset - next));
+      }
     }
     past_end.map(|pid| section.pid_start + pid)
   }
@@ -433,7 +459,8 @@ fn u64_at(data: &[u8], at: usize) -> Option<usize> {
   usize::try_from(u64::from_le_bytes(data.get(at..at + 8)?.try_into().ok()?)).ok()
 }
 
-/// The entities of a container, raw media (`$417`) left out.
+/// The entities of a container, raw media (`$417`) and fonts (`$418`) left
+/// out.
 fn entities(data: &[u8]) -> Result<Vec<Entity>, Error> {
   if data.starts_with(b"\xeaDRMION\xee") {
     return Err(Error::Drm);
@@ -469,7 +496,7 @@ fn entities(data: &[u8]) -> Result<Vec<Entity>, Error> {
     let bad = || broken("bad entity index entry");
     let id = u32_at(entry, 0).ok_or_else(bad)?;
     let kind = u32_at(entry, 4).ok_or_else(bad)?;
-    if kind == RAW_MEDIA {
+    if kind == RAW_MEDIA || kind == RAW_FONT {
       continue;
     }
     let offset = header_len + u64_at(entry, 8).ok_or_else(bad)?;
@@ -494,6 +521,29 @@ fn entities(data: &[u8]) -> Result<Vec<Entity>, Error> {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn runs_with_an_offset_in_the_block() {
+    // Block 7 runs from pid 0 to 10, block 8 (nested) from 10 to 15, then
+    // block 7 goes on from its character 10 (`[5, 7, 10]`) to 25.
+    let kfx = Kfx {
+      sections: vec![Section {
+        name: 1,
+        blocks: Vec::new(),
+        eids: vec![7, 8],
+        pid_start: 100,
+        pid_len: 25,
+        runs: vec![(0, 7, None), (10, 8, None), (15, 7, Some(10))],
+      }],
+      metadata: HashMap::new(),
+    };
+    assert_eq!(kfx.pid(7, 3), Some(103));
+    assert_eq!(kfx.pid(8, 2), Some(112));
+    assert_eq!(kfx.pid(7, 12), Some(117));
+    // Past the last run: counted on from its end.
+    assert_eq!(kfx.pid(7, 21), Some(126));
+    assert_eq!(kfx.pid_count(), 125);
+  }
 
   #[test]
   fn rejects_drm_and_other_files() {

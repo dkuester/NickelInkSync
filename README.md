@@ -63,7 +63,7 @@ links such a book to its original EPUB:
 ```sh
 nickelinksync map suggest --device /Volumes/KOBOeReader --library ~/Calibre\ Library
 nickelinksync map add --device /Volumes/KOBOeReader --book "Heat 2" --epub ~/Books/heat-2.epub
-nickelinksync map add --device /Volumes/Kindle --book heat-2
+nickelinksync map add --device ~/Kindle-copy --book heat-2
 nickelinksync map list
 nickelinksync map remove 1a2b3c4d
 ```
@@ -99,7 +99,23 @@ found by the 32 characters after it), *chapter start only* (the place in
 the chapter was not found), *from the percentage only* (the chapter is not
 in the other file, for example calibre's `titlepage.xhtml`). `pull
 --write` moves the server position back into a mapped EPUB on the Tolino
-the same way; into a kepub it writes nothing yet. Kindle books follow.
+the same way; into a kepub it writes nothing yet.
+
+**Kindle.** `status` and `push` also read a Kindle's books, for every KFX
+that is mapped to its EPUB (`map add`): the last page read (`lpr` in the
+`.sdr` folder) is translated into the EPUB and sent under its checksum.
+Nothing is written to the Kindle, and `pull` refuses. A recent Kindle
+offers only MTP, which a Mac does not mount: copy the `documents` folder,
+or only a book's `.kfx` file with its `.sdr` folder, with
+[OpenMTP](https://openmtp.ganeshrvel.com/) to a folder and give that as
+`--device`. Only books sent with **Send-to-Kindle** can be read; books
+bought in the Kindle store are encrypted (DRM) and are skipped. A
+jailbreak is not needed.
+
+```sh
+nickelinksync map add --device ~/Kindle-copy --book "Good Boy" --library ~/Calibre\ Library
+nickelinksync push --device ~/Kindle-copy
+```
 
 The mappings are only read on the computer: the Tolino plugin syncs every
 book under its own checksum, as before.
