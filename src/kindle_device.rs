@@ -4,6 +4,9 @@
 //! `documents/`. Send-to-Kindle stores a book as
 //! `documents/Downloads/Items01/<title>_<content_id>.kfx`, with its reading
 //! state in the `.sdr` folder of the same name (see SCOPE.md, Kindle).
+//! Recent Kindles offer only MTP, which a Mac does not mount, so a copy
+//! works as well: a folder with `documents/`, or any folder with the KFX
+//! files and their `.sdr` folders (copied with OpenMTP, for example).
 //! Nothing here writes to the device.
 
 use std::fs;
@@ -11,6 +14,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::kfx::Kfx;
+use crate::krds::{self, ReadingState};
 
 /// A KFX book on the Kindle.
 #[derive(Debug, Clone, PartialEq)]
@@ -34,15 +38,66 @@ impl KindleBook {
     self.kfx.with_extension("sdr")
   }
 
+  /// The reading state from the `.yjf` and `.yjr` files in the `.sdr`
+  /// folder (not the `.bad_file` copies the Kindle leaves); `None` if
+  /// there are none, as for a book never opened.
+  pub fn reading_state(&self) -> Result<Option<ReadingState>, String> {
+    let sdr = self.sdr();
+    let Ok(entries) = fs::read_dir(&sdr) else {
+      return Ok(None);
+    };
+    let mut objects = Vec::new();
+    let mut found = false;
+    for entry in entries {
+      let path = entry.map_err(|e| e.to_string())?.path();
+      let name = path.file_name().unwrap_or_default().to_string_lossy();
+      if name.starts_with('.') || !(name.ends_with(".yjf") || name.ends_with(".yjr")) {
+        continue;
+      }
+      let data = fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+      objects.extend(krds::parse(&data).map_err(|e| format!("{}: {e}", path.display()))?);
+      found = true;
+    }
+    Ok(found.then(|| ReadingState::from_objects(&objects)))
+  }
+
   /// The path below the mount point, for display.
   pub fn relative_path<'a>(&'a self, root: &Path) -> &'a Path {
     self.kfx.strip_prefix(root).unwrap_or(&self.kfx)
   }
 }
 
-/// A mounted Kindle: a `documents` folder and no `.kobo` folder.
+/// A mounted Kindle or a copy of its books: no `.kobo` folder, and a
+/// `documents` folder or KFX files up to two folders down (a copy of
+/// `Downloads/Items01`).
 pub fn is_kindle(root: &Path) -> bool {
-  root.join("documents").is_dir() && !root.join(".kobo").exists()
+  !root.join(".kobo").exists() && (root.join("documents").is_dir() || has_kfx(root, 2))
+}
+
+/// Where the books are: `documents/`, else the folder itself.
+pub fn documents(root: &Path) -> PathBuf {
+  let documents = root.join("documents");
+  if documents.is_dir() {
+    documents
+  } else {
+    root.to_path_buf()
+  }
+}
+
+fn has_kfx(dir: &Path, depth: usize) -> bool {
+  let Ok(entries) = fs::read_dir(dir) else {
+    return false;
+  };
+  entries.flatten().any(|e| {
+    let name = e.file_name().to_string_lossy().to_lowercase();
+    if name.starts_with('.') {
+      false
+    } else if e.file_type().is_ok_and(|t| t.is_dir()) {
+      depth > 0 && !name.ends_with(".sdr") && has_kfx(&e.path(), depth - 1)
+    } else {
+      name.ends_with(".kfx")
+    }
+  })
 }
 
 /// A KFX that could not be read, and why.
@@ -52,7 +107,7 @@ pub type Unreadable = (PathBuf, String);
 /// not be read.
 pub fn books(root: &Path) -> io::Result<(Vec<KindleBook>, Vec<Unreadable>)> {
   let mut files = Vec::new();
-  collect_kfx(&root.join("documents"), &mut files)?;
+  collect_kfx(&documents(root), &mut files)?;
   files.sort();
   let (mut books, mut unreadable) = (Vec::new(), Vec::new());
   for kfx in files {

@@ -66,7 +66,7 @@ Eine Zuordnung verbindet so ein Buch mit seinem Original-EPUB:
 ```sh
 nickelinksync map suggest --device /Volumes/KOBOeReader --library ~/Calibre-Bibliothek
 nickelinksync map add --device /Volumes/KOBOeReader --book "Heat 2" --epub ~/Books/heat-2.epub
-nickelinksync map add --device /Volumes/Kindle --book heat-2
+nickelinksync map add --device ~/Kindle-Kopie --book heat-2
 nickelinksync map list
 nickelinksync map remove 1a2b3c4d
 ```
@@ -104,8 +104,25 @@ wurde über die 32 Zeichen danach gefunden), *chapter start only* (die
 Stelle im Kapitel wurde nicht gefunden), *from the percentage only* (das
 Kapitel fehlt in der anderen Datei, z. B. Calibres `titlepage.xhtml`).
 `pull --write` bringt die Server-Position genauso in eine zugeordnete EPUB
-auf dem Tolino zurück; in ein kepub schreibt es noch nichts. Kindle-Bücher
-folgen.
+auf dem Tolino zurück; in ein kepub schreibt es noch nichts.
+
+**Kindle.** `status` und `push` lesen auch die Bücher eines Kindle, und
+zwar jedes KFX, das seiner EPUB zugeordnet ist (`map add`): Die zuletzt
+gelesene Seite (`lpr` im `.sdr`-Ordner) wird in die EPUB übersetzt und
+unter deren Prüfsumme gesendet. Auf den Kindle wird nichts geschrieben,
+`pull` lehnt ab. Ein aktueller Kindle bietet nur MTP an, das der Mac nicht
+als Laufwerk einhängt: Kopiere den Ordner `documents` oder nur die
+`.kfx`-Datei eines Buchs samt `.sdr`-Ordner mit
+[OpenMTP](https://openmtp.ganeshrvel.com/) in einen Ordner und gib diesen
+als `--device` an. Lesen lassen sich nur Bücher, die per
+**Send-to-Kindle** geschickt wurden; im Kindle-Shop gekaufte Bücher sind
+verschlüsselt (DRM) und werden übersprungen. Ein Jailbreak ist nicht
+nötig.
+
+```sh
+nickelinksync map add --device ~/Kindle-Kopie --book "Good Boy" --library ~/Calibre-Bibliothek
+nickelinksync push --device ~/Kindle-Kopie
+```
 
 Die Zuordnungen werden nur auf dem Computer gelesen: Das Tolino-Plugin
 synchronisiert jedes Buch wie bisher unter seiner eigenen Prüfsumme.

@@ -123,7 +123,9 @@ fixtures only.
   `map suggest` with a readable score. Stage 3 done: `status`/`push`/
   `pull` sync a mapped book under the original's checksum, the position
   moved by chapter path (calibre's split chapters joined) and visible
-  text, with visible fallbacks. Next: the Kindle in `status`/`push`.
+  text, with visible fallbacks. Stage 4 done: the Kindle in `status`/
+  `push` (read-only, a copy of its books where the Kindle offers only
+  MTP; store books with DRM skipped).
 - **Desktop client with a graphical UI** (L): right after the CLI
   mapping, on the same library: devices and books, creating mappings,
   starting a sync. egui/eframe (pure Rust, MIT/Apache, no WebView), one
@@ -182,13 +184,11 @@ Feasibility checks (each ends in a yes/no and a sketch, not in code) and
 what follows from a positive one. Both families are outside the current scope (Nickel devices only, see
 [SCOPE.md](SCOPE.md)).
 
-- **Kindle ↔ KOSync: CLI and book mapping** (M): read `lpr` from the
-  `.yjf` of a mounted Kindle in `status --device` and link the KFX
-  (`content_id`, title, author) to the EPUB's hash; the reader and the
-  translation to a KOReader XPointer are done (see "Recently completed").
-  Why: the feasibility check found the position readable over USB and
-  character-exact. Depends on the manual book mapping in the CLI; writing back is
-  unchecked (`cc.db` and Amazon's own sync also hold the position).
+- **Kindle ↔ KOSync** (M): reading `lpr` and pushing it through the book
+  mapping is done (D1 stage 4). Open: reading a Kindle directly over MTP
+  (recent Kindles offer nothing else; the CLI reads a copy so far), and
+  writing back, which is unchecked (`cc.db` and Amazon's own sync also
+  hold the position).
   Users are assumed to have no jailbreak: the base feature set is the
   desktop CLI over USB; a jailbroken Kindle only adds to it (`cc.db`, sync
   without a cable through an on-device daemon).

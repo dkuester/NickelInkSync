@@ -191,3 +191,97 @@ fn rejects_a_stale_position() {
     Err(Error::UnknownBlock(9999))
   ));
 }
+
+/// Book R's EPUB with a cover page in front of the spine and chapter 2
+/// split in two, so the KFX sections are no longer the spine items one by
+/// one (as Send-to-Kindle's cover section and split chapters leave them in
+/// the other direction).
+fn book_r_restructured() -> Epub {
+  use std::io::{Read, Write};
+  let source = fixtures().join("epub/book-r.epub");
+  let mut zip = zip::ZipArchive::new(fs::File::open(source).unwrap()).unwrap();
+  let path = std::env::temp_dir().join(format!(
+    "nickelinksync-{}-book-r-restructured.epub",
+    std::process::id()
+  ));
+  let mut out = zip::ZipWriter::new(fs::File::create(&path).unwrap());
+  let options = zip::write::SimpleFileOptions::default();
+  for i in 0..zip.len() {
+    let mut entry = zip.by_index(i).unwrap();
+    let name = entry.name().unwrap().to_string();
+    let mut data = String::new();
+    entry.read_to_string(&mut data).unwrap();
+    match name.as_str() {
+      "OEBPS/content.opf" => {
+        data = data
+          .replacen(
+            "<manifest>",
+            "<manifest><item id=\"cv\" href=\"text/cover.xhtml\" media-type=\"application/xhtml+xml\"/><item id=\"s2b\" href=\"text/chapter2b.xhtml\" media-type=\"application/xhtml+xml\"/>",
+            1,
+          )
+          .replacen("<itemref idref=\"s0\"/>", "<itemref idref=\"cv\"/><itemref idref=\"s0\"/>", 1)
+          .replacen("<itemref idref=\"s2\"/>", "<itemref idref=\"s2\"/><itemref idref=\"s2b\"/>", 1);
+      }
+      "OEBPS/text/chapter2.xhtml" => {
+        let (head, body) = data.split_once("<body>").unwrap();
+        let cut = body.find("<p>R2-101 ").unwrap();
+        let second = format!("{head}<body>\n{}", &body[cut..]);
+        data = format!("{head}<body>{}</body>\n</html>\n", &body[..cut]);
+        out
+          .start_file("OEBPS/text/chapter2b.xhtml", options)
+          .unwrap();
+        out.write_all(second.as_bytes()).unwrap();
+      }
+      _ => {}
+    }
+    out.start_file(name, options).unwrap();
+    out.write_all(data.as_bytes()).unwrap();
+  }
+  out.start_file("OEBPS/text/cover.xhtml", options).unwrap();
+  out
+    .write_all(b"<?xml version=\"1.0\"?><html xmlns=\"http://www.w3.org/1999/xhtml\"><head><title>c</title></head><body><img src=\"c.jpg\" alt=\"\"/></body></html>")
+    .unwrap();
+  out.finish().unwrap();
+  Epub::open(&path).unwrap()
+}
+
+#[test]
+fn blocks_are_found_by_text_when_sections_and_spine_differ() {
+  let b = book('r', 3);
+  let mut epub = book_r_restructured();
+  assert_eq!(epub.spine.len(), b.kfx.sections.len() + 2);
+  let lpr = b.state.last_read.unwrap().position;
+  // R3-85: chapter 3 is two spine items later now.
+  let x = to_xpointer(&b.kfx, &mut epub, &lpr).unwrap();
+  assert_eq!(
+    x.xpointer,
+    "/body[1]/DocFragment[6]/body[1]/p[85]/text()[1].187"
+  );
+  assert!(x.exact);
+  // R2-99 stays in the first part of the split chapter 2, R2-150 is
+  // paragraph 50 of the second part.
+  let r2 = b.state.history[2].position;
+  let x = to_xpointer(&b.kfx, &mut epub, &r2).unwrap();
+  assert_eq!(
+    x.xpointer,
+    "/body[1]/DocFragment[4]/body[1]/p[99]/text()[1].192"
+  );
+  let block = b
+    .kfx
+    .sections
+    .iter()
+    .flat_map(|s| &s.blocks)
+    .find(|bl| bl.text.starts_with("R2-150 "))
+    .unwrap();
+  let x = block_to_xpointer(&b.kfx, &mut epub, block.eid, 7).unwrap();
+  assert_eq!(
+    x.xpointer,
+    "/body[1]/DocFragment[5]/body[1]/p[50]/text()[1].7"
+  );
+  // The title page's section (spine item 0 of the KFX) is found by its
+  // text behind the cover.
+  let title = &b.kfx.sections[0].blocks[0];
+  let x = block_to_xpointer(&b.kfx, &mut epub, title.eid, 0).unwrap();
+  assert_eq!(x.spine_index, 1);
+  assert!(x.exact);
+}
