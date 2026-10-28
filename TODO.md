@@ -83,8 +83,8 @@ dürfen jederzeit dazwischengeschoben werden.
   - [x] **ich:** `map add|list|remove`; Kindle-Bücher per USB ohne
     Jailbreak (`src/kindle_device.rs`). Tests mit Book A (kepub ↔ EPUB),
     gleicher Datei und den Kindle-Fixtures (`tests/mapping.rs`).
-  - [ ] **du:** Etappe 1 am Gerät ausprobieren (siehe PR): Heat 2 vom
-    Kobo und vom Tolino auf die Original-EPUB abbilden, `map list`.
+  - [x] **du:** Etappe 1 am Kobo 6.0 ausprobiert (2026-10-28): Book R
+    kepub ↔ EPUB, `map add`, `map list`. Heat 2 vom Tolino steht noch aus.
   - [x] **ich:** Bibliothek mit Originalen (`library =` in `config.ini`,
     `--library`, `src/library.rs`): Calibre-`metadata.db` nur lesend
     (`immutable=1`), sonst `*.epub` rekursiv mit Titel/Autor aus der OPF;
@@ -96,13 +96,34 @@ dürfen jederzeit dazwischengeschoben werden.
     Vorschlag. Die Kindle-`content_id` wählt das Buch aus, steht aber nicht
     in der Bibliothek und zählt deshalb nicht zur Bewertung. Tests mit
     selbst erzeugter Calibre-`metadata.db` (`tests/library.rs`).
-  - [ ] **du:** Etappe 2 mit deiner Calibre-Bibliothek ausprobieren (siehe
-    PR): `map suggest` gegen den Kobo 6.0 und, falls zur Hand, den Kindle.
-  - [ ] **ich:** Etappe 3: `status`/`push`/`pull` über die Zuordnung;
-    Position in die Original-EPUB übersetzen (Kapitel-`href` und
-    Textanker), sonst Kapitelanfang bzw. Prozent, sichtbar gemeldet.
-  - [ ] **ich:** `status`/`push`/`pull` nutzen die Zuordnung; Positionen
-    werden in der zugeordneten EPUB übersetzt.
+  - [x] **du:** Etappe 2 mit deiner Calibre-Bibliothek und dem Kobo 6.0
+    geprüft (2026-10-28): drei kepubs aus Calibre, je der richtige Band
+    vorn (100 %, 99 %, 91 %). Calibre ersetzt beim Umwandeln die
+    Cover-Seite und teilt große Kapitel (`_split_NNN`).
+  - [x] **ich:** Etappe 3 (`src/transfer.rs`): `status`/`push`/`pull`
+    über die Zuordnung, unter der Prüfsumme der Original-EPUB; Position
+    über Kapitelpfad (Calibres `_split_NNN` zusammengeführt) und sichtbaren
+    Text übersetzt, sonst Kapitelanfang bzw. Prozent, in der Ausgabe
+    benannt. Mit Bibliothek wird ein Buch ohne Zuordnung, das weder in der
+    Bibliothek liegt noch Original einer Zuordnung ist, nicht
+    synchronisiert; ohne Bibliothek wie bisher. `pull --write` übersetzt
+    zurück in eine zugeordnete EPUB auf dem Tolino und schreibt nie in ein
+    kepub. Tests: Markierungen Book P/Q kepub ↔ EPUB, Kobo-6.0-Position
+    in Book R, Calibre-artige Umwandlung von Book R, Mock-Server
+    (`tests/transfer.rs`, `tests/sync_mapping.rs`).
+  - [x] **du:** Etappe 3 am Gerät (2026-10-28): Vampire Hunter D
+    (Calibre-kepub mit geteilten Kapiteln) auf dem Kobo 6.0 bis „the events
+    of the day“ gelesen; die gesendete Stelle stimmt zeichengenau, KOReader
+    zeigt sie aber weit unten auf seiner Seite.
+  - [x] **ich:** `position = paragraph | sentence | exact` in
+    `config.ini` (Standard `paragraph`): `push` sendet den Absatzanfang,
+    höchstens etwa eine halbe Seite zurück, sonst den Satzanfang; Ausgabe
+    nennt die Verschiebung (`transfer::step_back`).
+  - [x] **du:** Mit `position = paragraph` geprüft (2026-10-28): Vampire
+    Hunter D sendet den Absatzanfang (`p[26]`, 103 Zeichen zurück);
+    KOReader blieb auf derselben Seite, passt.
+  - [ ] **ich:** Etappe 4: Kindle in `status`/`push` (nur lesend, `.yjf`,
+    ohne Jailbreak).
 - [ ] **D2 Desktop-Client mit grafischer Oberfläche** · direkt nach D1.
   Baut auf derselben Bibliothek auf: Geräte und Bücher anzeigen, Zuordnung
   anlegen, Sync auslösen.

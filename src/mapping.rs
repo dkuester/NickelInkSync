@@ -206,7 +206,7 @@ struct StoreFile {
 }
 
 /// The mappings, loaded from and saved to one file.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Store {
   pub path: PathBuf,
   pub mappings: Vec<Mapping>,

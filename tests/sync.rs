@@ -62,6 +62,8 @@ fn run(root: &Path, config: &Path, args: &[&str]) -> Output {
     .arg(root)
     .arg("--config")
     .arg(config)
+    // No mappings of the machine running the tests.
+    .env("NICKELINKSYNC_DATA_DIR", root.join("no-data"))
     .output()
     .unwrap()
 }

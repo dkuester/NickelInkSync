@@ -87,8 +87,52 @@ with the device file's checksum needs no mapping. The Kindle's
 `content_id` is the key of its mapping and how `--content-id` picks the
 book; it does not appear in the library, so it adds nothing to the score.
 
-Still to come: `status`/`push`/`pull` through the mapping, with the
-position translated into the original EPUB by chapter href and text.
+**Syncing through the mapping** (`src/transfer.rs`, `status`/`push`/`pull`
+on the desktop; the plugin does not read mappings): a mapped book syncs
+under the original's checksum; a broken mapping, and with a library
+configured a book that is neither mapped, nor in the library, nor the
+original of a mapping, does not sync at all; without a library every
+unmapped book syncs under its own checksum as before. The position moves
+between the two files as a KOReader XPointer, by chapter and text, never
+by spine index or node path:
+
+- **Chapter:** the spine item's path, with calibre's `_split_NNN` taken
+  off, so the parts of a split chapter are one chapter. Calibre's Kobo
+  driver (EPUB → kepub on copy, owner's library on the Kobo 6.0,
+  2026-10-28) replaced the cover page by `titlepage.xhtml` in all three
+  books and split two chapters of one into `…_split_000`/`_split_001`
+  (34 spine items against 27).
+- **Text:** the chapter's visible characters in document order, without
+  whitespace, soft hyphens and zero-width characters (a kepub adds
+  wrapper `div`s, spans and whitespace between elements). Same text: the
+  same character (*same text*). Otherwise the 32 characters after the
+  position (before it, at a chapter end) are looked up, nearest to the
+  same relative place (*found by its text*).
+- **Fallbacks, shown:** the chapter's start if the text is not found; if
+  the chapter is not in the other file, the place at the book's
+  percentage, counted in visible characters (*from the percentage only*).
+
+Checked: KOReader's highlights of the same 16 words in the kepub and the
+EPUB of Book P and Book Q move to each other exactly, both ways; the
+Kobo 6.0's `#kobo.17.1:204` in the Book R kepub lands on
+`p[16]/text()[1].204` of the EPUB; Book A's `#kobo.1.1` is KOReader's own
+position in the EPUB; a calibre-like conversion of Book R (cover page,
+split chapter, changed text) moves both ways (`tests/transfer.rs`,
+`tests/sync_mapping.rs`). `pull --write` translates back into a mapped
+EPUB on the Tolino; a kepub is never written (Nickel expects a span
+there, and the translation back to a span is not done).
+
+**Place to send** (`position`, `transfer::step_back`): a device stores
+its page start, often mid-sentence; KOReader opens the page holding that
+place by its own layout, so it may sit anywhere on the page (Vampire Hunter
+D on the Kobo 6.0, 2026-10-28: the Kobo's page started at "the events of
+the day", which KOReader showed near the bottom of its page, though the
+XPointer was exact). By default `push` sends the start of the innermost
+block element (paragraph) instead, at most 600 visible characters back,
+else the sentence start (after `.`, `!`, `?`, `…` and closing quotes),
+else the place itself; `sentence` and `exact` are the other settings.
+The local position used for `status` and `confirm` is the same moved one,
+so the device does not look newer because of it.
 
 ## License
 

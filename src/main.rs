@@ -1,10 +1,11 @@
+use std::collections::HashSet;
 use std::error::Error;
 use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Args, Parser, Subcommand};
-use nickelinksync::config::{self, Config};
+use nickelinksync::config::{self, Config, LocalSettings, PushPosition};
 use nickelinksync::db::{Book, Device, Write};
 use nickelinksync::epub::Epub;
 use nickelinksync::hash::partial_md5;
@@ -21,6 +22,7 @@ use nickelinksync::sync::{
   self, decide, format_timestamp, iso_timestamp, parse_timestamp, Confirm, Decision, Direction,
   Local, Side,
 };
+use nickelinksync::transfer::{step_back, transfer, How};
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
@@ -159,6 +161,11 @@ struct Target {
   /// Seconds each request to the server may take
   #[arg(long, default_value_t = 30)]
   timeout: u64,
+  /// Folder with the original EPUBs (Calibre library or any folder): books
+  /// that are neither mapped nor the same file as one there are not synced
+  /// [default: `library` in the configuration file]
+  #[arg(long)]
+  library: Option<PathBuf>,
 }
 
 fn main() -> ExitCode {
@@ -217,6 +224,62 @@ struct Session {
   model: String,
   flavor: PointFlavor,
   books: Vec<Book>,
+  /// Book mappings; none on the device itself (`--live`).
+  store: Store,
+  /// The library of originals, if one is configured.
+  library: Option<Library>,
+  /// Checksums of the library's EPUBs, computed when first needed.
+  library_hashes: std::cell::OnceCell<HashSet<String>>,
+  /// Which place is sent (`position` in the configuration).
+  position: PushPosition,
+}
+
+/// Under which checksum a book is synced, if at all.
+enum Identity {
+  /// The device file's own checksum: the same file as in the library, or
+  /// no library to check against.
+  Own { hash: String, why: &'static str },
+  /// Mapped to an original EPUB: its checksum, and positions translated.
+  Mapped { hash: String, mapping: Mapping },
+  /// Not synced: `kind` for the plugin, and why.
+  Skip {
+    hash: Option<String>,
+    kind: &'static str,
+    message: String,
+  },
+}
+
+impl Identity {
+  /// The KOSync document: the checksum the server knows the book by.
+  fn document(&self) -> Option<&str> {
+    match self {
+      Identity::Own { hash, .. } => Some(hash),
+      Identity::Mapped { mapping, .. } => Some(&mapping.epub.hash),
+      Identity::Skip { .. } => None,
+    }
+  }
+
+  /// The device file's checksum.
+  fn device_hash(&self) -> Option<&str> {
+    match self {
+      Identity::Own { hash, .. } | Identity::Mapped { hash, .. } => Some(hash),
+      Identity::Skip { hash, .. } => hash.as_deref(),
+    }
+  }
+
+  /// What `status`, `push` and `pull` print about it.
+  fn describe(&self) -> String {
+    match self {
+      Identity::Own { why, .. } => format!("own checksum ({why})"),
+      Identity::Mapped { mapping, .. } => {
+        format!(
+          "mapped to {} (checksum {})",
+          mapping.epub.path, mapping.epub.hash
+        )
+      }
+      Identity::Skip { message, .. } => message.clone(),
+    }
+  }
 }
 
 impl Session {
@@ -252,6 +315,29 @@ impl Session {
       target.book.as_deref(),
       target.content_id.as_deref(),
     );
+    let settings = match target.config.clone().or_else(Config::default_path) {
+      Some(config) => Config::local_settings(&config)?,
+      None => LocalSettings::default(),
+    };
+    // The mappings and the library live on the desktop; the plugin syncs
+    // every book under its own checksum, as before.
+    let (store, library) = if target.live {
+      (Store::default(), None)
+    } else {
+      let store = match Store::default_path() {
+        Some(path) => Store::load(&path)?,
+        None => Store::default(),
+      };
+      let path = target.library.clone().or(settings.library);
+      (store, load_library(path)?)
+    };
+    if !store.mappings.is_empty() {
+      println!(
+        "Mappings  {} in {}",
+        store.mappings.len(),
+        store.path.display()
+      );
+    }
     if books.is_empty() {
       println!("\nNo sideloaded books.");
     }
@@ -260,7 +346,72 @@ impl Session {
       model,
       flavor,
       books,
+      store,
+      library,
+      library_hashes: std::cell::OnceCell::new(),
+      position: settings.position,
     })
+  }
+
+  /// Under which checksum the book is synced. A mapping wins over the
+  /// file's own checksum; with a library, a book that is neither mapped
+  /// nor the same file as one there is not synced.
+  fn identity(&self, book: &Book) -> Identity {
+    let hash = match self.hash(book) {
+      Ok(hash) => hash,
+      Err(message) => {
+        return Identity::Skip {
+          hash: None,
+          kind: "skipped",
+          message,
+        }
+      }
+    };
+    if let Some(mapping) = self.store.for_file(&hash) {
+      return match mapping.check() {
+        EpubState::Ok => Identity::Mapped {
+          hash,
+          mapping: mapping.clone(),
+        },
+        state => Identity::Skip {
+          hash: Some(hash),
+          kind: "mapping-broken",
+          message: format!(
+            "not synced: the mapping to {} is {state}; map it again with `map add`",
+            mapping.epub.path
+          ),
+        },
+      };
+    }
+    let Some(library) = &self.library else {
+      return Identity::Own {
+        hash,
+        why: "no library configured to check it",
+      };
+    };
+    if self.store.mappings.iter().any(|m| m.epub.hash == hash) {
+      return Identity::Own {
+        hash,
+        why: "the original EPUB of a mapping",
+      };
+    }
+    let in_library = self
+      .library_hashes
+      .get_or_init(|| library.books.iter().filter_map(|b| b.hash().ok()).collect());
+    if in_library.contains(&hash) {
+      Identity::Own {
+        hash,
+        why: "the same file as in the library",
+      }
+    } else {
+      Identity::Skip {
+        hash: Some(hash),
+        kind: "not-mapped",
+        message: "not mapped: neither mapped nor the same file as in the library, so not \
+                  synced; see `nickelinksync map suggest`"
+          .into(),
+      }
+    }
   }
 
   fn hash(&self, book: &Book) -> std::result::Result<String, String> {
@@ -276,27 +427,96 @@ impl Session {
       })
   }
 
-  /// A server XPointer as the device would store it.
-  fn translate(&self, book: &Book, xpointer: &str) -> std::result::Result<Translated, String> {
-    Epub::open(&self.device.book_file(book))
-      .map_err(|e| e.to_string())
-      .and_then(|mut epub| {
-        from_xpointer(&mut epub, xpointer, self.flavor).map_err(|e| e.to_string())
-      })
+  /// A server XPointer (in the original EPUB, for a mapped book) as the
+  /// device would store it, and what was not exact about it.
+  fn translate(
+    &self,
+    book: &Book,
+    identity: &Identity,
+    xpointer: &str,
+    percentage: f64,
+  ) -> std::result::Result<(Translated, Option<String>), String> {
+    if book.is_kepub() {
+      // Nickel reads it as a kepub and expects a `#kobo.N.M` span.
+      return Err("positions back into a kepub are not translated yet".into());
+    }
+    let mut device = Epub::open(&self.device.book_file(book)).map_err(|e| e.to_string())?;
+    let (xpointer, how) = match identity {
+      Identity::Mapped { mapping, .. } => {
+        let mut original =
+          Epub::open(std::path::Path::new(&mapping.epub.path)).map_err(|e| e.to_string())?;
+        let t =
+          transfer(&mut original, xpointer, &mut device, percentage).map_err(|e| e.to_string())?;
+        (t.xpointer, Some(t.how))
+      }
+      _ => (xpointer.to_string(), None),
+    };
+    let translated =
+      from_xpointer(&mut device, &xpointer, self.flavor).map_err(|e| e.to_string())?;
+    let note = match how {
+      Some(how) if how != How::SameText => Some(how.to_string()),
+      _ if !translated.exact => Some("chapter only".to_string()),
+      _ => None,
+    };
+    Ok((translated, note))
   }
 
-  /// The device position for KOSync, or why there is none.
-  fn local(&self, book: &Book) -> std::result::Result<(Local, bool), String> {
+  /// The device position for KOSync (in the original EPUB, for a mapped
+  /// book), and what was not exact about it; or why there is none.
+  fn local(
+    &self,
+    book: &Book,
+    identity: &Identity,
+  ) -> std::result::Result<(Local, Option<String>), String> {
     let stored = book.position.as_deref().ok_or("never opened")?;
     let x = self
       .xpointer(book, stored)
       .map_err(|e| format!("not translated: {e}"))?;
+    let percentage = book.percent_read as f64 / 100.0;
+    let device_file = self.device.book_file(book);
+    let (xpointer, mut notes, sent_file) = match identity {
+      Identity::Mapped { mapping, .. } => {
+        let original = PathBuf::from(&mapping.epub.path);
+        let moved = Epub::open(&device_file)
+          .and_then(|device| Ok((device, Epub::open(&original)?)))
+          .map_err(|e| e.to_string())
+          .and_then(|(mut device, mut epub)| {
+            transfer(&mut device, &x.xpointer, &mut epub, percentage).map_err(|e| e.to_string())
+          })
+          .map_err(|e| format!("not translated into the original EPUB: {e}"))?;
+        let notes: Vec<String> = (moved.how != How::SameText)
+          .then(|| moved.how.to_string())
+          .into_iter()
+          .collect();
+        (moved.xpointer, notes, original)
+      }
+      _ => {
+        let notes = (!x.exact).then(|| "chapter only".to_string());
+        (x.xpointer, notes.into_iter().collect(), device_file)
+      }
+    };
+    // The start of the sentence or paragraph, which is easier to find on
+    // KOReader's page than a place mid-sentence.
+    let stepped = Epub::open(&sent_file)
+      .map_err(|e| e.to_string())
+      .and_then(|mut epub| {
+        step_back(&mut epub, &xpointer, self.position).map_err(|e| e.to_string())
+      })
+      .map_err(|e| format!("not translated: {e}"))?;
+    let xpointer = match stepped {
+      Some(s) => {
+        notes.push(s.to_string());
+        s.xpointer
+      }
+      None => xpointer,
+    };
+    let note = (!notes.is_empty()).then(|| notes.join("; "));
     let local = Local {
-      xpointer: x.xpointer,
+      xpointer,
       percentage: book.percent_read as f64 / 100.0,
       last_read: book.last_read.as_deref().and_then(parse_timestamp),
     };
-    Ok((local, x.exact))
+    Ok((local, note))
   }
 }
 
@@ -349,6 +569,10 @@ impl Server {
     if !required && !path.exists() {
       return Ok(None);
     }
+    // A file with only `library` or `position` sets up no server.
+    if path.exists() && !Config::local_settings(&path)?.server {
+      return Ok(None);
+    }
     let config = Config::load(&path)?;
     // On the device's FAT storage every file looks world-readable.
     if !target.live {
@@ -364,12 +588,17 @@ impl Server {
   /// Like [`Server::open`], but a configuration is required.
   fn require(target: &Target) -> Result<Self> {
     Server::open(target)?.ok_or_else(|| {
-      let path = Config::default_path().unwrap_or_else(|| "config.ini".into());
-      format!(
-        "no configuration at {}; see README.md for the format",
-        path.display()
-      )
-      .into()
+      let path = target
+        .config
+        .clone()
+        .or_else(Config::default_path)
+        .unwrap_or_else(|| "config.ini".into());
+      let what = if path.exists() {
+        "no server set up in"
+      } else {
+        "no configuration at"
+      };
+      format!("{what} {}; see README.md for the format", path.display()).into()
     })
   }
 }
@@ -406,21 +635,21 @@ fn status(target: &Target) -> Result<bool> {
     heading(book);
     let format = if book.is_kepub() { "kepub" } else { "EPUB" };
     println!("  file      {} ({format})", book.onboard_path());
-    let hash = session.hash(book);
-    println!(
-      "  hash      {}",
-      hash.as_deref().unwrap_or_else(|e| e.as_str())
-    );
+    let identity = session.identity(book);
+    if let Some(hash) = identity.device_hash() {
+      println!("  hash      {hash}");
+    }
+    println!("  sync as   {}", identity.describe());
     println!(
       "  position  {}",
       book.position.as_deref().unwrap_or("(never opened)")
     );
-    let local = session.local(book);
-    if let Some(stored) = &book.position {
-      let koreader = match session.xpointer(book, stored) {
-        Ok(x) if x.exact => x.xpointer,
-        Ok(x) => format!("{} (chapter only)", x.xpointer),
-        Err(e) => format!("(not translated: {e})"),
+    let local = session.local(book, &identity);
+    if book.position.is_some() {
+      let koreader = match &local {
+        Ok((l, None)) => l.xpointer.clone(),
+        Ok((l, Some(note))) => format!("{} ({note})", l.xpointer),
+        Err(e) => format!("({e})"),
       };
       println!("  koreader  {koreader}");
     }
@@ -439,7 +668,7 @@ fn status(target: &Target) -> Result<bool> {
       ),
       None => println!("  progress  {} %, {state}", book.percent_read),
     }
-    let (Some(server), Ok(hash)) = (&server, &hash) else {
+    let (Some(server), Some(hash)) = (&server, identity.document()) else {
       continue;
     };
     if let Some(e) = &server_error {
@@ -580,9 +809,20 @@ fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool>
   let mut ok = true;
   for book in &session.books {
     heading(book);
-    let (hash, (local, exact)) = match (session.hash(book), session.local(book)) {
-      (Ok(hash), Ok(local)) => (hash, local),
-      (Err(e), _) | (_, Err(e)) => {
+    let identity = session.identity(book);
+    let hash = match &identity {
+      Identity::Skip { kind, message, .. } => {
+        println!("  skipped   {message}");
+        if emit {
+          emit_line("NOT_SENT", &[kind, message]);
+        }
+        continue;
+      }
+      _ => identity.document().unwrap_or_default().to_string(),
+    };
+    let (local, note) = match session.local(book, &identity) {
+      Ok(local) => local,
+      Err(e) => {
         println!("  skipped   {e}");
         if emit {
           emit_line("NOT_SENT", &["skipped", &e]);
@@ -590,6 +830,9 @@ fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool>
         continue;
       }
     };
+    if let Identity::Mapped { .. } = identity {
+      println!("  sync as   {}", identity.describe());
+    }
     println!("  hash      {hash}");
     if let Some(at) = not_in_line.get(&book.content_id) {
       if !force {
@@ -655,7 +898,7 @@ fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool>
     let what = format!(
       "{}{} ({})",
       update.progress,
-      if exact { "" } else { " (chapter only)" },
+      note.map(|n| format!(" ({n})")).unwrap_or_default(),
       percent(update.percentage)
     );
     if dry_run {
@@ -707,16 +950,20 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
   let mut ok = true;
   for book in &session.books {
     heading(book);
-    let hash = match session.hash(book) {
-      Ok(hash) => hash,
-      Err(e) => {
-        println!("  skipped   {e}");
+    let identity = session.identity(book);
+    let hash = match &identity {
+      Identity::Skip { kind, message, .. } => {
+        println!("  skipped   {message}");
         if emit {
-          emit_line("NOT_TAKEN", &["skipped", &e]);
+          emit_line("NOT_TAKEN", &[kind, message]);
         }
         continue;
       }
+      _ => identity.document().unwrap_or_default().to_string(),
     };
+    if let Identity::Mapped { .. } = identity {
+      println!("  sync as   {}", identity.describe());
+    }
     let remote = match server.client.progress(&hash) {
       Ok(Some(remote)) => remote,
       Ok(None) => {
@@ -738,7 +985,7 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
       book.position.as_deref().unwrap_or("(never opened)")
     );
     // Without a device position there is nothing on the device to keep.
-    let local = session.local(book).ok().map(|(local, _)| local);
+    let local = session.local(book, &identity).ok().map(|(local, _)| local);
     // After a failed take Nickel's DateLastRead says nothing about reading.
     let left_by_nickel = not_in_line.get(&book.content_id);
     let decision = match (&local, left_by_nickel) {
@@ -791,22 +1038,19 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
     }
     let verb = if write { "move to  " } else { "would move to" };
     println!("  {verb} {}", describe(&remote));
-    let translated = match session.translate(book, &remote.progress) {
-      Ok(t) => t,
-      Err(e) => {
-        println!("  skipped   not translated: {e}");
-        if emit {
-          emit_line("NOT_TAKEN", &["not-translated", &e]);
+    let (translated, note) =
+      match session.translate(book, &identity, &remote.progress, remote.percentage) {
+        Ok(t) => t,
+        Err(e) => {
+          println!("  skipped   not translated: {e}");
+          if emit {
+            emit_line("NOT_TAKEN", &["not-translated", &e]);
+          }
+          continue;
         }
-        continue;
-      }
-    };
-    let only = if translated.exact {
-      ""
-    } else {
-      " (chapter only)"
-    };
-    println!("  on device {}{only}", translated.position);
+      };
+    let note = note.map(|n| format!(" ({n})")).unwrap_or_default();
+    println!("  on device {}{note}", translated.position);
     // Keep the server the newer side, so the next push does not send the
     // old device position back: DateLastRead stays as it is unless it is
     // newer than the server's position.
@@ -1154,6 +1398,11 @@ fn open_library(args: &LibraryArgs) -> Result<Option<Library>> {
       }
     }
   };
+  load_library(path)
+}
+
+/// Reads the library at `path` and says so.
+fn load_library(path: Option<PathBuf>) -> Result<Option<Library>> {
   let Some(path) = path else {
     return Ok(None);
   };
