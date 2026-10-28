@@ -226,18 +226,9 @@ pub fn from_xpointer(
       "positions back to Kobo firmware 4.x are not translated yet",
     ));
   }
-  let bad = || Error::BadXPointer(xpointer.to_string());
-  let rest = xpointer
-    .strip_prefix("/body[1]/DocFragment[")
-    .or_else(|| xpointer.strip_prefix("/body/DocFragment["))
-    .ok_or_else(bad)?;
-  let (n, below) = rest.split_once(']').ok_or_else(bad)?;
-  let spine_index = n
-    .parse::<usize>()
-    .ok()
-    .and_then(|n| n.checked_sub(1))
-    .filter(|&i| i < epub.spine.len())
-    .ok_or_else(bad)?;
+  let (spine_index, below) = split_xpointer(xpointer)
+    .filter(|&(i, _)| i < epub.spine.len())
+    .ok_or_else(|| Error::BadXPointer(xpointer.to_string()))?;
   let chapter = epub.spine[spine_index].clone();
   let html = epub.chapter(spine_index)?;
   let resolved = Some(below)
@@ -272,6 +263,26 @@ pub fn from_xpointer(
     },
     exact,
   })
+}
+
+/// The 0-based spine index of `/body[1]/DocFragment[n]…` and the part
+/// below it.
+pub(crate) fn split_xpointer(xpointer: &str) -> Option<(usize, &str)> {
+  let rest = xpointer
+    .strip_prefix("/body[1]/DocFragment[")
+    .or_else(|| xpointer.strip_prefix("/body/DocFragment["))?;
+  let (n, below) = rest.split_once(']')?;
+  Some((n.parse::<usize>().ok()?.checked_sub(1)?, below))
+}
+
+/// Like [`point_for`], but the offset in characters of the text node as
+/// written (not collapsed).
+pub(crate) fn node_for(html: &Element, below: &str) -> Option<(Vec<usize>, usize)> {
+  let (path, bytes) = point_for(html, below)?;
+  match html.node_at(&path)? {
+    Node::Text(t) | Node::CData(t) => Some((path, bytes_to_chars(t, bytes))),
+    _ => None,
+  }
 }
 
 /// Child indices from `html` and a UTF-8 byte offset for the part of a

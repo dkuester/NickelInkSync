@@ -40,7 +40,10 @@ nickelinksync pull --device /Volumes/KOBOeReader
 | `pull` | Zeigt, für welche Bücher der Server eine neuere Position hat, wie das Gerät sie speichern würde und wo es nachfragen würde. Nur mit `--write` wird sie aufs Gerät geschrieben (bisher nur Tolino, experimentell, siehe unten); `--force` übernimmt die Server-Position ohne Rückfrage. |
 
 Alle drei nehmen `--book <Text>` (nur Bücher, deren Titel oder Dateipfad den
-Text enthält) und `--config <Datei>` für eine andere Konfigurationsdatei. Das
+Text enthält), `--config <Datei>` für eine andere Konfigurationsdatei und
+`--library <Ordner>` für die Bibliothek mit den Originalen (siehe
+[Buchzuordnung](#buchzuordnung-im-aufbau)); sie entscheidet mit, welche
+Bücher synchronisiert werden. Das
 Gerät wird nur gelesen, nie beschrieben, außer von `pull --write` (und vom
 Plugin, siehe unten).
 
@@ -78,8 +81,34 @@ nickelinksync map remove 1a2b3c4d
 Ein Buch auf Kobo oder Tolino wird an der Prüfsumme seiner Datei erkannt;
 Verschieben oder Umbenennen auf dem Gerät behält die Zuordnung. Ein
 Kindle-Buch wird an seiner `content_id` erkannt. Weder Gerät noch EPUB
-werden verändert. **Noch nicht:** `status`, `push` und `pull` nutzen die
-Zuordnungen bisher nicht.
+werden verändert.
+
+**Synchronisieren über die Zuordnung.** `status`, `push` und `pull`
+entscheiden für jedes Buch, unter welcher Prüfsumme es synchronisiert wird
+(Zeile `sync as`):
+
+| Buch | Synchronisiert |
+|---|---|
+| zugeordnet, EPUB unverändert | unter der Prüfsumme der Original-EPUB, Position übersetzt (siehe unten) |
+| zugeordnet, EPUB fehlt oder geändert | gar nicht, bis es neu zugeordnet ist |
+| dieselbe Datei wie in der Bibliothek, oder die Original-EPUB einer Zuordnung | unter der eigenen Prüfsumme |
+| nichts davon, Bibliothek eingerichtet | gar nicht („not mapped“; `map suggest` hilft) |
+| keine Bibliothek eingerichtet | unter der eigenen Prüfsumme, wie bisher |
+
+Die Position wird zwischen Gerätedatei und Original über das Kapitel (den
+Pfad der Datei; von Calibre geteilte Kapitel `ch1_split_000.xhtml`,
+`_split_001` … zählen als `ch1.xhtml`) und den sichtbaren Text des Kapitels
+übersetzt (ohne Leerraum und weiche Trennstriche). Wo etwas nicht passt,
+sagt die Ausgabe es: *found by its text* (der Text weicht ab, die Stelle
+wurde über die 32 Zeichen danach gefunden), *chapter start only* (die
+Stelle im Kapitel wurde nicht gefunden), *from the percentage only* (das
+Kapitel fehlt in der anderen Datei, z. B. Calibres `titlepage.xhtml`).
+`pull --write` bringt die Server-Position genauso in eine zugeordnete EPUB
+auf dem Tolino zurück; in ein kepub schreibt es noch nichts. Kindle-Bücher
+folgen.
+
+Die Zuordnungen werden nur auf dem Computer gelesen: Das Tolino-Plugin
+synchronisiert jedes Buch wie bisher unter seiner eigenen Prüfsumme.
 
 **Bibliothek.** Die Original-EPUBs kommen aus einem Ordner, angegeben mit
 `--library` oder als `library` in der Konfigurationsdatei. Liegt dort eine

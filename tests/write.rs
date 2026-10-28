@@ -58,6 +58,7 @@ impl Setup {
       .arg("--config")
       .arg(&self.config)
       .env("NICKELINKSYNC_BACKUP_DIR", &self.backups)
+      .env("NICKELINKSYNC_DATA_DIR", self.root.join("no-data"))
       .output()
       .unwrap();
     let out = String::from_utf8_lossy(&output.stdout).into_owned();

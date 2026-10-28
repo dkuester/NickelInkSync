@@ -120,8 +120,10 @@ fixtures only.
   directory, keyed by the device file's checksum or the Kindle
   `content_id`) and `map add|list|remove`. Stage 2 done: a library of
   originals (Calibre `metadata.db` read-only, or a folder of EPUBs) and
-  `map suggest` with a readable score. Next: `status`/`push`/`pull`
-  through the mapping, then the Kindle in `status`/`push`.
+  `map suggest` with a readable score. Stage 3 done: `status`/`push`/
+  `pull` sync a mapped book under the original's checksum, the position
+  moved by chapter path (calibre's split chapters joined) and visible
+  text, with visible fallbacks. Next: the Kindle in `status`/`push`.
 - **Desktop client with a graphical UI** (L): right after the CLI
   mapping, on the same library: devices and books, creating mappings,
   starting a sync. egui/eframe (pure Rust, MIT/Apache, no WebView), one

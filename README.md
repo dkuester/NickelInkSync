@@ -38,8 +38,10 @@ nickelinksync pull --device /Volumes/KOBOeReader
 | `pull` | Shows which books have a newer position on the server, how the device would store it and where it would ask first. Only with `--write` is it written to the device (Tolino so far, experimental, see below); `--force` takes the server position without asking. |
 
 All three take `--book <text>` to limit them to books whose title or file
-path contains the text, and `--config <file>` for another configuration
-file. The device is only read, never written, except by `pull --write`
+path contains the text, `--config <file>` for another configuration
+file and `--library <folder>` for the library of originals (see [Book
+mapping](#book-mapping-in-progress)), which decides which books are
+synced. The device is only read, never written, except by `pull --write`
 (and by the plugin, see below).
 
 `pull --write` first copies `.kobo/KoboReader.sqlite` to
@@ -75,8 +77,32 @@ nickelinksync map remove 1a2b3c4d
 
 A Kobo or Tolino book is recognized by the checksum of its file, so moving
 or renaming it on the device keeps the mapping; a Kindle book by its
-`content_id`. Neither the device nor the EPUB is changed. **Not yet:**
-`status`, `push` and `pull` do not use the mappings so far.
+`content_id`. Neither the device nor the EPUB is changed.
+
+**Syncing through the mapping.** `status`, `push` and `pull` decide per
+book under which checksum it syncs (shown as `sync as`):
+
+| Book | Synced |
+|---|---|
+| mapped, EPUB unchanged | under the original EPUB's checksum, the position translated (below) |
+| mapped, EPUB missing or changed | not at all, until it is mapped again |
+| the same file as in the library, or the original EPUB of a mapping | under its own checksum |
+| none of these, with a library configured | not at all ("not mapped"; `map suggest` helps) |
+| no library configured | under its own checksum, as before |
+
+The position is translated between the device file and the original by
+chapter (the file's path; calibre's split chapters `ch1_split_000.xhtml`,
+`_split_001` … count as `ch1.xhtml`) and by the chapter's visible text
+(whitespace and soft hyphens left out). Where something does not match,
+the output says so: *found by its text* (the text differs, the position was
+found by the 32 characters after it), *chapter start only* (the place in
+the chapter was not found), *from the percentage only* (the chapter is not
+in the other file, for example calibre's `titlepage.xhtml`). `pull
+--write` moves the server position back into a mapped EPUB on the Tolino
+the same way; into a kepub it writes nothing yet. Kindle books follow.
+
+The mappings are only read on the computer: the Tolino plugin syncs every
+book under its own checksum, as before.
 
 **Library.** The original EPUBs come from a folder given with `--library`
 or as `library` in the configuration file. If it holds a Calibre library

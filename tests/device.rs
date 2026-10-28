@@ -116,6 +116,7 @@ fn tolino_status_output() {
     .arg(&root)
     // No configuration: the server is not asked.
     .env("NICKELINKSYNC_CONFIG", root.join("no-config.ini"))
+    .env("NICKELINKSYNC_DATA_DIR", root.join("no-data"))
     .output()
     .unwrap();
   assert!(output.status.success());
