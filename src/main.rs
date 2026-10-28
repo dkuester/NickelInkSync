@@ -1047,7 +1047,8 @@ fn one_nickel_book(books: Vec<Book>) -> Result<Book> {
     1 => Ok(books.into_iter().next().unwrap()),
     0 => Err("no sideloaded book matches; see `nickelinksync status --device …`".into()),
     n => {
-      let mut e = format!("{n} books match, choose one with --book or --content-id:");
+      let mut e =
+        format!("{n} books match, choose one with --book <part of the file name> or --content-id:");
       for b in &books {
         e.push_str(&format!(
           "\n  {} ({})",
@@ -1086,7 +1087,9 @@ fn one_kindle_book(
     1 => Ok(books.into_iter().next().unwrap()),
     0 => Err("no KFX book on the Kindle matches".into()),
     n => {
-      let mut e = format!("{n} books match, choose one with --book or --content-id:");
+      let mut e = format!(
+        "{n} books match, choose one with --book <part of the title or file name> or --content-id:"
+      );
       for b in &books {
         e.push_str(&format!(
           "\n  {} ({})",
