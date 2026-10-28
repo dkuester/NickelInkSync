@@ -506,8 +506,23 @@ dürfen jederzeit dazwischengeschoben werden.
   - [x] **ich:** Prüfung nach dem Öffnen fragt bei leerer Stelle bis zu
     8 s lang jede Sekunde nach; bleibt sie leer, gilt die Übernahme nach
     dem Cache-Neuladen als geglückt. Testschalter wieder ausgebaut.
-  - [ ] **du:** Kurzer Gerätetest der neuen Prüfung (3–4 Übernahmen).
-  - [ ] **ich (nur falls Nickel doch wieder am Kapitelanfang öffnet):** Position über Nickel selbst
+  - [x] **du:** Kurzer Gerätetest der neuen Prüfung (2026-10-28,
+    15:52–16:03): die Prüfung arbeitet, aber Nickel öffnete Book R danach
+    immer am Anfang von Kapitel 1, auch nach einer Minute Pause.
+  - [x] **ich:** Was sich geändert hat, liegt außerhalb des Plugins: Der
+    Tolino hat sich am 28.10. selbst auf Firmware **5.18.279364**
+    aktualisiert (vorher 5.18.264769). Auch ohne Plugin, nach einem
+    `pull --write` über USB und Neustart, öffnet Nickel am Kapitelanfang.
+    Spur, nicht bewiesen: Nickels Cache gezeichneter Seiten
+    (`CachePersistenceRenderedPageData`); alle fehlgeschlagenen Stellen
+    lagen in Seiten, die dort fehlten.
+  - [ ] **Pausiert (28.10.), PR #26 als Entwurf:** Kobalt bekommt in der
+    nächsten Beta Tolino-Unterstützung. Dann Nicos Lösung ansehen, Lizenz
+    prüfen und entscheiden, ob wir sie übernehmen. Auf dem Tolino des
+    Owners ist das Plugin bis dahin aus (`config.ini.off`).
+  - [ ] **ich (nur falls Kobalt nicht hilft):** Seiten-Cache als Ursache
+    prüfen (Cache-Zeilen des Buchs löschen, dann öffnen), `libnickel` von
+    5.18.279364 beschaffen und die Symbole neu prüfen. Position über Nickel selbst
     schreiben, Vorbild Kobalt (MIT, nur das Konzept):
     `VolumeManager::updateBookmark`, `updateFields` in einer
     `DatabaseAdapter`-Transaktion; die CLI entscheidet dann nur noch

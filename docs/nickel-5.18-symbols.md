@@ -382,6 +382,23 @@ for up to 8 s more; if the place is still unknown and the cache was
 reloaded, the take counts as done and leaving pushes. The test switch is
 gone.
 
+**Firmware 5.18.279364** (28.10.): the Tolino had updated itself that
+day, before the fourth test; everything above was analysed on
+5.18.264769. All plugin symbols still resolve. In a fifth test the new
+check worked, but Nickel then opened Book R at the start of chapter 1
+every time, also a minute after leaving it, and also with the plugin
+switched off after `pull --write` over USB and a restart. So on this
+firmware Nickel does not take `ChapterIDBookmarked` alone. Lead, not
+proven: Nickel keeps a cache of rendered pages per book
+(`CachePersistenceRenderedPageData`: `pageStartLocation`,
+`pageEndLocation`, `contentId`, page and chapter index; files under
+`/mnt/aux/rendering`). The point that worked lay in a cached page; the
+three that failed (`/1/4/136`, `/1/4/224`, `/1/4/314` in chapter 1) lay
+in a stretch with no cached page, and on 25.10. the page with
+`/1/4/314` had been cached. `.kobo/BookReader.sqlite` is encrypted.
+This work is paused until Kobalt's Tolino support (next beta) can be
+compared.
+
 Not tried, in case this is not enough: writing the position through
 Nickel instead of the CLI, as Kobalt does on the Kobo (concept only):
 `VolumeManager::updateBookmark(Volume&, QString const&, int, QDateTime
