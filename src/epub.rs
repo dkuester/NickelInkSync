@@ -60,6 +60,10 @@ pub struct Epub {
   archive: ZipArchive<File>,
   /// Spine items as paths from the EPUB root, in reading order.
   pub spine: Vec<String>,
+  /// `dc:title` from the OPF (the first one).
+  pub title: Option<String>,
+  /// Every `dc:creator` from the OPF, in order.
+  pub authors: Vec<String>,
 }
 
 impl Epub {
@@ -91,7 +95,14 @@ impl Epub {
     if spine.is_empty() {
       return Err(Error::Broken(format!("{opf_path} has no spine")));
     }
-    Ok(Epub { archive, spine })
+    let title = dc_texts(&opf, "title")?.into_iter().next();
+    let authors = dc_texts(&opf, "creator")?;
+    Ok(Epub {
+      archive,
+      spine,
+      title,
+      authors,
+    })
   }
 
   /// Spine index of a chapter given by its path from the EPUB root.
@@ -130,6 +141,47 @@ fn start_tags(xml: &str) -> Result<Vec<(String, Attrs)>, Error> {
     match reader.read_event().map_err(|e| Error::Xml(e.to_string()))? {
       Event::Start(t) | Event::Empty(t) => tags.push(tag(&t)),
       Event::Eof => return Ok(tags),
+      _ => {}
+    }
+  }
+}
+
+/// The trimmed, non-empty text of every element with this local name, such
+/// as `dc:title` (`title`) in the OPF.
+fn dc_texts(xml: &str, name: &str) -> Result<Vec<String>, Error> {
+  let mut reader = Reader::from_str(xml);
+  let mut texts = Vec::new();
+  let mut current: Option<String> = None;
+  loop {
+    match reader.read_event().map_err(|e| Error::Xml(e.to_string()))? {
+      Event::Start(t) if t.local_name().as_ref() == name => current = Some(String::new()),
+      Event::Text(t) => {
+        if let Some(text) = &mut current {
+          text.push_str(&t.xml10_content());
+        }
+      }
+      Event::GeneralRef(r) => {
+        if let Some(text) = &mut current {
+          match r.resolve_char_ref().ok().flatten() {
+            Some(c) => text.push(c),
+            None => text.push_str(dom::entity(r.as_ref()).unwrap_or("")),
+          }
+        }
+      }
+      Event::CData(t) => {
+        if let Some(text) = &mut current {
+          text.push_str(&t.xml10_content());
+        }
+      }
+      Event::End(t) if t.local_name().as_ref() == name => {
+        if let Some(text) = current.take() {
+          let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+          if !text.is_empty() {
+            texts.push(text);
+          }
+        }
+      }
+      Event::Eof => return Ok(texts),
       _ => {}
     }
   }

@@ -44,12 +44,41 @@ file. The device is only read, never written, except by `pull --write`
 
 `pull --write` first copies `.kobo/KoboReader.sqlite` to
 `~/.local/share/nickelinksync/backups/KoboReader-<UTC time>.sqlite` (or
-`$XDG_DATA_HOME/nickelinksync/backups`, or `$NICKELINKSYNC_BACKUP_DIR`),
+`backups` in the data directory, see below, or `$NICKELINKSYNC_BACKUP_DIR`),
 then sets the position of all books in one transaction. It refuses to
 write without `.kobo/version` (not a mounted device) or while SQLite
 journal files lie next to the database. Eject the device before you open
 the book. To undo, copy the backup back to `.kobo/KoboReader.sqlite` while
 the device is mounted.
+
+### Book mapping (in progress)
+
+The sync server knows a book by a checksum of its file. A kepub on the
+Kobo, a differently converted EPUB on the Tolino or a KFX on a Kindle has
+another checksum than the original EPUB that KOReader opens. A mapping
+links such a book to its original EPUB:
+
+```sh
+nickelinksync map add --device /Volumes/KOBOeReader --book "Heat 2" --epub ~/Books/heat-2.epub
+nickelinksync map add --device /Volumes/Kindle --book heat-2 --epub ~/Books/heat-2.epub
+nickelinksync map list
+nickelinksync map remove 1a2b3c4d
+```
+
+| Command | What it does |
+|---|---|
+| `map add` | Maps one book on the device (`--book <text>` or `--content-id`) to the original EPUB and says how many chapters of the two files match. A file identical to the EPUB needs no mapping and is not stored. Mapping the same device book again replaces the old mapping. |
+| `map list` | Shows every mapping and checks its EPUB: a mapping whose EPUB is missing or has changed since is reported as broken. |
+| `map remove` | Removes the mapping with this checksum or Kindle `content_id` (or a unique start of it). |
+
+A Kobo or Tolino book is recognized by the checksum of its file, so moving
+or renaming it on the device keeps the mapping; a Kindle book by its
+`content_id`. Neither the device nor the EPUB is changed. **Not yet:**
+`status`, `push` and `pull` do not use the mappings so far.
+
+The mappings are kept in `mappings.json` in the data directory
+`~/.local/share/nickelinksync/` (or `$XDG_DATA_HOME/nickelinksync`, or
+`$NICKELINKSYNC_DATA_DIR`), shared with the coming desktop client.
 
 ## Configuration
 
@@ -168,8 +197,8 @@ Tolino starts).
 - Sideloaded kepub and EPUB books without DRM
 - For now, put the **same file** on every device. The sync server tells
   books apart by a hash of the file, so a kepub on one device and the original
-  EPUB on another count as two different books. Manual mapping between them
-  is on the roadmap.
+  EPUB on another count as two different books. The manual mapping between
+  them is being built (see [Book mapping](#book-mapping-in-progress)).
 
 ## History
 

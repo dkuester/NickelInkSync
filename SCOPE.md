@@ -42,13 +42,32 @@ up to 1 GiB, stopping at the end of the file; checked against the
 `partial_md5_checksum` KOReader stored for every EPUB fixture). A kepub on one device and the source
 EPUB on another are different books to the server.
 
-Later: a manual mapping that links several file hashes to one book, so a
-kepub and its source EPUB share progress (see the roadmap).
-[BookOrbit](https://github.com/bookorbit/bookorbit) does this
-([`docs/KOREADER_HASH_MATCHING.md`](https://github.com/bookorbit/bookorbit/blob/main/docs/KOREADER_HASH_MATCHING.md),
-manual links take precedence over automatic hash matches) and has a position
-converter for Kobo spans, XPointer and CFI
-(`server/src/modules/position-converter/`).
+**Manual mapping** (D1, in progress): a book on a device whose file differs
+from the original EPUB is linked to that EPUB, and synced under the EPUB's
+checksum. Concept as in
+[BookOrbit](https://github.com/bookorbit/bookorbit)
+([`docs/KOREADER_HASH_MATCHING.md`](https://github.com/bookorbit/bookorbit/blob/main/docs/KOREADER_HASH_MATCHING.md):
+manual links take precedence over automatic hash matches; it also has a
+position converter for Kobo spans, XPointer and CFI,
+`server/src/modules/position-converter/`), re-implemented, no code taken.
+
+| | Key | Why |
+|---|---|---|
+| Kobo, Tolino (kepub or EPUB) | partial MD5 of the file on the device | what the sync computes anyway; independent of mount point, folder and file name, so moving or renaming keeps the mapping, and one file on two devices shares it. A re-converted file has a new checksum and loses its mapping: positions in the old file may not fit the new one. |
+| Kindle (KFX) | `content_id` from the KFX metadata | nothing in the KFX leads to the EPUB checksum; `title` is the file stem it was sent under and need not be unique; the KFX is rewritten by Amazon, the `content_id` stays with the document. A new conversion shows up anyway: the stored position no longer fits the KFX's position maps. |
+| Original EPUB | path and its partial MD5 at the time of mapping | the checksum is what KOReader and the server use; if the file is missing or its checksum changed, the mapping is reported as broken instead of syncing under a checksum KOReader no longer has. |
+
+Path, title and author of the device book are kept for display only. The
+mappings live in `mappings.json` in the data directory
+(`$NICKELINKSYNC_DATA_DIR`, else `$XDG_DATA_HOME/nickelinksync`, else
+`~/.local/share/nickelinksync`), human-readable JSON with a `format`
+version, written atomically (temporary file, then rename), shared by the
+CLI and the desktop client (D2); a file with a newer format is refused,
+not rewritten. Commands: `nickelinksync map add|list|remove`
+(`src/mapping.rs`, `src/kindle_device.rs`). Still to come: suggestions
+from a library of originals (Calibre `metadata.db` or a folder of EPUBs),
+and `status`/`push`/`pull` through the mapping, with the position
+translated into the original EPUB by chapter href and text.
 
 ## License
 

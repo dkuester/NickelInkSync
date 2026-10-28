@@ -62,13 +62,28 @@ dürfen jederzeit dazwischengeschoben werden.
 
 ## Desktop-Client
 
-- [ ] **D1 CLI mit manueller Buchzuordnung** · höchste Priorität nach dem
+- [~] **D1 CLI mit manueller Buchzuordnung** · höchste Priorität nach dem
   Tolino-Durchgang. Löst O1 ab und entblockt den Sync kepub ↔ EPUB und den
-  Kindle-Sync (L1).
-  - [ ] **ich:** Zuordnungsspeicher: Buch auf dem Gerät (kepub, EPUB unter
-    anderem Hash, KFX) ↔ EPUB und KOReader-Prüfsumme; Testfall Heat 2.
-  - [ ] **ich:** Befehle zum Anlegen, Anzeigen und Löschen einer Zuordnung;
-    Vorschläge aus Titel und Autor (beim Kindle auch `content_id`).
+  Kindle-Sync (L1). In Etappen, je ein PR: (1) Speicher und Befehle,
+  (2) Bibliothek mit Originalen und Vorschläge, (3) `status`/`push`/`pull`
+  über die Zuordnung mit Positionsübersetzung, (4) Kindle in `status`/`push`.
+  - [x] **ich:** Zuordnungsspeicher (`src/mapping.rs`): Buch auf dem Gerät
+    (Kobo/Tolino: Prüfsumme der Gerätedatei; Kindle: `content_id`) ↔
+    Original-EPUB (Pfad und Prüfsumme), `mappings.json` im Datenordner
+    (`$NICKELINKSYNC_DATA_DIR`), Formatversion, atomar geschrieben;
+    fehlende oder geänderte EPUB = kaputte Zuordnung. Begründung der
+    Schlüssel in `SCOPE.md` (Book identity).
+  - [x] **ich:** `map add|list|remove`; Kindle-Bücher per USB ohne
+    Jailbreak (`src/kindle_device.rs`). Tests mit Book A (kepub ↔ EPUB),
+    gleicher Datei und den Kindle-Fixtures (`tests/mapping.rs`).
+  - [ ] **du:** Etappe 1 am Gerät ausprobieren (siehe PR): Heat 2 vom
+    Kobo und vom Tolino auf die Original-EPUB abbilden, `map list`.
+  - [ ] **ich:** Bibliothek mit Originalen (`library =` in `config.ini`,
+    `--library`): Calibre-`metadata.db` nur lesend (`immutable=1`), sonst
+    `*.epub` rekursiv mit Titel/Autor aus der OPF; nie hineinschreiben.
+  - [ ] **ich:** `map suggest`: Vorschläge aus Titel und Autor (beim
+    Kindle auch `content_id`) mit nachvollziehbarer Bewertung; Bücher mit
+    gleicher Prüfsumme wie in der Bibliothek brauchen keine Zuordnung.
   - [ ] **ich:** `status`/`push`/`pull` nutzen die Zuordnung; Positionen
     werden in der zugeordneten EPUB übersetzt.
 - [ ] **D2 Desktop-Client mit grafischer Oberfläche** · direkt nach D1.
@@ -471,7 +486,7 @@ dürfen jederzeit dazwischengeschoben werden.
 
 ## Optional (später)
 
-- [ ] **O1 Manuelle Zuordnung** von Büchern (kepub ↔ EPUB), Testfall Heat 2.
+- [~] **O1 Manuelle Zuordnung** von Büchern (kepub ↔ EPUB), Testfall Heat 2.
   **Geht in D1 auf** (CLI mit manueller Buchzuordnung, höchste Priorität).
   Vorbild: BookOrbit, nur als Konzept (AGPL-3.0). Blockiert auch den
   Kindle-Sync (L1): Nichts im KFX führt zur EPUB-Prüfsumme; Kandidaten für
