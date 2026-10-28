@@ -37,7 +37,8 @@ pub enum Anchor {
   /// Chapter only (Nickel stores no fragment at a chapter start).
   None,
   /// `#kobo.N.M` in a kepub; `offset` in UTF-16 units into the span's text
-  /// (0 for a reading position, set for highlights).
+  /// (set for highlights; for a reading position 0 on firmware 4.x, which
+  /// stores the span only, and set on 6.x, which stores `#kobo.N.M:offset`).
   KoboSpan { id: String, offset: usize },
   /// `#point(/1/a/b…:offset)`; `steps` are 1-based, the first one is `html`;
   /// `offset` in UTF-8 bytes.
@@ -50,9 +51,16 @@ impl Position {
   pub fn parse(stored: &str) -> Self {
     let (chapter, fragment) = stored.split_once('#').unwrap_or((stored, ""));
     let anchor = if let Some(id) = fragment.strip_prefix("kobo.") {
+      // Kobo 6.x adds the offset into the span: `kobo.17.1:204`.
+      let (id, offset) = match id.rsplit_once(':') {
+        Some((id, offset)) if !offset.is_empty() && offset.bytes().all(|b| b.is_ascii_digit()) => {
+          (id, offset.parse().unwrap_or(0))
+        }
+        _ => (id, 0),
+      };
       Anchor::KoboSpan {
         id: format!("kobo.{id}"),
-        offset: 0,
+        offset,
       }
     } else if let Some((steps, offset)) = parse_point(fragment) {
       Anchor::Point { steps, offset }
@@ -72,7 +80,8 @@ impl fmt::Display for Position {
     write!(f, "{}", self.chapter)?;
     match &self.anchor {
       Anchor::None => Ok(()),
-      Anchor::KoboSpan { id, .. } => write!(f, "#{id}"),
+      Anchor::KoboSpan { id, offset: 0 } => write!(f, "#{id}"),
+      Anchor::KoboSpan { id, offset } => write!(f, "#{id}:{offset}"),
       Anchor::Point { steps, offset } => {
         write!(f, "#point(")?;
         for step in steps {
@@ -562,6 +571,13 @@ mod tests {
         offset: 356
       }
     );
+    assert_eq!(
+      Position::parse("OEBPS/text/chapter2.xhtml#kobo.17.1:204").anchor,
+      Anchor::KoboSpan {
+        id: "kobo.17.1".into(),
+        offset: 204
+      }
+    );
     assert_eq!(Position::parse("OEBPS/a.xhtml").anchor, Anchor::None);
     assert_eq!(Position::parse("OEBPS/a.xhtml#aid_1").anchor, Anchor::None);
     assert_eq!(
@@ -625,6 +641,7 @@ mod tests {
     for stored in [
       "OEBPS/a.xhtml",
       "OEBPS/a.xhtml#kobo.2.1",
+      "OEBPS/a.xhtml#kobo.17.1:204",
       "OPS/a.html#point(/1/4/16/1:356)",
     ] {
       assert_eq!(Position::parse(stored).to_string(), stored);

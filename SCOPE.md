@@ -270,6 +270,19 @@ different XPointers for the same text. Element indices match the source DOM.
 Positions taken by paging (end of Book C) are page starts and differ between
 renderers; only chapter starts line up exactly.
 
+**Kobo firmware 6.0** (Clara BW, 6.0.279225, database version 222, Book R
+as kepub and EPUB, read 2026-10-28): the plain EPUB stores
+`chapter3.xhtml#point(/1/4/66/1:0)`, the Adobe point as on 4.46 and the
+Tolino, exactly the start of `R3-32` at the top of the page. The kepub
+stores **the offset into the span** as well:
+`chapter2.xhtml#kobo.17.1:204`, where 4.46 stored `#kobo.N.M` only. Span
+`kobo.17.1` is `R2-16`, and character 204 of its text is the first word
+on the page ("alt See hören …", after umlauts, so characters, not UTF-8
+bytes; UTF-16 units are assumed, as in Kobo highlights). Chapter rows
+(`ContentType = 9`) have UUID `ContentID`s for the kepub too, as on the
+Tolino. The database is in WAL mode. Not checked yet: comments and CDATA
+in the 6.0 Adobe point, and highlights.
+
 **Store vs. sideloaded**: store books have UUID `ContentID`s on both
 firmware lines; filtering on `file:///mnt/onboard/` is enough.
 
