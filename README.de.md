@@ -46,12 +46,43 @@ Plugin, siehe unten).
 
 `pull --write` kopiert zuerst `.kobo/KoboReader.sqlite` nach
 `~/.local/share/nickelinksync/backups/KoboReader-<UTC-Zeit>.sqlite` (oder
-`$XDG_DATA_HOME/nickelinksync/backups`, oder `$NICKELINKSYNC_BACKUP_DIR`)
+`backups` im Datenordner, siehe unten, oder `$NICKELINKSYNC_BACKUP_DIR`)
 und setzt dann die Position aller Bücher in einer Transaktion. Es schreibt
 nicht ohne `.kobo/version` (kein eingehängtes Gerät) und nicht, solange
 SQLite-Journaldateien neben der Datenbank liegen. Wirf das Gerät aus, bevor
 du das Buch öffnest. Rückgängig machen: die Sicherung bei eingehängtem Gerät
 zurück nach `.kobo/KoboReader.sqlite` kopieren.
+
+### Buchzuordnung (im Aufbau)
+
+Der Sync-Server erkennt ein Buch an einer Prüfsumme der Datei. Ein kepub auf
+dem Kobo, ein anders umgewandeltes EPUB auf dem Tolino oder ein KFX auf dem
+Kindle hat eine andere Prüfsumme als das Original-EPUB, das KOReader öffnet.
+Eine Zuordnung verbindet so ein Buch mit seinem Original-EPUB:
+
+```sh
+nickelinksync map add --device /Volumes/KOBOeReader --book "Heat 2" --epub ~/Books/heat-2.epub
+nickelinksync map add --device /Volumes/Kindle --book heat-2 --epub ~/Books/heat-2.epub
+nickelinksync map list
+nickelinksync map remove 1a2b3c4d
+```
+
+| Befehl | Was er tut |
+|---|---|
+| `map add` | Ordnet ein Buch auf dem Gerät (`--book <Text>` oder `--content-id`) dem Original-EPUB zu und sagt, wie viele Kapitel der beiden Dateien übereinstimmen. Eine Datei, die mit dem EPUB identisch ist, braucht keine Zuordnung und wird nicht gespeichert. Wird dasselbe Buch erneut zugeordnet, ersetzt das die alte Zuordnung. |
+| `map list` | Zeigt alle Zuordnungen und prüft ihr EPUB: Fehlt es oder hat es sich seitdem geändert, wird die Zuordnung als kaputt gemeldet. |
+| `map remove` | Löscht die Zuordnung mit dieser Prüfsumme bzw. Kindle-`content_id` (oder einem eindeutigen Anfang davon). |
+
+Ein Buch auf Kobo oder Tolino wird an der Prüfsumme seiner Datei erkannt;
+Verschieben oder Umbenennen auf dem Gerät behält die Zuordnung. Ein
+Kindle-Buch wird an seiner `content_id` erkannt. Weder Gerät noch EPUB
+werden verändert. **Noch nicht:** `status`, `push` und `pull` nutzen die
+Zuordnungen bisher nicht.
+
+Die Zuordnungen liegen in `mappings.json` im Datenordner
+`~/.local/share/nickelinksync/` (oder `$XDG_DATA_HOME/nickelinksync`, oder
+`$NICKELINKSYNC_DATA_DIR`), den sich CLI und der kommende Desktop-Client
+teilen.
 
 ## Konfiguration
 
@@ -150,7 +181,8 @@ wird nur beim Start geprüft).
 - Vorerst muss auf jedem Gerät **dieselbe Datei** liegen. Der Sync-Server
   erkennt Bücher an einer Prüfsumme der Datei, ein kepub auf dem einen und das
   ursprüngliche EPUB auf dem anderen Gerät gelten also als zwei verschiedene
-  Bücher. Eine manuelle Zuordnung steht auf der Roadmap.
+  Bücher. Die manuelle Zuordnung ist im Aufbau (siehe
+  [Buchzuordnung](#buchzuordnung-im-aufbau)).
 
 ## Vorgeschichte
 

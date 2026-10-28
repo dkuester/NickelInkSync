@@ -113,7 +113,11 @@ its own.
   anchor. Reference: BookOrbit's hash matching and position converter
   (AGPL-3.0, concept only, see the license note in
   [SCOPE.md](SCOPE.md#license)). Test case: *Heat 2* on the two reference
-  devices.
+  devices. Stage 1 done: the mapping store (`mappings.json` in the data
+  directory, keyed by the device file's checksum or the Kindle
+  `content_id`) and `map add|list|remove`. Next: a library of originals
+  (Calibre or a folder) with suggestions, then `status`/`push`/`pull`
+  through the mapping, then the Kindle in `status`/`push`.
 - **Desktop client with a graphical UI** (L): right after the CLI
   mapping, on the same library: devices and books, creating mappings,
   starting a sync. egui/eframe (pure Rust, MIT/Apache, no WebView), one

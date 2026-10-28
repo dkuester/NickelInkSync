@@ -8,7 +8,9 @@ use nickelinksync::config::{self, Config};
 use nickelinksync::db::{Book, Device, Write};
 use nickelinksync::epub::Epub;
 use nickelinksync::hash::partial_md5;
+use nickelinksync::kindle_device::{self, KindleBook};
 use nickelinksync::kosync::{self, Client, Progress, Update};
+use nickelinksync::mapping::{DeviceBook, EpubState, Mapping, Original, Store};
 use nickelinksync::not_in_line::NotInLine;
 use nickelinksync::position::{
   from_xpointer, to_xpointer, PointFlavor, Position, Translated, XPointer,
@@ -71,6 +73,36 @@ enum Command {
     #[arg(long)]
     emit: bool,
   },
+  /// Link books on a device to their original EPUB, so they sync under its
+  /// checksum (kepub, a differently converted EPUB, a Kindle KFX)
+  Map {
+    #[command(subcommand)]
+    command: MapCommand,
+  },
+}
+
+#[derive(Subcommand)]
+enum MapCommand {
+  /// List every mapping and check its EPUB, also broken ones
+  List,
+  /// Map one book on the device to its original EPUB
+  Add {
+    /// Mount point of the device (Kobo, Tolino or Kindle)
+    #[arg(long)]
+    device: PathBuf,
+    /// The book whose title or file path contains this text
+    #[arg(long)]
+    book: Option<String>,
+    /// The book with exactly this ContentID (Kobo, Tolino) or content_id
+    /// (Kindle)
+    #[arg(long)]
+    content_id: Option<String>,
+    /// The original EPUB, the file KOReader opens
+    #[arg(long)]
+    epub: PathBuf,
+  },
+  /// Remove a mapping, given by its key (or the start of it) from `map list`
+  Remove { key: String },
 }
 
 #[derive(Args)]
@@ -113,6 +145,7 @@ fn main() -> ExitCode {
       write,
       emit,
     } => (pull(&target, force, write, emit), emit),
+    Command::Map { command } => (map(command), false),
   };
   match result {
     Ok(true) => ExitCode::SUCCESS,
@@ -182,20 +215,11 @@ impl Session {
       None if family == "Tolino" => PointFlavor::AllNodes,
       None => PointFlavor::JoinText,
     };
-    let mut books = device.db.sideloaded_books()?;
-    if let Some(filter) = &target.book {
-      let filter = filter.to_lowercase();
-      books.retain(|b| {
-        b.onboard_path().to_lowercase().contains(&filter)
-          || b
-            .title
-            .as_deref()
-            .is_some_and(|t| t.to_lowercase().contains(&filter))
-      });
-    }
-    if let Some(id) = &target.content_id {
-      books.retain(|b| &b.content_id == id);
-    }
+    let books = select(
+      device.db.sideloaded_books()?,
+      target.book.as_deref(),
+      target.content_id.as_deref(),
+    );
     if books.is_empty() {
       println!("\nNo sideloaded books.");
     }
@@ -242,6 +266,25 @@ impl Session {
     };
     Ok((local, x.exact))
   }
+}
+
+/// The books whose title or path contains `filter` (any case), and the one
+/// with exactly `content_id`.
+fn select(mut books: Vec<Book>, filter: Option<&str>, content_id: Option<&str>) -> Vec<Book> {
+  if let Some(filter) = filter {
+    let filter = filter.to_lowercase();
+    books.retain(|b| {
+      b.onboard_path().to_lowercase().contains(&filter)
+        || b
+          .title
+          .as_deref()
+          .is_some_and(|t| t.to_lowercase().contains(&filter))
+    });
+  }
+  if let Some(id) = content_id {
+    books.retain(|b| b.content_id == id);
+  }
+  books
 }
 
 fn heading(book: &Book) {
@@ -796,4 +839,265 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
     println!("Eject the device before you open the book.");
   }
   Ok(ok)
+}
+
+fn map(command: MapCommand) -> Result<bool> {
+  let path = Store::default_path().ok_or("no data directory (HOME is not set)")?;
+  let mut store = Store::load(&path)?;
+  match command {
+    MapCommand::List => {
+      map_list(&store);
+      Ok(true)
+    }
+    MapCommand::Add {
+      device,
+      book,
+      content_id,
+      epub,
+    } => map_add(
+      &mut store,
+      &device,
+      book.as_deref(),
+      content_id.as_deref(),
+      &epub,
+    ),
+    MapCommand::Remove { key } => {
+      let removed = store.remove(&key)?;
+      store.save()?;
+      println!(
+        "Removed the mapping of {} to {}.",
+        device_label(&removed.device),
+        removed.epub.path
+      );
+      Ok(true)
+    }
+  }
+}
+
+/// Title and author of a device book, or its path.
+fn device_label(book: &DeviceBook) -> String {
+  let title = match (book.title(), book) {
+    (Some(title), _) => title.to_string(),
+    (None, DeviceBook::File { path, .. }) => path.clone(),
+    (None, DeviceBook::Kindle { content_id, .. }) => content_id.clone(),
+  };
+  match book.author() {
+    Some(author) => format!("{title} — {author}"),
+    None => title,
+  }
+}
+
+fn map_list(store: &Store) {
+  println!("Mappings in {}", store.path.display());
+  if store.mappings.is_empty() {
+    println!("\nNo mappings yet; `nickelinksync map add` makes one.");
+    return;
+  }
+  let mut broken = 0;
+  for m in &store.mappings {
+    println!("\n{}", device_label(&m.device));
+    match &m.device {
+      DeviceBook::File { hash, path, .. } => {
+        println!("  device    {path} (Kobo/Tolino, checksum {hash})")
+      }
+      DeviceBook::Kindle { content_id, .. } => {
+        println!("  device    Kindle, content_id {content_id}")
+      }
+    }
+    println!("  epub      {} (checksum {})", m.epub.path, m.epub.hash);
+    if let Some(title) = &m.epub.title {
+      match &m.epub.author {
+        Some(author) => println!("            {title} — {author}"),
+        None => println!("            {title}"),
+      }
+    }
+    let state = m.check();
+    if state != EpubState::Ok {
+      broken += 1;
+    }
+    println!("  state     {state}");
+    println!("  made      {}", m.created);
+  }
+  if broken > 0 {
+    println!(
+      "\n{broken} broken mapping(s): these books are not synced. Map them again with \
+       `map add` (it replaces the old mapping) or remove them with `map remove <checksum or content_id>`."
+    );
+  }
+}
+
+fn map_add(
+  store: &mut Store,
+  device: &std::path::Path,
+  filter: Option<&str>,
+  content_id: Option<&str>,
+  epub_path: &std::path::Path,
+) -> Result<bool> {
+  let epub_path = epub_path
+    .canonicalize()
+    .map_err(|e| format!("{}: {e}", epub_path.display()))?;
+  let epub = Epub::open(&epub_path).map_err(|e| format!("{}: {e}", epub_path.display()))?;
+  let epub_hash = partial_md5(&epub_path)?;
+  let original = Original {
+    path: epub_path
+      .to_str()
+      .ok_or_else(|| format!("{}: path is not UTF-8", epub_path.display()))?
+      .to_string(),
+    hash: epub_hash.clone(),
+    title: epub.title.clone(),
+    author: (!epub.authors.is_empty()).then(|| epub.authors.join(", ")),
+  };
+
+  let (book, device_hash, chapters) = if kindle_device::is_kindle(device) {
+    let (books, _) = kindle_device::books(device)?;
+    let book = one_kindle_book(device, books, filter, content_id)?;
+    let sections = nickelinksync::kfx::Kfx::open(&book.kfx)?.sections.len();
+    let chapters = if sections == epub.spine.len() {
+      format!("{sections} sections, as many as spine items in the EPUB")
+    } else {
+      format!(
+        "{sections} sections, but {} spine items in the EPUB: positions may land in the wrong chapter",
+        epub.spine.len()
+      )
+    };
+    let book = DeviceBook::Kindle {
+      content_id: book.content_id,
+      title: book.title,
+      author: book.author,
+    };
+    (book, None, chapters)
+  } else {
+    let opened = Device::open(device, false)?;
+    let book = one_nickel_book(select(opened.db.sideloaded_books()?, filter, content_id))?;
+    let file = opened.book_file(&book);
+    let hash = partial_md5(&file).map_err(|e| format!("{}: {e}", file.display()))?;
+    let chapters = match Epub::open(&file) {
+      Ok(on_device) => compare_spines(&on_device.spine, &epub.spine),
+      Err(e) => format!("not compared: {e}"),
+    };
+    let book = DeviceBook::File {
+      hash: hash.clone(),
+      path: book.onboard_path().to_string(),
+      title: book.title.clone(),
+      author: book.author.clone(),
+    };
+    (book, Some(hash), chapters)
+  };
+  println!("Device    {}", device_label(&book));
+  println!("EPUB      {} (checksum {epub_hash})", original.path);
+  if device_hash.as_deref() == Some(epub_hash.as_str()) {
+    println!(
+      "\nSame file as the EPUB (checksum {epub_hash}): it already syncs under that checksum, \
+       no mapping needed."
+    );
+    if let Some(old) = store.get(&book).cloned() {
+      store.remove(old.device.key())?;
+      store.save()?;
+      println!("Removed the old mapping to {}.", old.epub.path);
+    }
+    return Ok(true);
+  }
+  println!("chapters  {chapters}");
+  let mapping = Mapping {
+    device: book,
+    epub: original,
+    created: iso_timestamp(
+      std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_secs() as i64,
+    ),
+  };
+  let replaced = store.insert(mapping);
+  store.save()?;
+  if let Some(old) = replaced {
+    println!("\nMapped; this replaces the mapping to {}.", old.epub.path);
+  } else {
+    println!("\nMapped.");
+  }
+  println!("Saved in {}", store.path.display());
+  Ok(true)
+}
+
+/// How many chapters (spine items) of the device file the EPUB has, by
+/// path: positions translate by chapter.
+fn compare_spines(device: &[String], epub: &[String]) -> String {
+  let same = device.iter().filter(|c| epub.contains(c)).count();
+  if same == device.len() && device.len() == epub.len() {
+    format!("all {same} spine items match")
+  } else if same == 0 {
+    format!(
+      "none of the {} spine items is in the EPUB ({} there): is it the same book? Positions \
+       fall back to the percentage",
+      device.len(),
+      epub.len()
+    )
+  } else {
+    format!(
+      "{same} of {} spine items found in the EPUB ({} there): positions elsewhere fall back \
+       to the percentage",
+      device.len(),
+      epub.len()
+    )
+  }
+}
+
+/// Exactly one book, or an error that lists the candidates.
+fn one_nickel_book(books: Vec<Book>) -> Result<Book> {
+  match books.len() {
+    1 => Ok(books.into_iter().next().unwrap()),
+    0 => Err("no sideloaded book matches; see `nickelinksync status --device …`".into()),
+    n => {
+      let mut e =
+        format!("{n} books match, choose one with --book <part of the file name> or --content-id:");
+      for b in &books {
+        e.push_str(&format!(
+          "\n  {} ({})",
+          b.title.as_deref().unwrap_or("(no title)"),
+          b.content_id
+        ));
+      }
+      Err(e.into())
+    }
+  }
+}
+
+fn one_kindle_book(
+  root: &std::path::Path,
+  mut books: Vec<KindleBook>,
+  filter: Option<&str>,
+  content_id: Option<&str>,
+) -> Result<KindleBook> {
+  if let Some(filter) = filter {
+    let filter = filter.to_lowercase();
+    books.retain(|b| {
+      b.relative_path(root)
+        .to_string_lossy()
+        .to_lowercase()
+        .contains(&filter)
+        || [&b.title, &b.author].iter().any(|t| {
+          t.as_deref()
+            .is_some_and(|t| t.to_lowercase().contains(&filter))
+        })
+    });
+  }
+  if let Some(id) = content_id {
+    books.retain(|b| b.content_id.eq_ignore_ascii_case(id));
+  }
+  match books.len() {
+    1 => Ok(books.into_iter().next().unwrap()),
+    0 => Err("no KFX book on the Kindle matches".into()),
+    n => {
+      let mut e = format!(
+        "{n} books match, choose one with --book <part of the title or file name> or --content-id:"
+      );
+      for b in &books {
+        e.push_str(&format!(
+          "\n  {} ({})",
+          b.title.as_deref().unwrap_or("(no title)"),
+          b.content_id
+        ));
+      }
+      Err(e.into())
+    }
+  }
 }

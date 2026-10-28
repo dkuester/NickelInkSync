@@ -97,19 +97,28 @@ impl Config {
     Some(base.join("nickelinksync/config.ini"))
   }
 
-  /// Where `pull --write` keeps database backups:
-  /// `$NICKELINKSYNC_BACKUP_DIR`, else `$XDG_DATA_HOME/nickelinksync/backups`,
-  /// else `~/.local/share/nickelinksync/backups`.
-  pub fn backup_dir() -> Option<PathBuf> {
+  /// Where NickelInkSync keeps its own data (book mappings, backups):
+  /// `$NICKELINKSYNC_DATA_DIR`, else `$XDG_DATA_HOME/nickelinksync`, else
+  /// `~/.local/share/nickelinksync`. The CLI and the desktop client share it.
+  pub fn data_dir() -> Option<PathBuf> {
     let var = |name| std::env::var_os(name).filter(|v| !v.is_empty());
-    if let Some(dir) = var("NICKELINKSYNC_BACKUP_DIR") {
+    if let Some(dir) = var("NICKELINKSYNC_DATA_DIR") {
       return Some(PathBuf::from(dir));
     }
     let base = match var("XDG_DATA_HOME") {
       Some(dir) => PathBuf::from(dir),
       None => PathBuf::from(var("HOME")?).join(".local/share"),
     };
-    Some(base.join("nickelinksync/backups"))
+    Some(base.join("nickelinksync"))
+  }
+
+  /// Where `pull --write` keeps database backups:
+  /// `$NICKELINKSYNC_BACKUP_DIR`, else `backups` in [`Config::data_dir`].
+  pub fn backup_dir() -> Option<PathBuf> {
+    match std::env::var_os("NICKELINKSYNC_BACKUP_DIR").filter(|v| !v.is_empty()) {
+      Some(dir) => Some(PathBuf::from(dir)),
+      None => Some(Self::data_dir()?.join("backups")),
+    }
   }
 
   pub fn load(path: &Path) -> Result<Self, Error> {
