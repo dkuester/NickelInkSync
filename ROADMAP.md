@@ -100,9 +100,12 @@ Order: everything the Tolino Shine Color (5.18) can test on its own comes
 first (reverse translation for plain EPUB, USB write-back, Qt6 symbols and
 plugin). **Right after that, before anything else: the manual book
 mapping in the CLI, then a desktop client with a graphical UI.**
-Maintenance and bug fixes may be slotted in at any time. The Kobo (4.46:
-kepub reverse translation, write-back, Qt5 plugin) follows in a pass of
-its own.
+Maintenance and bug fixes may be slotted in at any time. The Kobo
+(kepub reverse translation, write-back, plugin) follows in a pass of its
+own. The reference Clara BW updated itself to firmware **6.0.279225** on
+2026-10-28, so that pass targets Kobo 6.0 (Qt6, like the Tolino); there is
+no 4.x device left, and 4.x-only behaviour is checked against the 4.46
+fixtures only.
 
 - **Manual book mapping in the CLI** (M–L): link a book on a device
   (kepub, an EPUB with another hash, a Kindle KFX) to the EPUB and its
@@ -145,7 +148,9 @@ its own.
   `VolumeIndex` is a ToC index, not a spine index. Fixtures: the Clara BW
   and Shine Color databases in `tests/fixtures/db/`.
 - **Position translation, back to the Kobo** (S–M): KOReader XPointer →
-  Kobo span (kepub) and the 4.x Adobe point, for `pull` on the Kobo. Back to
+  Kobo span (kepub), for `pull` on the Kobo, checked on 6.0; the 4.x Adobe
+  point only against the fixtures. Position format and chapter rows on
+  6.0 still to be checked. Back to
   the Tolino is done (see "Recently completed").
 - **USB write-back on the Kobo** (S–M): `pull --write` works on the
   Tolino (see "Recently completed"); the Kobo needs the reverse
@@ -155,9 +160,9 @@ its own.
   `config.ini` (`all`, `errors`, `none`). Verified on the Tolino, also
   opening within the chapter last read. Still to do: English texts (the
   plugin logs `QLocale()`, `de_DE` so far).
-- **NickelHook plugin, Qt5 (Kobo 4.x)** (L): push on book close, pull on open,
-  jump via Nickel's own navigation. Blocker: find the libnickel symbol for
-  "open at position" on 4.46; verification is on-device only.
+- **NickelHook plugin for the Kobo 6.0** (M–L): the Tolino plugin (Qt6)
+  built and checked for Kobo 6.0 (symbols from its `libnickel.so`). The
+  Qt5 plugin for 4.x is on hold: no 4.x device to test on.
 
 ## Low priority (optional)
 

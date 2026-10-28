@@ -14,10 +14,17 @@ Erledigte Punkte wandern in der Roadmap nach „Recently completed“.
 
 **Reihenfolge der Geräte:** Erst wird alles, was mit dem **Tolino Shine Color
 (5.18)** allein geht, umgesetzt und am Gerät getestet: P3, K4 rückwärts für
-normale EPUBs, P2 am Tolino, N3, N4. Danach kommt der **Kobo** (Clara BW,
-4.46) in einem eigenen Durchgang: P1-Durchlauf mit allen Geräten,
-K4 rückwärts für kepub (`#kobo.N.M`), P2 am Kobo, N1, N2. So geraten die
+normale EPUBs, P2 am Tolino, N3, N4. Danach kommt der **Kobo** (Clara BW)
+in einem eigenen Durchgang: P1-Durchlauf mit allen Geräten,
+K4 rückwärts für kepub (`#kobo.N.M`), P2 am Kobo, N2. So geraten die
 beiden Geräte beim Testen nicht durcheinander.
+
+**Kobo jetzt auf Firmware 6.0:** Der Referenz-Clara-BW hat sich am
+2026-10-28 selbst auf **6.0.279225** (Datenbankversion 222) aktualisiert.
+Ein Kobo mit 4.x ist nicht mehr da. Der Kobo-Durchgang läuft deshalb auf
+6.0 (Qt6 wie der Tolino, die Nickel-VM nutzt ebenfalls Kobo 6.0); was nur
+4.x betrifft (Adobe-Point mit zusammengefasstem Text, Qt5-Plugin), bleibt
+im Code, ist aber nur noch über die 4.46-Fixtures geprüft.
 
 **Danach zuerst D1, dann D2:** Sobald der Tolino-Durchgang abgeschlossen
 ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
@@ -194,8 +201,16 @@ dürfen jederzeit dazwischengeschoben werden.
     `OEBPS/text/chapter2.xhtml#point(/1/4/128/1:0)`, wie erwartet. Ob
     Nickel dort öffnet, prüft P2.
   - [ ] **ich (Kobo-Durchgang):** Rückwärts für den Kobo: XPointer →
-    Kobo-Span (kepub) und Adobe-Point für 4.x (Text um Kommentare
-    zusammengefasst).
+    Kobo-Span (kepub), am Kobo 6.0 prüfen. Adobe-Point für 4.x (Text um
+    Kommentare zusammengefasst) nur noch gegen die 4.46-Fixtures, kein
+    4.x-Gerät mehr.
+  - [ ] **ich (Kobo-Durchgang):** Positionsformat und Kapitelzeilen auf
+    Kobo 6.0 prüfen (kepub-Span, Adobe-Point: zählt 6.0 Kommentare als
+    Knoten wie der Tolino?); die CLI nimmt ab Firmware 5 das
+    Tolino-Verhalten an (`PointFlavor::for_firmware`), ungeprüft.
+  - [ ] **du:** Fixture-Bücher (Book P, Q, R, je kepub und EPUB) auf den
+    Kobo 6.0 laden, Book P und Q markieren wie zuvor, dann
+    Datenbankkopie für neue Fixtures (`tools/make_db_fixture.py`).
   - [x] **ich:** Zweites Probebuch für Umlaute, Zeichen mit 3 und 4 Bytes,
     CDATA, Leerraum am Absatzanfang und kombinierende Akzente, unter eigenem
     Namen (**Book Q**, `book-q*.epub`), damit es nicht mit Book P verwechselt
@@ -298,14 +313,17 @@ dürfen jederzeit dazwischengeschoben werden.
 
 ## Plugin
 
-- [ ] **N1 Symbole für Kobo 4.46 (Qt5)**
+- [!] **N1 Symbole für Kobo 4.46 (Qt5)** · blockiert: kein Kobo mit 4.x
+  mehr (Clara BW seit 2026-10-28 auf 6.0). Nur noch, falls ein 4.x-Gerät
+  zum Testen auftaucht.
   - [ ] **du:** Firmware-Update 4.46 für den Clara BW besorgen (wegen `libnickel.so`).
   - [ ] **ich:** Symbole für „Buch geöffnet“, „Buch geschlossen“ und „an
     Position springen“ suchen.
-- [ ] **N2 Plugin Qt5**
-  - [ ] **ich:** NickelHook-Plugin, das das Programm beim Schließen (`push`)
-    und Öffnen (`pull`) aufruft; Paket `KoboRoot.tgz`.
-  - [ ] **du:** Test auf dem Clara BW.
+- [ ] **N2 Plugin für den Kobo 6.0** (statt Qt5 für 4.x)
+  - [ ] **ich:** Symbole aus `libnickel.so` von Kobo 6.0 prüfen (Vorbild
+    N3, Tolino 5.18) und das Tolino-Plugin (Qt6) für den Kobo bauen;
+    Paket `Kobo.tgz`.
+  - [ ] **du:** Test auf dem Clara BW (6.0).
 - [x] **N3 Symbole für Tolino 5.18 (Qt6)** · Ergebnis in
   [`docs/nickel-5.18-symbols.md`](docs/nickel-5.18-symbols.md)
   - [x] **du:** `libnickel.so` aus dem Kobo-Build 5.18.270971 und die
@@ -498,10 +516,9 @@ dürfen jederzeit dazwischengeschoben werden.
 - [ ] **O3 Einstellungsdialog** auf dem Gerät.
 - [ ] **O4 Sync-Status** im Buchmenü, plus „Jetzt synchronisieren“.
 - [ ] **O5 Geräteübersicht** in `status`: alle Positionen eines Buchs nebeneinander.
-- [ ] **O6 Markierungen auf Kobo 5.x/6.x nachtesten** · `[!]` erst, wenn alle
-  Tests mit Kobo 4.x durch sind: Das Update auf 5.18+ kostet das einzige
-  4.x-Gerät (Clara BW). · **du:** Book P auf dem Kobo mit Firmware 5.18 oder
-  6.x markieren. Auf 4.46 zeigt Nickel Markierungen im kepub verschoben und im
+- [ ] **O6 Markierungen auf Kobo 5.x/6.x nachtesten** · nicht mehr
+  blockiert: Der Clara BW ist seit 2026-10-28 auf 6.0. · **du:** Book P auf
+  dem Kobo mit Firmware 6.0 markieren. Auf 4.46 zeigt Nickel Markierungen im kepub verschoben und im
   EPUB teils gar nicht an (gespeichert wird richtig); auf dem Tolino mit 5.18
   tritt das nicht auf.
 
