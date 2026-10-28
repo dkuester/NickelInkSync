@@ -377,7 +377,7 @@ was the plugin's check: 3 s after opening,
 `ReadingView::bookmarkForCurrentLocation` gave an empty location in eight
 of the nine takes (on 25.10. never), and the check took that for another
 chapter, so the book was not pushed on leaving. The same showed in the
-emulated [Nickel VM](nickel-vm.md). The check now asks again every second
+emulated Nickel VM (PR #27). The check now asks again every second
 for up to 8 s more; if the place is still unknown and the cache was
 reloaded, the take counts as done and leaving pushes. The test switch is
 gone.
