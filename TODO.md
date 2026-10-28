@@ -498,11 +498,16 @@ dürfen jederzeit dazwischengeschoben werden.
   - [x] **ich:** Testschalter: Gibt es `.adds/NickelInkSync/debug-open-wait`,
     wartet das Plugin bei jedem Öffnen 10 s in einer lokalen
     Ereignisschleife, auch bei verbundenem WLAN.
-  - [ ] **du (26.10.):** Gerätetest mit Schalter: fünf Übernahmen mit der
-    Datei, fünf ohne, WLAN jeweils schon verbunden.
-  - [ ] **ich (falls nur „WLAN aus“ fehlschlägt):** nicht mehr mitten in
-    `setVolume` aufs WLAN warten.
-  - [ ] **ich (nur falls das nicht reicht):** Position über Nickel selbst
+  - [x] **du:** Gerätetest mit Schalter (2026-10-28, 15:06–15:22): Nickel
+    öffnete in allen neun Übernahmen auf der Seite mit der gezogenen
+    Stelle, mit und ohne Warten. Falsch war die Prüfung des Plugins: 3 s
+    nach dem Öffnen kannte Nickel seine Stelle in acht von neun Fällen
+    noch nicht (leer), und das Plugin hielt das für ein anderes Kapitel.
+  - [x] **ich:** Prüfung nach dem Öffnen fragt bei leerer Stelle bis zu
+    8 s lang jede Sekunde nach; bleibt sie leer, gilt die Übernahme nach
+    dem Cache-Neuladen als geglückt. Testschalter wieder ausgebaut.
+  - [ ] **du:** Kurzer Gerätetest der neuen Prüfung (3–4 Übernahmen).
+  - [ ] **ich (nur falls Nickel doch wieder am Kapitelanfang öffnet):** Position über Nickel selbst
     schreiben, Vorbild Kobalt (MIT, nur das Konzept):
     `VolumeManager::updateBookmark`, `updateFields` in einer
     `DatabaseAdapter`-Transaktion; die CLI entscheidet dann nur noch

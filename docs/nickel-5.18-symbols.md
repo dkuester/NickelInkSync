@@ -363,9 +363,24 @@ prepare the opening from the old state. Not proven yet.
 **Third device test** (15:44–15:49): three takes right, two of them
 after a wait for Wi-Fi (7 s and 1 s). With the cache reload, 7 of 7 takes
 without a wait and 4 of 7 with one were right: suggestive, not proven.
-For a controlled test, the empty file
-`.adds/NickelInkSync/debug-open-wait` makes every opening wait 10 s in a
-local event loop before the pull, with Wi-Fi already up.
+For a controlled test, a test build waited 10 s in a local event loop
+before the pull when the empty file `.adds/NickelInkSync/debug-open-wait`
+existed, with Wi-Fi already up.
+
+**Fourth device test** (28.10., 15:06–15:22, five runs with that wait,
+five without, one of them with nothing newer on the server): Nickel
+opened on the page with the pulled point in all nine takes, by the
+owner's notes and by the position Nickel saved on leaving (each 2 to 4
+node steps before the pulled point, in its chapter). Once, Nickel showed
+the page before it. The wait for Wi-Fi makes no difference. What failed
+was the plugin's check: 3 s after opening,
+`ReadingView::bookmarkForCurrentLocation` gave an empty location in eight
+of the nine takes (on 25.10. never), and the check took that for another
+chapter, so the book was not pushed on leaving. The same showed in the
+emulated [Nickel VM](nickel-vm.md). The check now asks again every second
+for up to 8 s more; if the place is still unknown and the cache was
+reloaded, the take counts as done and leaving pushes. The test switch is
+gone.
 
 Not tried, in case this is not enough: writing the position through
 Nickel instead of the CLI, as Kobalt does on the Kobo (concept only):

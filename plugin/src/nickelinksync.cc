@@ -105,11 +105,6 @@ static const char kBackups[] = "/mnt/onboard/.adds/NickelInkSync/backups";
 // `ContentID<tab>where Nickel opened` per line. The CLI never pushes them
 // and takes the server's position on the next pull.
 static const char kNotInLine[] = "/mnt/onboard/.adds/NickelInkSync/not-in-line.tsv";
-// Device test only: if this file exists, opening a book waits kDebugOpenWaitMs
-// in a local event loop before the pull, as it does while waiting for
-// Wi-Fi, to tell whether that wait makes Nickel open at the chapter start.
-static const char kDebugOpenWait[] = "/mnt/onboard/.adds/NickelInkSync/debug-open-wait";
-static const int kDebugOpenWaitMs = 10000;
 static const char kOnboard[] = "/mnt/onboard";
 static const char kSideloaded[] = "file:///mnt/onboard/";
 static const qint64 kLogMaxBytes = 128 * 1024;
@@ -126,8 +121,12 @@ static const int kSilentWifiS = 15;
 // constructor), a Bookmark 8 (vtable, shared data). Room to spare.
 static const size_t kVolumeBytes = 64;
 static const size_t kBookmarkBytes = 64;
-// When to check that Nickel opened the pulled chapter.
+// When to check that Nickel opened the pulled chapter. Nickel may not know
+// its place yet after 3 s (an empty location, in 8 of 9 runs of a device
+// test), so the check asks again every second, kCheckOpenTries times.
 static const int kCheckOpenMs = 3000;
+static const int kCheckOpenRetryMs = 1000;
+static const int kCheckOpenTries = 8;
 // Toasts: how long they stay (Nickel's own use 1500 ms), and how long after
 // setVolume the one about opening is queued, once the reading view is up.
 static const int kToastMs = 5000;
@@ -483,10 +482,24 @@ static bool near(const QString &at, const QString &target)
     return true;
 }
 
+// The book is in line with the server: shown as taken, and pushed on
+// leaving unless Nickel is still on page `at` (empty: always pushed).
+static void taken_from_server(const QString &id, const QString &at, const QString &taken)
+{
+    if (g_not_synced == id) {
+        g_not_synced.clear();
+    }
+    g_taken_id = id;
+    g_taken_page = at;
+    set_not_in_line(id, QString());
+    toast(false, QStringLiteral("Fortschritt übernommen"), taken);
+}
+
 // After opening: Nickel shows a page start, which lies before the pulled
 // point, so "reached" means near it in the same chapter. Only then is the
-// book in line with the server and `taken` shown.
-static void check_open(const QString &id, const QString &target, const QString &taken, bool reloaded)
+// book in line with the server and `taken` shown. An empty location means
+// Nickel does not know its place yet: asked again, `tries` more times.
+static void check_open(const QString &id, const QString &target, const QString &taken, bool reloaded, int tries)
 {
     ReadingView *view = reading_view();
     if (!view || g_open_id != id) {
@@ -494,17 +507,26 @@ static void check_open(const QString &id, const QString &target, const QString &
         return;
     }
     const QString at = current_location(view);
-    log_line(QStringLiteral("after opening (%1): Nickel is at %2, pulled %3")
-                 .arg(QLatin1String(reloaded ? "cache reloaded" : "copy, cache not reloaded"), at, target));
-    if (near(at, target)) {
+    const int waited_ms = kCheckOpenMs + (kCheckOpenTries - tries) * kCheckOpenRetryMs;
+    if (at.isEmpty() && tries > 0) {
+        QTimer::singleShot(kCheckOpenRetryMs, qApp, [id, target, taken, reloaded, tries] {
+            check_open(id, target, taken, reloaded, tries - 1);
+        });
+        return;
+    }
+    log_line(QStringLiteral("after opening (%1, %2 ms): Nickel is at %3, pulled %4")
+                 .arg(QLatin1String(reloaded ? "cache reloaded" : "copy, cache not reloaded"))
+                 .arg(waited_ms)
+                 .arg(at, target));
+    if (at.isEmpty() && reloaded) {
+        // In every device run Nickel opened the reloaded position, so an
+        // unknown place counts as taken; leaving pushes.
+        log_line(QStringLiteral("after opening: Nickel's place still unknown; the reloaded cache holds the pulled "
+                                "point, so taken"));
+        taken_from_server(id, QString(), taken);
+    } else if (near(at, target)) {
         log_line(QStringLiteral("after opening: Nickel is at %1, on the page with the pulled point").arg(at));
-        if (g_not_synced == id) {
-            g_not_synced.clear();
-        }
-        g_taken_id = id;
-        g_taken_page = at;
-        set_not_in_line(id, QString());
-        toast(false, QStringLiteral("Fortschritt übernommen"), taken);
+        taken_from_server(id, at, taken);
     } else if (chapter_of(at) == chapter_of(target)) {
         log_line(QStringLiteral("after opening: Nickel is at %1, in the pulled chapter but not near the point; "
                                 "not pushed until a pull brings it in line").arg(at));
@@ -749,12 +771,6 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     // it stayed false for 10 s with Wi-Fi connected (device test). So it
     // only decides how long to wait; the CLI always tries, and fails fast
     // without a network.
-    if (QFileInfo::exists(QString::fromLatin1(kDebugOpenWait))) {
-        log_line(QStringLiteral("debug-open-wait: waiting %1 s in a local event loop").arg(kDebugOpenWaitMs / 1000));
-        QEventLoop loop;
-        QTimer::singleShot(kDebugOpenWaitMs, &loop, &QEventLoop::quit);
-        loop.exec();
-    }
     const bool wifi = wait_online(kOpenWifiMs);
     if (!wifi) {
         log_line(QStringLiteral("Nickel reports no internet; trying anyway"));
@@ -821,7 +837,9 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     const QString target = QString::fromUtf8(p.position);
     const QString taken = p.from.isEmpty() ? QStringLiteral("%1 %").arg(p.percent)
                                            : QStringLiteral("%1 %, von %2").arg(p.percent).arg(p.from);
-    QTimer::singleShot(kCheckOpenMs, qApp, [id, target, taken, reloaded] { check_open(id, target, taken, reloaded); });
+    QTimer::singleShot(kCheckOpenMs, qApp, [id, target, taken, reloaded] {
+        check_open(id, target, taken, reloaded, kCheckOpenTries);
+    });
 }
 
 // What a finished push means, for the log and the message.
