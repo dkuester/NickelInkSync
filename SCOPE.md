@@ -24,14 +24,20 @@ everything else is still an assumption.
 
 | | |
 |---|---|
-| Devices | Kobo on firmware 4.x (Qt5), Tolino Shine 5, Shine Color and Vision Color on firmware 5.x (Qt6) |
+| Devices | Kobo on firmware 4.x (Qt5) and 6.x (Qt6, not checked yet), Tolino Shine 5, Shine Color and Vision Color on firmware 5.x (Qt6) |
 | Formats | kepub (`.kepub.epub`) and plain EPUB |
 | Books | Sideloaded only (`ContentID` starting with `file:///mnt/onboard/`) |
 | Server | Any KOSync-compatible server (koreader-sync-server, self-hosted forks) |
 
-Both firmware lines are needed: the reference Kobo (Clara BW) runs 4.46, the
+Both firmware lines are needed: the reference Kobo (Clara BW) ran 4.46, the
 reference Tolino (Shine Color) runs 5.18. The Rust core is unaffected; the
 NickelHook plugin is built twice (Qt5 and Qt6).
+
+On 2026-10-28 the reference Clara BW updated itself to firmware
+**6.0.279225** (database version 222). There is no 4.x device left: the
+4.46 findings below stay verified, but 4.x-only behaviour can be checked
+against the fixtures only, and the Kobo pass targets 6.0 (see
+[Open technical questions](#open-technical-questions)).
 
 ## Book identity
 
@@ -445,7 +451,11 @@ What it would take, and what is open:
    the plugin sets the pulled position in the `Volume` passed to
    `setVolume` and in the one `VolumeManager::getById` loads while opening
    ([docs/nickel-5.18-symbols.md](docs/nickel-5.18-symbols.md)). The Qt5
-   symbols for 4.46 are still open.
+   symbols for 4.46 are still open, and on hold without a 4.x device.
+4. **Kobo firmware 6.0.** Not checked yet: the position format (kepub
+   span, and whether the Adobe point counts comments and CDATA as nodes
+   like the Tolino; the CLI assumes so from firmware 5 on), the chapter
+   rows, and the plugin symbols. Reference device: Clara BW, 6.0.279225.
 
 ## Test data still needed
 
