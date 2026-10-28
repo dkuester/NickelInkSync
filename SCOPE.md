@@ -122,6 +122,18 @@ split chapter, changed text) moves both ways (`tests/transfer.rs`,
 EPUB on the Tolino; a kepub is never written (Nickel expects a span
 there, and the translation back to a span is not done).
 
+**Place to send** (`position`, `transfer::step_back`): a device stores
+its page start, often mid-sentence; KOReader opens the page holding that
+place by its own layout, so it may sit anywhere on the page (Vampire Hunter
+D on the Kobo 6.0, 2026-10-28: the Kobo's page started at "the events of
+the day", which KOReader showed near the bottom of its page, though the
+XPointer was exact). By default `push` sends the start of the innermost
+block element (paragraph) instead, at most 600 visible characters back,
+else the sentence start (after `.`, `!`, `?`, `…` and closing quotes),
+else the place itself; `sentence` and `exact` are the other settings.
+The local position used for `status` and `confirm` is the same moved one,
+so the device does not look newer because of it.
+
 ## License
 
 NickelInkSync is MIT-licensed. KOReader, koreader-sync-server and BookOrbit are

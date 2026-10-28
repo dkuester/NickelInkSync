@@ -150,6 +150,9 @@ password = your password
 
 # Folder with the original EPUBs, a Calibre library or any folder (book mapping)
 # library = ~/Calibre Library
+
+# Which place push sends: paragraph (default), sentence, exact
+# position = paragraph
 ```
 
 - The password is only read from this file, never from the command line.
@@ -177,9 +180,26 @@ password = your password
   and the book is reported. `--force` overwrites without asking.
 - `notify` is only read by the Tolino plugin (see below): which messages
   it shows on the screen.
-- `library` is only used by `map suggest` and `map add`, which need no
-  server settings: a file with only `library` is enough for them. A
-  leading `~/` is your home folder.
+- `library` is used by the `map` commands and decides which books
+  `status`, `push` and `pull` sync (see [Book
+  mapping](#book-mapping-in-progress)). A leading `~/` is your home
+  folder. The `map` commands need no server settings: a file with only
+  `library` (and `position`) is enough; `status` then shows no server.
+- `position` decides which place `push` sends. The device stores where
+  its page starts, often mid-sentence, and KOReader opens the page that
+  holds that place by its own page layout, so it can be anywhere on the
+  page; the start of a paragraph or sentence is easier to find there.
+
+  | Value | Sends |
+  |---|---|
+  | `paragraph` (default) | the start of the paragraph; if that is more than about half a page (600 characters without spaces) back, the start of the sentence; if that is too, the place itself |
+  | `sentence` | the start of the sentence, at most half a page back |
+  | `exact` | the place itself, to the character |
+
+  The output says how far it moved ("moved back 103 characters to the
+  paragraph start"), and `status` and `confirm` compare with the same
+  place, so a book is not reported as newer on the device just because
+  of it. `pull` takes the server position as it is.
 - Lines starting with `#` or `;` are comments; unknown keys are an error.
 
 ## Plugin for the Tolino (experimental)

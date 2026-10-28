@@ -111,9 +111,16 @@ dürfen jederzeit dazwischengeschoben werden.
     kepub. Tests: Markierungen Book P/Q kepub ↔ EPUB, Kobo-6.0-Position
     in Book R, Calibre-artige Umwandlung von Book R, Mock-Server
     (`tests/transfer.rs`, `tests/sync_mapping.rs`).
-  - [ ] **du:** Etappe 3 am Gerät: ein zugeordnetes Calibre-kepub auf dem
-    Kobo 6.0 lesen, `push`, in KOReader die Original-EPUB mit Sync öffnen
-    (siehe PR).
+  - [x] **du:** Etappe 3 am Gerät (2026-10-28): Vampire Hunter D
+    (Calibre-kepub mit geteilten Kapiteln) auf dem Kobo 6.0 bis „the events
+    of the day“ gelesen; die gesendete Stelle stimmt zeichengenau, KOReader
+    zeigt sie aber weit unten auf seiner Seite.
+  - [x] **ich:** `position = paragraph | sentence | exact` in
+    `config.ini` (Standard `paragraph`): `push` sendet den Absatzanfang,
+    höchstens etwa eine halbe Seite zurück, sonst den Satzanfang; Ausgabe
+    nennt die Verschiebung (`transfer::step_back`).
+  - [ ] **du:** Mit `position = paragraph` noch einmal: lesen, `push`,
+    in KOReader öffnen; ist die Stelle so besser zu finden?
   - [ ] **ich:** Etappe 4: Kindle in `status`/`push` (nur lesend, `.yjf`,
     ohne Jailbreak).
 - [ ] **D2 Desktop-Client mit grafischer Oberfläche** · direkt nach D1.

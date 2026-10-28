@@ -27,9 +27,13 @@
 //! In the target file the character becomes KOReader's XPointer (node path
 //! and collapsed offset), so a position that falls on whitespace moves to
 //! the next visible character.
+//!
+//! [`step_back`] moves a position to the start of its sentence or
+//! paragraph before it is sent (`position` in the configuration).
 
 use std::fmt;
 
+use crate::config::PushPosition;
 use crate::dom::{Element, Node};
 use crate::epub::Epub;
 use crate::position::{koreader_path, node_for, split_xpointer, Error};
@@ -133,6 +137,157 @@ pub fn transfer(
     },
   };
   Ok(locate(&texts, found, how))
+}
+
+/// Visible characters a paragraph start may lie before the position for
+/// `position = paragraph`, about half a page; further back, the start of
+/// the sentence is taken.
+pub const MAX_BACK: usize = 600;
+
+/// Where [`step_back`] moved a position.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SteppedBack {
+  pub xpointer: String,
+  /// Visible characters it moved back.
+  pub chars: usize,
+  /// `true` for the paragraph start, `false` for a sentence start.
+  pub paragraph: bool,
+}
+
+impl fmt::Display for SteppedBack {
+  /// `moved back 125 characters to the paragraph start`
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(
+      f,
+      "moved back {} characters to the {} start",
+      self.chars,
+      if self.paragraph {
+        "paragraph"
+      } else {
+        "sentence"
+      }
+    )
+  }
+}
+
+/// Moves the KOReader position `xpointer` in `epub` back to the start of
+/// its sentence or paragraph, as `mode` says, never more than [`MAX_BACK`]
+/// visible characters. `None` if it stays: `exact`, a chapter-only
+/// position, one already at such a start, or one whose sentence starts
+/// further back.
+///
+/// The paragraph is the innermost block element around the position (`p`,
+/// `div`, `li`, a heading, …). A sentence starts after `.`, `!`, `?` or `…`
+/// and any closing quotes or brackets; an abbreviation like "Dr." also
+/// counts as one, which only moves the position back less.
+pub fn step_back(
+  epub: &mut Epub,
+  xpointer: &str,
+  mode: PushPosition,
+) -> Result<Option<SteppedBack>, Error> {
+  if mode == PushPosition::Exact {
+    return Ok(None);
+  }
+  let (spine_index, below) = split_xpointer(xpointer)
+    .filter(|&(i, _)| i < epub.spine.len())
+    .ok_or_else(|| Error::BadXPointer(xpointer.to_string()))?;
+  if below.is_empty() {
+    return Ok(None);
+  }
+  let html = epub.chapter(spine_index)?;
+  let Some((path, chars)) = node_for(&html, below) else {
+    return Ok(None);
+  };
+  let text = ChapterText::of(&html);
+  let k = text.index_of(&path, chars);
+  let block = block_of(&html, &path);
+  let start = text
+    .at
+    .iter()
+    .position(|&(node, _)| text.nodes[node].starts_with(&block))
+    .unwrap_or(k)
+    .min(k);
+  let sentence = (start..=k)
+    .rev()
+    .find(|&i| i == start || sentence_starts(&text.chars, i))
+    .unwrap_or(start);
+  // Never further back than about half a page.
+  let target = match mode {
+    PushPosition::Paragraph if k - start <= MAX_BACK => start,
+    _ if k - sentence <= MAX_BACK => sentence,
+    _ => k,
+  };
+  if target == k {
+    return Ok(None);
+  }
+  let moved = locate(&[(spine_index, html, text)], target, How::SameText);
+  Ok(Some(SteppedBack {
+    xpointer: moved.xpointer,
+    chars: k - target,
+    paragraph: target == start,
+  }))
+}
+
+/// The child path of the innermost block element on the way to the node at
+/// `path`; `[]` (all of the chapter) if there is none.
+fn block_of(html: &Element, path: &[usize]) -> Vec<usize> {
+  let mut block = Vec::new();
+  let mut element = html;
+  for (depth, &i) in path.iter().enumerate() {
+    let Some(Node::Element(child)) = element.children.get(i) else {
+      break;
+    };
+    if is_block(&child.name) {
+      block = path[..=depth].to_vec();
+    }
+    element = child;
+  }
+  block
+}
+
+fn is_block(name: &str) -> bool {
+  matches!(
+    name,
+    "p"
+      | "div"
+      | "li"
+      | "blockquote"
+      | "h1"
+      | "h2"
+      | "h3"
+      | "h4"
+      | "h5"
+      | "h6"
+      | "dd"
+      | "dt"
+      | "td"
+      | "th"
+      | "pre"
+      | "figcaption"
+      | "section"
+      | "article"
+      | "aside"
+  )
+}
+
+/// A sentence starts at visible character `i`: after `.`, `!`, `?` or `…`
+/// and any closing quotes or brackets, and `i` is none of those itself.
+fn sentence_starts(chars: &[char], i: usize) -> bool {
+  let ends = |c: char| matches!(c, '.' | '!' | '?' | '…');
+  let closes = |c: char| {
+    matches!(
+      c,
+      '"' | '\'' | '”' | '’' | '“' | '»' | '«' | '›' | '‹' | ')' | ']'
+    )
+  };
+  if chars.get(i).is_some_and(|&c| ends(c) || closes(c)) {
+    return false;
+  }
+  let mut j = i;
+  while j > 0 && closes(chars[j - 1]) {
+    j -= 1;
+  }
+  j > 0 && ends(chars[j - 1])
 }
 
 /// The XPointer of visible character `index` in the parts of a chapter.
@@ -330,6 +485,29 @@ mod tests {
       find(&source, 3, &"nothing alike".chars().collect::<Vec<_>>()),
       None
     );
+  }
+
+  #[test]
+  fn sentence_starts_after_closing_quotes() {
+    let chars: Vec<char> = "Er ging.„Nein!“Sie lachte…Dann".chars().collect();
+    let starts: Vec<usize> = (0..chars.len())
+      .filter(|&i| sentence_starts(&chars, i))
+      .collect();
+    let words: Vec<String> = starts
+      .iter()
+      .map(|&i| chars[i..].iter().take(3).collect())
+      .collect();
+    assert_eq!(words, ["„Ne", "Sie", "Dan"]);
+  }
+
+  #[test]
+  fn block_is_the_innermost_paragraph() {
+    let html =
+      crate::dom::parse("<html><body><div><p>a <span><em>b</em></span></p></div></body></html>")
+        .unwrap();
+    // html > body[0] > div[0] > p[0] > span[1] > em[0] > text[0]
+    assert_eq!(block_of(&html, &[0, 0, 0, 1, 0, 0]), [0, 0, 0]);
+    assert_eq!(block_of(&html, &[0]), Vec::<usize>::new());
   }
 
   #[test]

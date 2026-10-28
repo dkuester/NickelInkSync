@@ -8,8 +8,9 @@
 //! (`all`, `errors` or `none`, default `all`; only the device plugin uses
 //! it, for its messages on the screen) and `library` (the folder with the
 //! original EPUBs, a Calibre library or any folder; a leading `~/` is the
-//! home folder). The password is only ever read from this file, never from
-//! the command line.
+//! home folder) and `position` (`exact`, `sentence` or `paragraph`, default
+//! `paragraph`: which place `push` sends, see [`PushPosition`]). The
+//! password is only ever read from this file, never from the command line.
 
 use std::collections::HashMap;
 use std::fmt;
@@ -60,10 +61,52 @@ pub struct Config {
   pub notify: Notify,
   /// Folder with the original EPUBs (Calibre library or plain folder).
   pub library: Option<PathBuf>,
+  /// Which place `push` sends.
+  pub position: PushPosition,
+}
+
+/// `position`: which place `push` sends. The reading position is where the
+/// device's page starts, often mid-sentence; KOReader opens the page that
+/// holds it, by its own page layout, so the place can be anywhere on that
+/// page. A paragraph or sentence start is easier to find there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PushPosition {
+  /// The stored position, to the character.
+  Exact,
+  /// The start of its sentence.
+  Sentence,
+  /// The start of its paragraph, or of its sentence where the paragraph
+  /// starts too far back.
+  #[default]
+  Paragraph,
+}
+
+impl std::str::FromStr for PushPosition {
+  type Err = ();
+
+  fn from_str(s: &str) -> Result<Self, ()> {
+    match s {
+      "exact" => Ok(PushPosition::Exact),
+      "sentence" => Ok(PushPosition::Sentence),
+      "paragraph" => Ok(PushPosition::Paragraph),
+      _ => Err(()),
+    }
+  }
+}
+
+/// The settings that need no server: what the book mapping and the place
+/// to send use.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct LocalSettings {
+  pub library: Option<PathBuf>,
+  pub position: PushPosition,
+  /// The file names a server or account (`server`, `user`, `password` or
+  /// `key`); without, it only holds local settings.
+  pub server: bool,
 }
 
 /// Every key the file may hold.
-const KEYS: [&str; 9] = [
+const KEYS: [&str; 10] = [
   "server",
   "user",
   "password",
@@ -73,6 +116,7 @@ const KEYS: [&str; 9] = [
   "confirm",
   "notify",
   "library",
+  "position",
 ];
 
 /// `notify`: which messages the device plugin shows on the screen.
@@ -148,16 +192,26 @@ impl Config {
   /// the server settings (the book mapping works without a server). A
   /// missing file has none.
   pub fn library_setting(path: &Path) -> Result<Option<PathBuf>, Error> {
+    Ok(Self::local_settings(path)?.library)
+  }
+
+  /// `library` and `position` of the file at `path`, without needing the
+  /// server settings. A missing file has the defaults.
+  pub fn local_settings(path: &Path) -> Result<LocalSettings, Error> {
     let text = match std::fs::read_to_string(path) {
       Ok(text) => text,
-      Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+      Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(LocalSettings::default()),
       Err(e) => return Err(Error::Io(path.to_path_buf(), e)),
     };
-    Ok(
-      entries(path, &text)?
-        .remove("library")
-        .map(|l| expand_home(&l)),
-    )
+    let mut entries = entries(path, &text)?;
+    let server = ["server", "user", "password", "key"]
+      .iter()
+      .any(|k| entries.contains_key(k));
+    Ok(LocalSettings {
+      server,
+      library: entries.remove("library").map(|l| expand_home(&l)),
+      position: push_position(path, entries.remove("position"))?,
+    })
   }
 
   /// `path` is only used in error messages.
@@ -173,6 +227,7 @@ impl Config {
       take("notify"),
     );
     let library = take("library").map(|l| expand_home(&l));
+    let position = push_position(path, take("position"))?;
     let missing = |key| Error::Missing(path.to_path_buf(), key);
     let key = match (password, key) {
       (Some(_), Some(_)) => {
@@ -218,6 +273,7 @@ impl Config {
       confirm,
       notify,
       library,
+      position,
     })
   }
 
@@ -253,6 +309,18 @@ fn entries(path: &Path, text: &str) -> Result<HashMap<&'static str, String>, Err
     };
   }
   Ok(entries)
+}
+
+fn push_position(path: &Path, value: Option<String>) -> Result<PushPosition, Error> {
+  match value {
+    None => Ok(PushPosition::default()),
+    Some(value) => value.parse().map_err(|()| {
+      Error::Invalid(
+        path.to_path_buf(),
+        "`position` must be `exact`, `sentence` or `paragraph`",
+      )
+    }),
+  }
 }
 
 /// `~/…` with the home folder.
@@ -369,6 +437,18 @@ mod tests {
       let c = parse("server=s\nuser=u\npassword=p\nlibrary = ~/Calibre").unwrap();
       assert_eq!(c.library, Some(PathBuf::from(home).join("Calibre")));
     }
+  }
+
+  #[test]
+  fn position_setting() {
+    let c = parse("server=s\nuser=u\npassword=p").unwrap();
+    assert_eq!(c.position, PushPosition::Paragraph);
+    let c = parse("server=s\nuser=u\npassword=p\nposition = exact").unwrap();
+    assert_eq!(c.position, PushPosition::Exact);
+    let e = parse("server=s\nuser=u\npassword=p\nposition=page")
+      .unwrap_err()
+      .to_string();
+    assert!(e.contains("`position` must be"), "{e}");
   }
 
   #[test]

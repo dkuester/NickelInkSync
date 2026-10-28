@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Args, Parser, Subcommand};
-use nickelinksync::config::{self, Config};
+use nickelinksync::config::{self, Config, LocalSettings, PushPosition};
 use nickelinksync::db::{Book, Device, Write};
 use nickelinksync::epub::Epub;
 use nickelinksync::hash::partial_md5;
@@ -22,7 +22,7 @@ use nickelinksync::sync::{
   self, decide, format_timestamp, iso_timestamp, parse_timestamp, Confirm, Decision, Direction,
   Local, Side,
 };
-use nickelinksync::transfer::{transfer, How};
+use nickelinksync::transfer::{step_back, transfer, How};
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
@@ -230,6 +230,8 @@ struct Session {
   library: Option<Library>,
   /// Checksums of the library's EPUBs, computed when first needed.
   library_hashes: std::cell::OnceCell<HashSet<String>>,
+  /// Which place is sent (`position` in the configuration).
+  position: PushPosition,
 }
 
 /// Under which checksum a book is synced, if at all.
@@ -313,6 +315,10 @@ impl Session {
       target.book.as_deref(),
       target.content_id.as_deref(),
     );
+    let settings = match target.config.clone().or_else(Config::default_path) {
+      Some(config) => Config::local_settings(&config)?,
+      None => LocalSettings::default(),
+    };
     // The mappings and the library live on the desktop; the plugin syncs
     // every book under its own checksum, as before.
     let (store, library) = if target.live {
@@ -322,13 +328,7 @@ impl Session {
         Some(path) => Store::load(&path)?,
         None => Store::default(),
       };
-      let path = match &target.library {
-        Some(path) => Some(path.clone()),
-        None => match target.config.clone().or_else(Config::default_path) {
-          Some(config) => Config::library_setting(&config)?,
-          None => None,
-        },
-      };
+      let path = target.library.clone().or(settings.library);
       (store, load_library(path)?)
     };
     if !store.mappings.is_empty() {
@@ -349,6 +349,7 @@ impl Session {
       store,
       library,
       library_hashes: std::cell::OnceCell::new(),
+      position: settings.position,
     })
   }
 
@@ -472,25 +473,44 @@ impl Session {
       .xpointer(book, stored)
       .map_err(|e| format!("not translated: {e}"))?;
     let percentage = book.percent_read as f64 / 100.0;
-    let (xpointer, note) = match identity {
+    let device_file = self.device.book_file(book);
+    let (xpointer, mut notes, sent_file) = match identity {
       Identity::Mapped { mapping, .. } => {
-        let moved = Epub::open(&self.device.book_file(book))
-          .and_then(|device| {
-            Ok((
-              device,
-              Epub::open(std::path::Path::new(&mapping.epub.path))?,
-            ))
-          })
+        let original = PathBuf::from(&mapping.epub.path);
+        let moved = Epub::open(&device_file)
+          .and_then(|device| Ok((device, Epub::open(&original)?)))
           .map_err(|e| e.to_string())
-          .and_then(|(mut device, mut original)| {
-            transfer(&mut device, &x.xpointer, &mut original, percentage).map_err(|e| e.to_string())
+          .and_then(|(mut device, mut epub)| {
+            transfer(&mut device, &x.xpointer, &mut epub, percentage).map_err(|e| e.to_string())
           })
           .map_err(|e| format!("not translated into the original EPUB: {e}"))?;
-        let note = (moved.how != How::SameText).then(|| moved.how.to_string());
-        (moved.xpointer, note)
+        let notes: Vec<String> = (moved.how != How::SameText)
+          .then(|| moved.how.to_string())
+          .into_iter()
+          .collect();
+        (moved.xpointer, notes, original)
       }
-      _ => (x.xpointer, (!x.exact).then(|| "chapter only".to_string())),
+      _ => {
+        let notes = (!x.exact).then(|| "chapter only".to_string());
+        (x.xpointer, notes.into_iter().collect(), device_file)
+      }
     };
+    // The start of the sentence or paragraph, which is easier to find on
+    // KOReader's page than a place mid-sentence.
+    let stepped = Epub::open(&sent_file)
+      .map_err(|e| e.to_string())
+      .and_then(|mut epub| {
+        step_back(&mut epub, &xpointer, self.position).map_err(|e| e.to_string())
+      })
+      .map_err(|e| format!("not translated: {e}"))?;
+    let xpointer = match stepped {
+      Some(s) => {
+        notes.push(s.to_string());
+        s.xpointer
+      }
+      None => xpointer,
+    };
+    let note = (!notes.is_empty()).then(|| notes.join("; "));
     let local = Local {
       xpointer,
       percentage: book.percent_read as f64 / 100.0,
@@ -549,6 +569,10 @@ impl Server {
     if !required && !path.exists() {
       return Ok(None);
     }
+    // A file with only `library` or `position` sets up no server.
+    if path.exists() && !Config::local_settings(&path)?.server {
+      return Ok(None);
+    }
     let config = Config::load(&path)?;
     // On the device's FAT storage every file looks world-readable.
     if !target.live {
@@ -564,12 +588,17 @@ impl Server {
   /// Like [`Server::open`], but a configuration is required.
   fn require(target: &Target) -> Result<Self> {
     Server::open(target)?.ok_or_else(|| {
-      let path = Config::default_path().unwrap_or_else(|| "config.ini".into());
-      format!(
-        "no configuration at {}; see README.md for the format",
-        path.display()
-      )
-      .into()
+      let path = target
+        .config
+        .clone()
+        .or_else(Config::default_path)
+        .unwrap_or_else(|| "config.ini".into());
+      let what = if path.exists() {
+        "no server set up in"
+      } else {
+        "no configuration at"
+      };
+      format!("{what} {}; see README.md for the format", path.display()).into()
     })
   }
 }

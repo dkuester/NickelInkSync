@@ -140,8 +140,26 @@ es sie gibt. Standardort: `~/.config/nickelinksync/config.ini` (oder
 `$NICKELINKSYNC_CONFIG`). Das Format steht im [englischen README](README.md#configuration):
 `server`, `user`, `password` (oder `key` = MD5 des Passworts), optional
 `device`, `device_id`, `confirm`, `notify` (nur für das Tolino-Plugin,
-siehe unten) und `library` (Ordner mit den Original-EPUBs für die
-Buchzuordnung; dafür genügt eine Datei, die nur `library` enthält).
+siehe unten), `library` (Ordner mit den Original-EPUBs für die
+Buchzuordnung) und `position`. Für die `map`-Befehle genügt eine Datei, die
+nur `library` (und `position`) enthält; `status` zeigt dann keinen Server.
+
+`position` legt fest, welche Stelle `push` sendet. Das Gerät speichert, wo
+seine Seite beginnt, oft mitten im Satz. KOReader öffnet die Seite, auf der
+diese Stelle liegt, nach seinem eigenen Seitenumbruch, die Stelle kann also
+irgendwo auf der Seite stehen. Ein Absatz- oder Satzanfang ist dort leichter
+zu finden.
+
+| Wert | Sendet |
+|---|---|
+| `paragraph` (Standard) | den Anfang des Absatzes; liegt der mehr als etwa eine halbe Seite (600 Zeichen ohne Leerzeichen) zurück, den Anfang des Satzes; liegt auch der so weit zurück, die Stelle selbst |
+| `sentence` | den Anfang des Satzes, höchstens eine halbe Seite zurück |
+| `exact` | die Stelle selbst, zeichengenau |
+
+Die Ausgabe sagt, wie weit zurückgesetzt wurde („moved back 103 characters
+to the paragraph start“), und `status` und `confirm` vergleichen mit
+derselben Stelle; ein Buch gilt deshalb nicht als auf dem Gerät neuer.
+`pull` übernimmt die Server-Position, wie sie ist.
 
 `confirm` legt fest, wann `push` und `pull` „Gerät oder Server?“ fragen,
 statt die neuere Position gewinnen zu lassen:

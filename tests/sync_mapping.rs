@@ -304,3 +304,65 @@ fn no_position_is_written_into_a_kepub() {
     before
   );
 }
+
+#[test]
+fn push_sends_the_paragraph_start_unless_set_otherwise() {
+  let s = Setup::new(
+    "push-paragraph",
+    "tolino-shinecolor-5.18-placeholder-books.sql",
+    TOLINO_VERSION,
+  );
+  // book-c.epub becomes Book R, read up to byte 204 (character 195) of
+  // R2-16.
+  fs::copy(
+    fixtures().join("epub/book-r.epub"),
+    s.root.join("Books/book-c.epub"),
+  )
+  .unwrap();
+  Connection::open(s.root.join(".kobo/KoboReader.sqlite"))
+    .unwrap()
+    .execute(
+      "UPDATE content SET ChapterIDBookmarked = ?1 WHERE ContentID = ?2",
+      [
+        "OEBPS/text/chapter2.xhtml#point(/1/4/34/1:204)",
+        "file:///mnt/onboard/Books/book-c.epub",
+      ],
+    )
+    .unwrap();
+  let r = partial_md5(&fixtures().join("epub/book-r.epub")).unwrap();
+  let (output, out) = s.run(&["push", "--book", "book-c", "--force"]);
+  assert!(output.status.success(), "{out}");
+  assert!(out.contains("characters to the paragraph start"), "{out}");
+  let sent = put(&s.server);
+  assert_eq!(sent[0]["document"], r);
+  assert_eq!(
+    sent[0]["progress"],
+    "/body[1]/DocFragment[3]/body[1]/p[16]/text()[1].0"
+  );
+
+  let mut config = fs::read_to_string(&s.config).unwrap();
+  config.push_str("position = exact\n");
+  fs::write(&s.config, config).unwrap();
+  let (_, out) = s.run(&["status", "--book", "book-c"]);
+  assert!(
+    out.contains("  koreader  /body[1]/DocFragment[3]/body[1]/p[16]/text()[1].195\n"),
+    "{out}"
+  );
+}
+
+#[test]
+fn a_configuration_without_a_server() {
+  let s = Setup::new(
+    "config-local-only",
+    "tolino-shinecolor-5.18-placeholder-books.sql",
+    TOLINO_VERSION,
+  );
+  fs::write(&s.config, "position = sentence\n").unwrap();
+  let (output, out) = s.run(&["status", "--book", "book-a.epub"]);
+  assert!(output.status.success(), "{out}");
+  assert!(out.contains("Server not configured"), "{out}");
+  let (output, _) = s.run(&["push"]);
+  assert!(!output.status.success());
+  let stderr = String::from_utf8_lossy(&output.stderr);
+  assert!(stderr.contains("no server set up in"), "{stderr}");
+}

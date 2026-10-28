@@ -278,3 +278,106 @@ fn text_that_is_nowhere_falls_back_to_the_chapter_start() {
   // And a bad XPointer is an error, not a guess.
   assert!(transfer(&mut p, "/body[1]/DocFragment[99]", &mut q, 0.5).is_err());
 }
+
+/// A one-chapter EPUB with this body, written by the test.
+fn one_chapter(name: &str, body: &str) -> PathBuf {
+  let path = std::env::temp_dir().join(format!("nickelinksync-{}-{name}.epub", std::process::id()));
+  let mut out = ZipWriter::new(fs::File::create(&path).unwrap());
+  let options = SimpleFileOptions::default();
+  for (name, text) in [
+    ("mimetype", "application/epub+zip".to_string()),
+    (
+      "META-INF/container.xml",
+      r#"<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"#.to_string(),
+    ),
+    (
+      "content.opf",
+      r#"<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="2.0"><metadata/><manifest><item id="c" href="c.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>"#.to_string(),
+    ),
+    (
+      "c.xhtml",
+      format!("<?xml version=\"1.0\"?><html xmlns=\"http://www.w3.org/1999/xhtml\"><head><title>c</title></head><body>{body}</body></html>"),
+    ),
+  ] {
+    out.start_file(name, options).unwrap();
+    out.write_all(text.as_bytes()).unwrap();
+  }
+  out.finish().unwrap();
+  path
+}
+
+#[test]
+fn steps_back_to_the_paragraph_or_sentence_start() {
+  use nickelinksync::config::PushPosition::{Exact, Paragraph, Sentence};
+  use nickelinksync::transfer::step_back;
+  // Book R, R2-16 at character 204, where the Kobo 6.0's page started:
+  // the paragraph is one sentence, so both go to its start.
+  let mut r = epub("book-r.epub");
+  let at = "/body[1]/DocFragment[3]/body[1]/p[16]/text()[1].204";
+  let back = step_back(&mut r, at, Paragraph).unwrap().unwrap();
+  assert_eq!(
+    back.xpointer,
+    "/body[1]/DocFragment[3]/body[1]/p[16]/text()[1].0"
+  );
+  assert!(back.paragraph);
+  assert_eq!(
+    back.to_string(),
+    format!(
+      "moved back {} characters to the paragraph start",
+      back.chars
+    )
+  );
+  assert_eq!(
+    step_back(&mut r, at, Sentence).unwrap().unwrap().xpointer,
+    back.xpointer
+  );
+  assert_eq!(step_back(&mut r, at, Exact).unwrap(), None);
+  // Already at the start, or only the chapter: nothing to do.
+  assert_eq!(step_back(&mut r, &back.xpointer, Paragraph).unwrap(), None);
+  assert_eq!(
+    step_back(&mut r, "/body[1]/DocFragment[3]", Paragraph).unwrap(),
+    None
+  );
+
+  // A paragraph of 40 sentences of 29 visible characters each: a place in
+  // sentence 3 goes to the paragraph start, one in sentence 30 (too far
+  // in) only to its sentence start, which is also where `sentence` goes.
+  let sentence = |n: usize| format!("Satz {n:02} hat genau dreißig Zeichen. ");
+  let paragraph: String = (1..=40).map(sentence).collect();
+  let mut long = Epub::open(&one_chapter(
+    "long-paragraph",
+    &format!("<p>Kurz.</p><p><em>Lang:</em> {paragraph}</p>"),
+  ))
+  .unwrap();
+  // Character offsets in the second text node of p[2]: " Satz 01 …".
+  let offset_of = |n: usize| 1 + (n - 1) * sentence(1).chars().count();
+  let near = format!(
+    "/body[1]/DocFragment[1]/body[1]/p[2]/text()[1].{}",
+    offset_of(3) + 5
+  );
+  let back = step_back(&mut long, &near, Paragraph).unwrap().unwrap();
+  assert_eq!(
+    back.xpointer,
+    "/body[1]/DocFragment[1]/body[1]/p[2]/em[1]/text()[1].0"
+  );
+  let far = format!(
+    "/body[1]/DocFragment[1]/body[1]/p[2]/text()[1].{}",
+    offset_of(30) + 5
+  );
+  let back = step_back(&mut long, &far, Paragraph).unwrap().unwrap();
+  assert!(!back.paragraph);
+  let start_of_30 = format!(
+    "/body[1]/DocFragment[1]/body[1]/p[2]/text()[1].{}",
+    offset_of(30)
+  );
+  assert_eq!(back.xpointer, start_of_30);
+  assert_eq!(back.chars, 4, "\"Satz\" before the place");
+  let back = step_back(&mut long, &near, Sentence).unwrap().unwrap();
+  assert_eq!(
+    back.xpointer,
+    format!(
+      "/body[1]/DocFragment[1]/body[1]/p[2]/text()[1].{}",
+      offset_of(3)
+    )
+  );
+}
