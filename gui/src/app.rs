@@ -636,7 +636,7 @@ fn loaded_view(ui: &mut egui::Ui, t: &Texts, lang: Lang, loaded: &Loaded) -> Opt
     (t.problems, "", pick(|g| matches!(g, Group::Problem { .. }))),
   ];
   let mut action = None;
-  egui::ScrollArea::vertical().show(ui, |ui| {
+  egui::ScrollArea::both().show(ui, |ui| {
     for (i, (name, hint, rows)) in sections.iter().enumerate() {
       if rows.is_empty() && i == 3 {
         continue;
@@ -661,6 +661,12 @@ fn loaded_view(ui: &mut egui::Ui, t: &Texts, lang: Lang, loaded: &Loaded) -> Opt
   action
 }
 
+/// The file name of a path, for a narrow column; the full path goes in
+/// the hover text.
+fn file_name(path: &str) -> &str {
+  path.rsplit(['/', '\\']).next().unwrap_or(path)
+}
+
 fn book_table(ui: &mut egui::Ui, t: &Texts, id: usize, rows: &[&Row]) -> Option<Action> {
   let mut action = None;
   egui::Grid::new(("books", id))
@@ -669,6 +675,7 @@ fn book_table(ui: &mut egui::Ui, t: &Texts, id: usize, rows: &[&Row]) -> Option<
     .spacing([16.0, 4.0])
     .show(ui, |ui| {
       ui.strong(t.title);
+      ui.label("");
       ui.strong(t.position);
       ui.strong(t.last_read);
       ui.strong(match rows[0].group {
@@ -676,7 +683,6 @@ fn book_table(ui: &mut egui::Ui, t: &Texts, id: usize, rows: &[&Row]) -> Option<
         Group::NotMapped => t.file,
         _ => t.why,
       });
-      ui.label("");
       ui.end_row();
       for row in rows {
         let title = match &row.author {
@@ -684,31 +690,8 @@ fn book_table(ui: &mut egui::Ui, t: &Texts, id: usize, rows: &[&Row]) -> Option<
           None => row.title.clone(),
         };
         ui.label(title).on_hover_text(&row.file);
-        let position = match row.percent {
-          Some(p) => format!("{:.0} %", p * 100.0),
-          None => t.never_opened.to_string(),
-        };
-        let response = ui.label(position);
-        match &row.xpointer {
-          Ok(x) => {
-            response.on_hover_text(x);
-          }
-          Err(e) if !e.is_empty() => {
-            response.on_hover_text(e);
-          }
-          Err(_) => {}
-        }
-        ui.label(row.last_read.as_deref().unwrap_or("–"));
-        match &row.group {
-          Group::Mapped { original } => ui.label(original),
-          Group::NotMapped => ui.label(&row.file),
-          Group::Same { why } => ui.weak(match why {
-            Own::InLibrary => t.own_in_library,
-            Own::OriginalOfMapping => t.own_original,
-            Own::NoLibrary => t.own_no_library,
-          }),
-          Group::Problem { message } => ui.colored_label(ui.visuals().warn_fg_color, message),
-        };
+        // The buttons right after the title, so a long path never pushes
+        // them out of sight.
         ui.horizontal(|ui| {
           let can_map = !row.id.is_empty();
           let map_label = match row.group {
@@ -739,6 +722,31 @@ fn book_table(ui: &mut egui::Ui, t: &Texts, id: usize, rows: &[&Row]) -> Option<
             }
           }
         });
+        let position = match row.percent {
+          Some(p) => format!("{:.0} %", p * 100.0),
+          None => t.never_opened.to_string(),
+        };
+        let response = ui.label(position);
+        match &row.xpointer {
+          Ok(x) => {
+            response.on_hover_text(x);
+          }
+          Err(e) if !e.is_empty() => {
+            response.on_hover_text(e);
+          }
+          Err(_) => {}
+        }
+        ui.label(row.last_read.as_deref().unwrap_or("–"));
+        match &row.group {
+          Group::Mapped { original } => ui.label(file_name(original)).on_hover_text(original),
+          Group::NotMapped => ui.label(file_name(&row.file)).on_hover_text(&row.file),
+          Group::Same { why } => ui.weak(match why {
+            Own::InLibrary => t.own_in_library,
+            Own::OriginalOfMapping => t.own_original,
+            Own::NoLibrary => t.own_no_library,
+          }),
+          Group::Problem { message } => ui.colored_label(ui.visuals().warn_fg_color, message),
+        };
         ui.end_row();
       }
     });
@@ -762,5 +770,24 @@ impl eframe::App for App {
     let ctx = ui.ctx().clone();
     self.map_dialog(&ctx, t);
     self.unmap_dialog(&ctx, t);
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::file_name;
+
+  #[test]
+  fn file_name_of_device_and_library_paths() {
+    assert_eq!(
+      file_name("Books/Acts of Contrition.kepub.epub"),
+      "Acts of Contrition.kepub.epub"
+    );
+    assert_eq!(
+      file_name("/Users/me/Calibre Library/A/B (1)/B.epub"),
+      "B.epub"
+    );
+    assert_eq!(file_name("C:\\Books\\b.epub"), "b.epub");
+    assert_eq!(file_name("b.epub"), "b.epub");
   }
 }
