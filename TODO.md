@@ -218,8 +218,8 @@ fertig, D2 läuft (E0 und E1 erledigt).
     Tolino nur Book R, weil Paradise Lost und Good Boy Shop-Bücher sind
     (siehe P4). Der gewählte Kindle-Ordner ließ sich nicht wieder
     entfernen: jetzt Knopf „Kindle-Ordner entfernen“.
-  - [ ] **du:** Den Knopf kurz prüfen (Ordner wählen, entfernen, er
-    verschwindet links und bleibt nach dem Neustart weg).
+  - [x] **du:** Knopf geprüft (2026-10-29): Der Ordner verschwindet und
+    bleibt nach dem Neustart weg.
   - [ ] **ich:** **E2** Zuordnung in der GUI: Vorschläge mit Bewertung,
     bestätigen oder EPUB selbst wählen, entfernen.
   - [ ] **ich:** **E3** Server-Positionen, Push/Pull per Knopf mit
