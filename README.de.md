@@ -146,8 +146,20 @@ gezeigt, unter 80 % ist der beste als „uncertain“ markiert.
 
 Die Zuordnungen liegen in `mappings.json` im Datenordner
 `~/.local/share/nickelinksync/` (oder `$XDG_DATA_HOME/nickelinksync`, oder
-`$NICKELINKSYNC_DATA_DIR`), den sich CLI und der kommende Desktop-Client
-teilen.
+`$NICKELINKSYNC_DATA_DIR`), den sich CLI und Desktop-Client teilen.
+
+### Desktop-Client (im Aufbau)
+
+Ein Fenster für dieselbe Arbeit, auf derselben Bibliothek (`gui/`, egui):
+`just gui` oder `cargo run -p nickelinksync-gui`. Bisher liest es nur: Es
+findet einen per USB angesteckten Kobo oder Tolino (macOS: `/Volumes`),
+nimmt eine Kopie der Bücher eines Kindle als Ordner und zeigt die Bücher
+danach, wie sie synchronisiert werden (nicht zugeordnet, zugeordnet,
+gleiche Datei), mit der Stelle auf dem Gerät. Beim Anstecken wird nichts
+synchronisiert. Deutsch oder Englisch nach Systemsprache, umschaltbar.
+`config.ini` und `mappings.json` teilt es mit der CLI; seine eigenen
+Einstellungen (Sprache, Kindle-Ordner) liegen in `gui.json` im
+Datenordner.
 
 ## Konfiguration
 

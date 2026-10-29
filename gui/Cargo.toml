@@ -1,0 +1,24 @@
+[package]
+name = "nickelinksync-gui"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.97"
+description = "Desktop client of NickelInkSync: devices, books and their reading positions in a window"
+license = "MIT"
+repository = "https://github.com/dkuester/NickelInkSync"
+publish = false
+
+[dependencies]
+nickelinksync = { path = ".." }
+eframe = "0.37.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sys-locale = "0.3.2"
+
+# Native folder dialog for the Kindle copy. On Linux rfd needs GTK or a
+# portal runtime; the Linux build (optional, E8) types the path instead.
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+rfd = "0.17.2"
+
+[dev-dependencies]
+rusqlite = { version = "0.40.2", features = ["bundled"] }

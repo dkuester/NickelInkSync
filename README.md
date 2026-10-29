@@ -137,7 +137,19 @@ below 50 % are not shown; below 80 % the best one is marked "uncertain".
 
 The mappings are kept in `mappings.json` in the data directory
 `~/.local/share/nickelinksync/` (or `$XDG_DATA_HOME/nickelinksync`, or
-`$NICKELINKSYNC_DATA_DIR`), shared with the coming desktop client.
+`$NICKELINKSYNC_DATA_DIR`), shared with the desktop client.
+
+### Desktop client (in progress)
+
+A window for the same work, built on the same library (`gui/`, egui):
+`just gui` or `cargo run -p nickelinksync-gui`. So far it only reads: it
+finds a Kobo or Tolino connected over USB (macOS: `/Volumes`), takes a
+copy of a Kindle's books as a folder, and lists the books by how they
+sync (not mapped, mapped, same file) with their position on the device.
+Nothing is synced when a device is connected. German or English after the
+system language, switchable. It shares `config.ini` and `mappings.json`
+with the CLI; its own settings (language, Kindle folder) are in
+`gui.json` in the data directory.
 
 ## Configuration
 

@@ -32,7 +32,7 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0 erledigt).
+fertig, D2 läuft (E0 und E1 erledigt).
 
 ## Grundlagen
 
@@ -204,14 +204,22 @@ fertig, D2 läuft (E0 erledigt).
     gibt aus oder fragt. Die CLI gibt aus und fragt wie bisher: Ihre
     Ausgabe ist über alle Aufrufe der Testsuite zeichengleich geblieben.
     Tests ohne CLI in `tests/session.rs`.
-  - [ ] **ich:** **E1** Workspace und Fenster, das nur anzeigt: angesteckte
+  - [x] **ich:** **E1** Workspace und Fenster, das nur anzeigt: angesteckte
     Kobo/Tolino (`/Volumes/*` mit `.kobo/KoboReader.sqlite`), Kindle-Ordner
     wählen, Bücher nach gleicher Prüfsumme, zugeordnet und „Nicht
     zugeordnet“, Position auf dem Gerät; Arbeits-Thread; Deutsch/Englisch
     (`sys-locale`, umschaltbar). CI: clippy/test mit `--workspace`,
-    Gerätebau mit `-p nickelinksync`.
-  - [ ] **du:** E1 am Mac mit Kobo, Tolino und der Kindle-Kopie
-    ausprobieren (`cargo run -p nickelinksync-gui`).
+    Gerätebau mit `-p nickelinksync`, eigener Job `gui-macos` (kein
+    Pflicht-Check). eframe 0.37; Ordnerdialog (`rfd`) nur für macOS und
+    Windows, unter Linux wird der Pfad eingetippt. `just gui` startet.
+  - [x] **du:** E1 am Mac mit Kobo, Tolino und der Kindle-Kopie
+    ausprobiert (`just gui`, 2026-10-29): Bücher und Status stimmen, auch
+    im Kindle-Ordner; Sprachwahl wirkt und bleibt nach dem Neustart. Am
+    Tolino nur Book R, weil Paradise Lost und Good Boy Shop-Bücher sind
+    (siehe P4). Der gewählte Kindle-Ordner ließ sich nicht wieder
+    entfernen: jetzt Knopf „Kindle-Ordner entfernen“.
+  - [x] **du:** Knopf geprüft (2026-10-29): Der Ordner verschwindet und
+    bleibt nach dem Neustart weg.
   - [ ] **ich:** **E2** Zuordnung in der GUI: Vorschläge mit Bewertung,
     bestätigen oder EPUB selbst wählen, entfernen.
   - [ ] **ich:** **E3** Server-Positionen, Push/Pull per Knopf mit
@@ -415,6 +423,32 @@ fertig, D2 läuft (E0 erledigt).
     `status` meldet „push asks first“, `push` fragt, Antwort `s` behält die
     Server-Position; mit `< /dev/null` wird nichts gesendet.
 
+- [ ] **P4 Shop- und Cloud-Bücher ohne DRM** (nach D2) · Bisher werden nur
+  seitengeladene Bücher (`file:///mnt/onboard/…`) synchronisiert, weil
+  Shop-Bücher als DRM-Bücher galten. Am Tolino (2026-10-29) liegen
+  heruntergeladene Shop-Bücher ohne Verschlüsselung in
+  `.kobo/kepub/<ContentID>` (Paradise Lost, Good Boy), Position wie bei
+  seitengeladenen EPUBs (`#point(...)`). Beim Herunterladen legt der
+  Tolino `META-INF/cdp.info` (Bestellnummer) ins EPUB, die Prüfsumme
+  weicht also immer von der eigenen Kopie ab.
+  - [ ] **ich:** DRM sicher erkennen: `encryption.xml` nur, wenn
+    Textdateien verschlüsselt sind (nicht bei verschleierten Schriften),
+    `rights.xml` (Adobe), `license.lcpl` (LCP), Kobo-Store-Schlüssel in
+    `content_keys`; zusätzlich muss das erste Kapitel als XHTML lesbar
+    sein, sonst überspringen und nennen.
+  - [ ] **ich:** Shop-Bücher in `status`/`push` und in der GUI: immer über
+    eine Zuordnung zur Original-EPUB, Schlüssel ist die **ContentID**
+    (wie die Kindle-`content_id`), weil sich die Datei beim erneuten
+    Herunterladen ändern kann; ohne Zuordnung nicht synchronisiert, auch
+    ohne Bibliothek. `SCOPE.md` anpassen („Out of scope“: Bücher mit DRM
+    statt Shop-Bücher).
+  - [ ] **du:** Good Boy auf dem Tolino zuordnen, `push`, in KOReader
+    öffnen.
+  - [ ] **ich + du (später):** Rückschreiben erst nach einem Test, ob der
+    eigene Cloud-Sync von Tolino/Kobo die geschriebene Stelle
+    überschreibt (Flugmodus, dann WLAN). Das Plugin bleibt bis dahin bei
+    seitengeladenen Büchern.
+
 ## Plugin
 
 - [!] **N1 Symbole für Kobo 4.46 (Qt5)** · blockiert: kein Kobo mit 4.x
@@ -605,6 +639,28 @@ fertig, D2 läuft (E0 erledigt).
   - [ ] **ich (nach dem Test):** Gerätesprache: Das Log zeigt `QLocale()`
     beim Start; folgt sie Nickels Spracheinstellung, kommen die Meldungen
     auch auf Englisch.
+- [ ] **N6 Zuordnungen auf dem Gerät** (nach D2, vor dem Kobo-Plugin N2) ·
+  Lücke, die du am 2026-10-29 bemerkt hast: Am Rechner sendet `push` ein
+  zugeordnetes Buch (kepub, von Calibre verändertes EPUB) unter der
+  Prüfsumme der Original-EPUB, mit der Stelle in sie übersetzt; KOReader
+  findet sie, wenn er dieselbe Original-Datei hat. Das Plugin auf dem
+  Gerät (`--live`) kennt aber keine Zuordnungen und sendet unter der
+  eigenen Prüfsumme der Gerätedatei, mit der KOReader nichts anfangen
+  kann; dasselbe beim Holen. Für die Übersetzung braucht die Bibliothek
+  heute die Original-EPUB selbst, und die liegt nicht auf dem Gerät.
+  - [ ] **ich:** Weg wählen und vorschlagen: (a) beim Anlegen der
+    Zuordnung eine kleine Übersetzungstabelle erzeugen (Prüfsumme des
+    Originals, Kapitelpfade, Textlängen bzw. Offsets je Kapitel kepub ↔
+    Original) und nach `.adds/NickelInkSync/` aufs Gerät legen (die GUI
+    beim Kopieren in E5 oder per Knopf, die CLI per Befehl); (b) die
+    Original-EPUB verborgen mit aufs Gerät kopieren (einfacher, kostet
+    Speicher). Beide Richtungen, Kobo und Tolino.
+  - [ ] **ich:** Umsetzen in Bibliothek und CLI (`--live` liest die
+    Tabelle), Tests mit Book A/R (kepub ↔ EPUB) und Calibre-artiger
+    Umwandlung.
+  - [ ] **du:** Am Gerät prüfen: ein Calibre-kepub auf dem Kobo bzw. ein
+    Calibre-EPUB auf dem Tolino lesen, Buch verlassen, in KOReader mit der
+    Original-EPUB öffnen.
 
 ## Optional (später)
 

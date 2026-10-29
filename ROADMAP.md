@@ -140,7 +140,9 @@ fixtures only.
   [TODO.md](TODO.md)), the GUI as a second package in a Cargo workspace
   so the device build stays without it. Done: E0, the sync run (device,
   server, one step per book with the `confirm` question as data) moved
-  from the CLI into the library (`session`), CLI output unchanged.
+  from the CLI into the library (`session`), CLI output unchanged; E1, a
+  read-only window (`gui/`, eframe) that finds connected devices and lists
+  their books by how they sync.
 
 - **Read-only device database layer** (S–M): reading the books and their
   positions is done (`status --device`); still to do: resolve
@@ -165,6 +167,21 @@ fixtures only.
 - **NickelHook plugin for the Kobo 6.0** (M–L): the Tolino plugin (Qt6)
   built and checked for Kobo 6.0 (symbols from its `libnickel.so`). The
   Qt5 plugin for 4.x is on hold: no 4.x device to test on.
+- **Book mappings on the device** (M): the plugin syncs every book under
+  its own checksum, so a mapped book (kepub, an EPUB changed by Calibre)
+  pushed from the device is useless to KOReader, which knows the
+  original EPUB. The desktop translates through the original EPUB, which
+  is not on the device: either a small translation table made with the
+  mapping (original checksum, chapter paths, text offsets) or the
+  original copied to the device, read by `--live`. After the desktop
+  client, before the Kobo plugin.
+- **Store and cloud books without DRM** (S–M): downloaded Tolino store
+  books without encryption sit in `.kobo/kepub/<ContentID>` and store
+  positions like sideloaded EPUBs, but only sideloaded books sync so far.
+  Sync them through a mapping keyed by `ContentID` (the store adds
+  `cdp.info` to the file), skip books with DRM (detected by encrypted
+  text, `rights.xml`, LCP or Kobo store keys), push first; write-back only
+  after checking the store's own cloud sync. After the desktop client.
 
 ## Low priority (optional)
 
