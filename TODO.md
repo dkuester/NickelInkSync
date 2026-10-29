@@ -32,7 +32,7 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0, E1 und E2 erledigt).
+fertig, D2 läuft (E0, E1, E2 und E3a erledigt; als Nächstes E3b).
 
 ## Grundlagen
 
@@ -245,10 +245,30 @@ fertig, D2 läuft (E0, E1 und E2 erledigt).
     Die CLI sendet ohne Bibliothek weiter unter der eigenen Prüfsumme; ob
     die GUI solche Bücher beim Push überspringt oder fragt, entscheiden wir
     in E3.
-  - [ ] **ich:** **E3** Server-Positionen, Push/Pull per Knopf mit
-    Rückfrage-Dialog, Rückschreiben am Tolino, Verlauf (`history.jsonl`,
-    auch für die CLI), Geräteansicht nebeneinander (O5). Kobo nur „zum
-    Server“, bis P2 für den Kobo fertig ist.
+  - E3 neu geschnitten (2026-10-29, wegen des Nutzungslimits) in drei
+    kleine PRs:
+  - [x] **ich:** **E3a** Verlauf: `src/history.rs`, `history.jsonl` im
+    Datenordner (eine JSON-Zeile je gesendeter oder geschriebener
+    Position, Richtung, Gerät, Titel, Dokument, Stelle, Prozent, `by`).
+    Die CLI schreibt nach `push` (Kobo/Tolino und Kindle) und nach
+    `pull --write`, nicht auf dem Gerät (`--live`); Ausgabe unverändert.
+  - [ ] **ich:** **E3b** GUI: Server-Positionen in der Bücherliste (Spalte
+    „Server“ mit Prozent, Gerät, Zeit und Aussage nach `sync::outlook`),
+    „Senden“ je Buch und „Alle senden“ über `Session::push_step`; Fragen
+    (`Action::Ask`) sammeln und in einem Dialog beantworten (Gerät,
+    Server, Überspringen), dann die gemerkten `Update`s senden; Bücher
+    ohne Referenz-EPUB überspringt „Alle senden“, „Senden“ am einzelnen
+    Buch fragt vorher; Verlauf (`by: "gui"`) als Fenster. Kindle über
+    `KindleSession::push_step`. Tests in `gui/` mit dem Mock-Server aus
+    `tests/common` (`#[path]`).
+  - [ ] **du:** E3b: Book R am Tolino senden, einmal mit Rückfrage
+    (KOReader weiter vorn), Verlauf ansehen; Kindle-Kopie senden.
+  - [ ] **ich:** **E3c** Holen und Rückschreiben am Tolino in der GUI
+    (`pull_step`, `take`, `write` mit Sicherungskopie, gleicher Dialog),
+    Kobo nur „zum Server“, bis P2 für den Kobo fertig ist;
+    Geräteansicht nebeneinander (O5).
+  - [ ] **du:** E3c: Book R vom Server auf den Tolino holen, auswerfen,
+    öffnen.
   - [ ] **ich:** **E4** Einstellungen; Schlüssel im Schlüsselbund bzw. in
     der Anmeldeinformationsverwaltung (`keyring`, nur für macOS und
     Windows, nicht im Gerätebau). Die CLI sucht `password`/`key` in der

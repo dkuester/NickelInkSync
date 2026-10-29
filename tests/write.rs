@@ -143,6 +143,14 @@ fn pull_write_sets_the_position_after_a_backup() {
   assert!(out.contains(&format!("Backup of the database: {}", backups[0].display())));
   assert_eq!(fs::read(&backups[0]).unwrap(), before);
   assert!(s.journals().is_empty(), "{:?}", s.journals());
+  let history = nickelinksync::history::read(&s.root.join("no-data/history.jsonl"), 10).unwrap();
+  assert_eq!(history.len(), 1);
+  assert_eq!(
+    history[0].direction,
+    nickelinksync::history::Direction::Pull
+  );
+  assert_eq!(history[0].position, AHEAD_ON_DEVICE);
+  assert_eq!(history[0].percentage, 0.9);
 
   // Now both sides agree: push sends nothing, pull writes nothing.
   let (_, out) = s.run(&["push", "--book", "book-a.epub"]);
