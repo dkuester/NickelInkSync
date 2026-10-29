@@ -1,15 +1,18 @@
 //! The window: devices on the left, the chosen device's books in the
-//! middle, grouped by how they sync.
+//! middle, grouped by how they sync, with a dialog to map a book to its
+//! original EPUB.
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use eframe::egui;
 use nickelinksync::library;
+use nickelinksync::session::Own;
+use nickelinksync::suggest;
 
 use crate::devices::{Found, Kind};
 use crate::i18n::{self, Choice, Lang, Texts};
-use crate::model::{Group, Loaded, Row};
+use crate::model::{Group, Loaded, Mapped, Row, Suggestions};
 use crate::settings::Settings;
 use crate::worker::{Command, Event, Worker};
 
@@ -21,6 +24,41 @@ enum View {
   Loading { done: usize, total: usize },
   Failed(String),
   Loaded(Loaded),
+}
+
+/// What a click in the book list asks for.
+enum Action {
+  /// Open the mapping dialog for the book with `id`.
+  Map { id: String, title: String },
+  /// Ask before removing the mapping with `key`.
+  Unmap { key: String, title: String },
+}
+
+/// The library's candidates, while they are being compared and after.
+enum Candidates {
+  Loading,
+  Ready(Suggestions),
+  Failed(String),
+}
+
+/// Mapping one book: the library's candidates, or an EPUB chosen by hand.
+struct MapDialog {
+  id: String,
+  title: String,
+  candidates: Candidates,
+  chosen: Option<PathBuf>,
+  /// The mapping was sent; waiting for the answer.
+  busy: bool,
+  error: Option<String>,
+  /// Typed path of the EPUB, where there is no file dialog.
+  #[cfg_attr(any(target_os = "macos", target_os = "windows"), allow(dead_code))]
+  typed: String,
+}
+
+/// Asking before a mapping is removed.
+struct UnmapDialog {
+  key: String,
+  title: String,
 }
 
 pub struct App {
@@ -37,6 +75,10 @@ pub struct App {
   kindle_error: bool,
   /// Typed path of the Kindle copy, where there is no folder dialog.
   kindle_path: String,
+  map_dialog: Option<MapDialog>,
+  unmap_dialog: Option<UnmapDialog>,
+  /// What the last mapping change did, shown above the books.
+  notice: Option<Result<String, String>>,
 }
 
 impl App {
@@ -63,6 +105,9 @@ impl App {
       view: View::Nothing,
       kindle_error: false,
       kindle_path,
+      map_dialog: None,
+      unmap_dialog: None,
+      notice: None,
     }
   }
 
@@ -87,6 +132,7 @@ impl App {
   }
 
   fn select(&mut self, found: Found) {
+    self.notice = None;
     self.view = View::Loading { done: 0, total: 0 };
     self.worker.send(Command::Load {
       root: found.root.clone(),
@@ -167,6 +213,49 @@ impl App {
         }
         // For a device no longer shown.
         Event::Progress { .. } | Event::Loaded { .. } => {}
+        Event::Suggestions { id, result } => {
+          if let Some(dialog) = self.map_dialog.as_mut().filter(|d| d.id == id) {
+            dialog.chosen = match &result {
+              Ok(s) if s.same.is_none() => s
+                .candidates
+                .first()
+                .filter(|c| c.score >= suggest::LIKELY)
+                .map(|c| c.path.clone()),
+              _ => None,
+            };
+            dialog.candidates = match result {
+              Ok(s) => Candidates::Ready(s),
+              Err(e) => Candidates::Failed(e),
+            };
+          }
+        }
+        Event::Mapped { id, result } => {
+          let lang = self.lang();
+          if let Some(dialog) = self.map_dialog.as_mut().filter(|d| d.id == id) {
+            match result {
+              Ok(mapped) => {
+                self.notice = Some(Ok(match mapped {
+                  Mapped::SameFile => i18n::same_file_notice(lang, &dialog.title),
+                  Mapped::To(path) => i18n::mapped_notice(lang, &dialog.title, &path),
+                }));
+                self.map_dialog = None;
+              }
+              Err(e) => {
+                dialog.busy = false;
+                dialog.error = Some(e);
+              }
+            }
+          }
+        }
+        Event::Unmapped { result } => {
+          let lang = self.lang();
+          let title = self
+            .unmap_dialog
+            .take()
+            .map(|d| d.title)
+            .unwrap_or_default();
+          self.notice = Some(result.map(|()| i18n::unmapped_notice(lang, &title)));
+        }
       }
     }
   }
@@ -273,8 +362,18 @@ impl App {
     }
   }
 
-  fn books(&self, ui: &mut egui::Ui, t: &Texts) {
+  fn books(&mut self, ui: &mut egui::Ui, t: &Texts) {
     let lang = self.lang();
+    match &self.notice {
+      Some(Ok(notice)) => {
+        ui.label(notice);
+      }
+      Some(Err(e)) => {
+        ui.colored_label(ui.visuals().error_fg_color, e);
+      }
+      None => {}
+    }
+    let mut action = None;
     match &self.view {
       View::Nothing => {
         ui.weak(t.choose_device);
@@ -291,12 +390,205 @@ impl App {
       View::Failed(e) => {
         ui.colored_label(ui.visuals().error_fg_color, format!("{}: {e}", t.failed));
       }
-      View::Loaded(loaded) => loaded_view(ui, t, lang, loaded),
+      View::Loaded(loaded) => action = loaded_view(ui, t, lang, loaded),
+    }
+    match action {
+      Some(Action::Map { id, title }) => self.open_map_dialog(id, title),
+      Some(Action::Unmap { key, title }) => self.unmap_dialog = Some(UnmapDialog { key, title }),
+      None => {}
+    }
+  }
+
+  fn open_map_dialog(&mut self, id: String, title: String) {
+    let Some(selected) = &self.selected else {
+      return;
+    };
+    self.worker.send(Command::Suggest {
+      root: selected.root.clone(),
+      id: id.clone(),
+    });
+    self.map_dialog = Some(MapDialog {
+      id,
+      title,
+      candidates: Candidates::Loading,
+      chosen: None,
+      busy: false,
+      error: None,
+      typed: String::new(),
+    });
+  }
+
+  fn map_dialog(&mut self, ctx: &egui::Context, t: &Texts) {
+    let lang = self.lang();
+    let Some(dialog) = &mut self.map_dialog else {
+      return;
+    };
+    let mut close = false;
+    let mut confirm = false;
+    let modal = egui::Modal::new(egui::Id::unique("map")).show(ctx, |ui| {
+      ui.set_max_width(640.0);
+      ui.heading(format!("{} „{}“", t.map_title, dialog.title));
+      ui.add_space(4.0);
+      match &dialog.candidates {
+        Candidates::Loading => {
+          ui.horizontal(|ui| {
+            ui.spinner();
+            ui.label(t.comparing);
+          });
+        }
+        Candidates::Failed(e) => {
+          ui.colored_label(ui.visuals().error_fg_color, e);
+        }
+        Candidates::Ready(s) => {
+          if s.library.is_none() {
+            ui.weak(t.no_library_for_suggestions);
+          } else if let Some(same) = &s.same {
+            ui.label(t.same_in_library);
+            ui.monospace(same.display().to_string());
+          } else if s.candidates.is_empty() {
+            ui.weak(t.no_candidates);
+          }
+          egui::ScrollArea::vertical()
+            .max_height(320.0)
+            .show(ui, |ui| {
+              for (i, c) in s.candidates.iter().enumerate() {
+                let title = c.title.as_deref().unwrap_or("?");
+                let label = match c.authors.as_slice() {
+                  [] => title.to_string(),
+                  authors => format!("{title} — {}", authors.join(", ")),
+                };
+                let selected = dialog.chosen.as_ref() == Some(&c.path);
+                if ui.radio(selected, label).clicked() {
+                  dialog.chosen = Some(c.path.clone());
+                }
+                ui.indent(i, |ui| {
+                  ui.weak(c.path.display().to_string());
+                  let mut score =
+                    i18n::score(lang, c.score, c.title_score, c.author_score, c.chapters);
+                  if i == 0 && c.score < suggest::LIKELY {
+                    score = format!("{score} · {}", t.uncertain);
+                  }
+                  ui.weak(score);
+                });
+              }
+            });
+        }
+      }
+      ui.separator();
+      epub_picker(ui, t, dialog);
+      if let Some(chosen) = &dialog.chosen {
+        ui.label(format!("{}: {}", t.chosen, chosen.display()));
+      }
+      if let Some(e) = &dialog.error {
+        ui.colored_label(
+          ui.visuals().error_fg_color,
+          format!("{}: {e}", t.map_failed),
+        );
+      }
+      ui.add_space(4.0);
+      ui.horizontal(|ui| {
+        let ready = dialog.chosen.is_some() && !dialog.busy;
+        if ui
+          .add_enabled(ready, egui::Button::new(t.map_confirm))
+          .clicked()
+        {
+          confirm = true;
+        }
+        if ui.button(t.cancel).clicked() {
+          close = true;
+        }
+        if dialog.busy {
+          ui.spinner();
+        }
+      });
+    });
+    if confirm {
+      if let (Some(selected), Some(epub)) = (&self.selected, dialog.chosen.clone()) {
+        dialog.busy = true;
+        dialog.error = None;
+        self.worker.send(Command::Map {
+          root: selected.root.clone(),
+          kind: selected.kind,
+          id: dialog.id.clone(),
+          epub,
+        });
+      }
+    }
+    if close || (modal.should_close() && !dialog.busy) {
+      self.map_dialog = None;
+    }
+  }
+
+  fn unmap_dialog(&mut self, ctx: &egui::Context, t: &Texts) {
+    let lang = self.lang();
+    let Some(dialog) = &self.unmap_dialog else {
+      return;
+    };
+    let mut answer = None;
+    let modal = egui::Modal::new(egui::Id::unique("unmap")).show(ctx, |ui| {
+      ui.set_max_width(480.0);
+      ui.label(i18n::unmap_question(lang, &dialog.title));
+      ui.add_space(4.0);
+      ui.horizontal(|ui| {
+        if ui.button(t.unmap_button).clicked() {
+          answer = Some(true);
+        }
+        if ui.button(t.cancel).clicked() {
+          answer = Some(false);
+        }
+      });
+    });
+    match answer {
+      Some(true) => {
+        if let Some(selected) = &self.selected {
+          // The dialog stays until the answer, for the notice's title.
+          self.worker.send(Command::Unmap {
+            root: selected.root.clone(),
+            kind: selected.kind,
+            key: dialog.key.clone(),
+          });
+        }
+      }
+      Some(false) => self.unmap_dialog = None,
+      None if modal.should_close() => self.unmap_dialog = None,
+      None => {}
     }
   }
 }
 
-fn loaded_view(ui: &mut egui::Ui, t: &Texts, lang: Lang, loaded: &Loaded) {
+/// Choosing the original EPUB by hand: a file dialog, starting in the
+/// library.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn epub_picker(ui: &mut egui::Ui, t: &Texts, dialog: &mut MapDialog) {
+  if ui
+    .add_enabled(!dialog.busy, egui::Button::new(t.choose_epub))
+    .clicked()
+  {
+    let mut picker = rfd::FileDialog::new().add_filter("EPUB", &["epub"]);
+    if let Candidates::Ready(Suggestions {
+      library: Some(dir), ..
+    }) = &dialog.candidates
+    {
+      picker = picker.set_directory(dir);
+    }
+    if let Some(path) = picker.pick_file() {
+      dialog.chosen = Some(path);
+    }
+  }
+}
+
+/// Without a file dialog (Linux): the path typed in.
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn epub_picker(ui: &mut egui::Ui, t: &Texts, dialog: &mut MapDialog) {
+  ui.label(t.epub_path);
+  let edit = ui.add(egui::TextEdit::singleline(&mut dialog.typed).hint_text(t.choose_epub));
+  if edit.changed() {
+    let typed = dialog.typed.trim();
+    dialog.chosen = (!typed.is_empty()).then(|| PathBuf::from(typed));
+  }
+}
+
+fn loaded_view(ui: &mut egui::Ui, t: &Texts, lang: Lang, loaded: &Loaded) -> Option<Action> {
   ui.heading(&loaded.device);
   match &loaded.library {
     Some((path, kind, n)) => {
@@ -311,9 +603,8 @@ fn loaded_view(ui: &mut egui::Ui, t: &Texts, lang: Lang, loaded: &Loaded) {
         i18n::epubs(lang, *n)
       ));
     }
-    None if loaded.device == "Kindle" => {}
     None => {
-      ui.weak(t.no_library);
+      ui.colored_label(ui.visuals().warn_fg_color, t.no_library);
     }
   }
   ui.label(format!("{}: {}", t.mappings, loaded.mappings));
@@ -321,62 +612,93 @@ fn loaded_view(ui: &mut egui::Ui, t: &Texts, lang: Lang, loaded: &Loaded) {
   ui.add_space(8.0);
   if loaded.rows.is_empty() {
     ui.label(t.no_books);
-    return;
+    return None;
   }
   let pick =
     |f: fn(&Group) -> bool| -> Vec<&Row> { loaded.rows.iter().filter(|r| f(&r.group)).collect() };
+  // Name, hint, books, and whether it is a warning: shown only with books,
+  // its hint in the warning colour.
   let sections = [
     (
       t.not_mapped,
       t.not_mapped_hint,
       pick(|g| matches!(g, Group::NotMapped)),
+      true,
+    ),
+    (
+      t.no_reference,
+      t.no_reference_hint,
+      pick(|g| matches!(g, Group::NoReference)),
+      false,
     ),
     (
       t.mapped,
       t.mapped_hint,
       pick(|g| matches!(g, Group::Mapped { .. })),
+      true,
     ),
     (
-      t.same_file,
-      t.same_file_hint,
+      t.own_checksum,
+      t.own_checksum_hint,
       pick(|g| matches!(g, Group::Same { .. })),
+      true,
     ),
-    (t.problems, "", pick(|g| matches!(g, Group::Problem { .. }))),
+    (
+      t.problems,
+      "",
+      pick(|g| matches!(g, Group::Problem { .. })),
+      false,
+    ),
   ];
-  egui::ScrollArea::vertical().show(ui, |ui| {
-    for (i, (name, hint, rows)) in sections.iter().enumerate() {
-      if rows.is_empty() && i == 3 {
+  let mut action = None;
+  egui::ScrollArea::both().show(ui, |ui| {
+    for (i, (name, hint, rows, shown_empty)) in sections.iter().enumerate() {
+      let warning = !shown_empty;
+      if rows.is_empty() && warning {
         continue;
       }
       egui::CollapsingHeader::new(format!("{name} ({})", rows.len()))
         .id_salt(i)
         .default_open(!rows.is_empty())
         .show(ui, |ui| {
-          if !hint.is_empty() {
+          if warning && !hint.is_empty() {
+            ui.colored_label(ui.visuals().warn_fg_color, *hint);
+          } else if !hint.is_empty() {
             ui.weak(*hint);
           }
           if rows.is_empty() {
             ui.weak(t.none);
             return;
           }
-          book_table(ui, t, i, rows);
+          if let Some(a) = book_table(ui, t, i, rows) {
+            action = Some(a);
+          }
         });
     }
   });
+  action
 }
 
-fn book_table(ui: &mut egui::Ui, t: &Texts, id: usize, rows: &[&Row]) {
+/// The file name of a path, for a narrow column; the full path goes in
+/// the hover text.
+fn file_name(path: &str) -> &str {
+  path.rsplit(['/', '\\']).next().unwrap_or(path)
+}
+
+fn book_table(ui: &mut egui::Ui, t: &Texts, id: usize, rows: &[&Row]) -> Option<Action> {
+  let mut action = None;
   egui::Grid::new(("books", id))
     .striped(true)
-    .num_columns(4)
+    .num_columns(5)
     .spacing([16.0, 4.0])
     .show(ui, |ui| {
       ui.strong(t.title);
+      ui.label("");
       ui.strong(t.position);
       ui.strong(t.last_read);
       ui.strong(match rows[0].group {
         Group::Mapped { .. } => t.original,
-        Group::NotMapped => t.file,
+        Group::NotMapped | Group::NoReference => t.file,
         _ => t.why,
       });
       ui.end_row();
@@ -386,6 +708,35 @@ fn book_table(ui: &mut egui::Ui, t: &Texts, id: usize, rows: &[&Row]) {
           None => row.title.clone(),
         };
         ui.label(title).on_hover_text(&row.file);
+        // The buttons right after the title, so a long path never pushes
+        // them out of sight.
+        ui.horizontal(|ui| {
+          let can_map = !row.id.is_empty();
+          let map_label = match row.group {
+            // Without a library nothing told whether it needs a mapping.
+            Group::NotMapped | Group::NoReference => Some(t.map_button),
+            Group::Mapped { .. } | Group::Problem { .. } if row.key.is_some() => {
+              Some(t.remap_button)
+            }
+            _ => None,
+          };
+          if let Some(label) = map_label.filter(|_| can_map) {
+            if ui.small_button(label).clicked() {
+              action = Some(Action::Map {
+                id: row.id.clone(),
+                title: row.title.clone(),
+              });
+            }
+          }
+          if let Some(key) = &row.key {
+            if ui.small_button(t.unmap_button).clicked() {
+              action = Some(Action::Unmap {
+                key: key.clone(),
+                title: row.title.clone(),
+              });
+            }
+          }
+        });
         let position = match row.percent {
           Some(p) => format!("{:.0} %", p * 100.0),
           None => t.never_opened.to_string(),
@@ -402,14 +753,21 @@ fn book_table(ui: &mut egui::Ui, t: &Texts, id: usize, rows: &[&Row]) {
         }
         ui.label(row.last_read.as_deref().unwrap_or("–"));
         match &row.group {
-          Group::Mapped { original } => ui.label(original),
-          Group::NotMapped => ui.label(&row.file),
-          Group::Same { why } => ui.weak(why),
+          Group::Mapped { original } => ui.label(file_name(original)).on_hover_text(original),
+          Group::NotMapped | Group::NoReference => {
+            ui.label(file_name(&row.file)).on_hover_text(&row.file)
+          }
+          Group::Same { why } => ui.weak(match why {
+            Own::InLibrary => t.own_in_library,
+            Own::OriginalOfMapping => t.own_original,
+            Own::NoLibrary => t.no_reference,
+          }),
           Group::Problem { message } => ui.colored_label(ui.visuals().warn_fg_color, message),
         };
         ui.end_row();
       }
     });
+  action
 }
 
 impl eframe::App for App {
@@ -426,5 +784,27 @@ impl eframe::App for App {
       .default_size(220.0)
       .show(ui, |ui| self.device_list(ui, t));
     egui::CentralPanel::default().show(ui, |ui| self.books(ui, t));
+    let ctx = ui.ctx().clone();
+    self.map_dialog(&ctx, t);
+    self.unmap_dialog(&ctx, t);
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::file_name;
+
+  #[test]
+  fn file_name_of_device_and_library_paths() {
+    assert_eq!(
+      file_name("Books/Acts of Contrition.kepub.epub"),
+      "Acts of Contrition.kepub.epub"
+    );
+    assert_eq!(
+      file_name("/Users/me/Calibre Library/A/B (1)/B.epub"),
+      "B.epub"
+    );
+    assert_eq!(file_name("C:\\Books\\b.epub"), "b.epub");
+    assert_eq!(file_name("b.epub"), "b.epub");
   }
 }

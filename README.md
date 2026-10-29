@@ -142,10 +142,15 @@ The mappings are kept in `mappings.json` in the data directory
 ### Desktop client (in progress)
 
 A window for the same work, built on the same library (`gui/`, egui):
-`just gui` or `cargo run -p nickelinksync-gui`. So far it only reads: it
-finds a Kobo or Tolino connected over USB (macOS: `/Volumes`), takes a
-copy of a Kindle's books as a folder, and lists the books by how they
-sync (not mapped, mapped, same file) with their position on the device.
+`just gui` or `cargo run -p nickelinksync-gui`. It finds a Kobo or
+Tolino connected over USB (macOS: `/Volumes`), takes a copy of a
+Kindle's books as a folder, and lists the books by how they sync (not
+mapped, no reference EPUB, mapped, own checksum) with their position on
+the device; without a library it warns that it cannot check which books
+KOReader knows. A book is
+mapped from there: the library's suggestions with their scores, or an
+EPUB chosen by hand; a mapping can be changed or removed. It writes
+nothing to the device, only `mappings.json`.
 Nothing is synced when a device is connected. German or English after the
 system language, switchable. It shares `config.ini` and `mappings.json`
 with the CLI; its own settings (language, Kindle folder) are in

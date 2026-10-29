@@ -32,7 +32,7 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0 und E1 erledigt).
+fertig, D2 läuft (E0, E1 und E2 erledigt).
 
 ## Grundlagen
 
@@ -220,8 +220,31 @@ fertig, D2 läuft (E0 und E1 erledigt).
     entfernen: jetzt Knopf „Kindle-Ordner entfernen“.
   - [x] **du:** Knopf geprüft (2026-10-29): Der Ordner verschwindet und
     bleibt nach dem Neustart weg.
-  - [ ] **ich:** **E2** Zuordnung in der GUI: Vorschläge mit Bewertung,
-    bestätigen oder EPUB selbst wählen, entfernen.
+  - [x] **ich:** **E2** Zuordnung in der GUI: Vorschläge mit Bewertung,
+    bestätigen oder EPUB selbst wählen, entfernen. Die Logik von
+    `map add`/`map suggest` liegt jetzt in der Bibliothek (`src/map.rs`:
+    `device_books`, `open_library`, `candidates`, `add`), die CLI gibt nur
+    noch aus (Ausgabe zeichengleich). In der GUI: „Zuordnen …“ bei Büchern
+    ohne Zuordnung, „Ändern …“ und „Entfernen“ (mit Rückfrage) bei
+    zugeordneten und kaputten; der Dialog zeigt die Kandidaten mit
+    Bewertung (der beste ab 80 % vorausgewählt, darunter „unsicher“), die
+    gleiche Datei in der Bibliothek, oder ohne Bibliothek nur „EPUB wählen
+    …“. Geschrieben wird nur `mappings.json`, nie das Gerät.
+  - [x] **du:** E2 am Kobo ausprobiert (2026-10-29): „Acts of Contrition“
+    (neues kepub) in der GUI zugeordnet, klappt. Der Test zeigte zwei
+    Schwächen, beide behoben: Ohne `library =` standen ungeprüfte Bücher
+    unter „Gleiche Datei“ (jetzt „Eigene Prüfsumme“ mit Grund, auch dort
+    „Zuordnen …“), und die Knöpfe lagen bei langen Pfaden außerhalb des
+    Fensters (jetzt neben dem Titel).
+  - [x] **ich:** Auf deinen Wunsch: Ohne Referenz-EPUB gibt die App einen
+    Hinweis statt einer falschen Meldung. Ohne Bibliothek steht oben eine
+    Warnung, ungeprüfte Bücher stehen in der Gruppe „Ohne Referenz-EPUB“
+    (Warnfarbe, „Zuordnen …“), „Eigene Prüfsumme“ zeigt nur Geprüftes
+    (gleiche Datei wie in der Bibliothek, Original einer Zuordnung, Letzteres
+    auch ohne Bibliothek); der Dialog sagt „Keine Referenz-EPUB gefunden“.
+    Die CLI sendet ohne Bibliothek weiter unter der eigenen Prüfsumme; ob
+    die GUI solche Bücher beim Push überspringt oder fragt, entscheiden wir
+    in E3.
   - [ ] **ich:** **E3** Server-Positionen, Push/Pull per Knopf mit
     Rückfrage-Dialog, Rückschreiben am Tolino, Verlauf (`history.jsonl`,
     auch für die CLI), Geräteansicht nebeneinander (O5). Kobo nur „zum
