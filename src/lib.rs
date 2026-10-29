@@ -17,6 +17,7 @@ pub mod kindle_device;
 pub mod kosync;
 pub mod krds;
 pub mod library;
+pub mod map;
 pub mod mapping;
 pub mod not_in_line;
 pub mod position;

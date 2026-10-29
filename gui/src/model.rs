@@ -1,11 +1,15 @@
 //! What the window shows of a device, read with the library's
 //! [`Session`]/[`KindleSession`]: the books, grouped by how they sync, with
-//! the position on the device. Only reads; the server is not asked yet.
+//! the position on the device; and making or removing a book's mapping
+//! (in the data directory, never on the device). The server is not asked
+//! yet.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use nickelinksync::library;
+use nickelinksync::library::{self, Library};
+use nickelinksync::map::{self, OnDevice, Outcome};
+use nickelinksync::mapping::Store;
 use nickelinksync::session::{Identity, KindleSession, Options, Session};
 use nickelinksync::sync::{format_timestamp, parse_timestamp};
 
@@ -27,6 +31,11 @@ pub enum Group {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Row {
+  /// What selects the book for a mapping: ContentID (Kobo, Tolino) or
+  /// `content_id` (Kindle); empty for an unreadable file.
+  pub id: String,
+  /// The key of the book's mapping, if it has one (also a broken one).
+  pub key: Option<String>,
   pub title: String,
   pub author: Option<String>,
   /// Path on the device (or in the Kindle copy).
@@ -101,6 +110,15 @@ fn load_nickel(
         message: message.clone(),
       },
     };
+    let key = match &identity {
+      Identity::Mapped { hash, .. } => Some(hash.clone()),
+      Identity::Skip {
+        kind: "mapping-broken",
+        hash,
+        ..
+      } => hash.clone(),
+      _ => None,
+    };
     let xpointer = match &identity {
       Identity::Skip { .. } => Err(String::new()),
       _ => session
@@ -108,6 +126,8 @@ fn load_nickel(
         .map(|(local, _)| local.xpointer),
     };
     rows.push(Row {
+      id: book.content_id.clone(),
+      key,
       title: book
         .title
         .clone()
@@ -167,6 +187,11 @@ fn load_kindle(
       None => (None, Err(String::new()), None),
     };
     rows.push(Row {
+      id: book.content_id.clone(),
+      key: session
+        .store
+        .for_kindle(&book.content_id)
+        .map(|m| m.device.key().to_string()),
       title: book
         .title
         .clone()
@@ -182,6 +207,8 @@ fn load_kindle(
   }
   for (path, e) in &session.unreadable {
     rows.push(Row {
+      id: String::new(),
+      key: None,
       title: path
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
@@ -200,6 +227,108 @@ fn load_kindle(
     mappings: session.store.mappings.len(),
     rows,
   })
+}
+
+/// One library book offered as the original of a device book.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Suggestion {
+  pub path: PathBuf,
+  pub title: Option<String>,
+  pub authors: Vec<String>,
+  pub score: f64,
+  pub title_score: f64,
+  /// `None` if either side has no author.
+  pub author_score: Option<f64>,
+  /// Matching chapters and how many there are, if compared.
+  pub chapters: Option<(usize, usize)>,
+}
+
+/// What the library offers for one device book.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Suggestions {
+  /// `None`: no library set up, only choosing a file is possible.
+  pub library: Option<PathBuf>,
+  /// The library book that is the same file: no mapping needed.
+  pub same: Option<PathBuf>,
+  /// Best first.
+  pub candidates: Vec<Suggestion>,
+}
+
+/// The one book with `id` on the device at `root`.
+fn on_device(root: &Path, id: &str) -> Result<OnDevice, String> {
+  let (mut books, _) = map::device_books(root, None, Some(id)).map_err(|e| e.to_string())?;
+  match books.len() {
+    1 => Ok(books.remove(0)),
+    _ => Err(format!("{id}: not on the device")),
+  }
+}
+
+/// The library's candidates for the book with `id` on the device at
+/// `root`.
+pub fn suggest(root: &Path, id: &str, library: Option<&Library>) -> Result<Suggestions, String> {
+  let on = on_device(root, id)?;
+  let Some(library) = library else {
+    return Ok(Suggestions {
+      library: None,
+      same: None,
+      candidates: Vec::new(),
+    });
+  };
+  let (candidates, same) = map::candidates(&on, library);
+  Ok(Suggestions {
+    library: Some(library.root.clone()),
+    same: same.map(|b| b.path.clone()),
+    candidates: candidates
+      .iter()
+      .map(|c| Suggestion {
+        path: c.book.path.clone(),
+        title: c.book.title.clone(),
+        authors: c.book.authors.clone(),
+        score: c.score(),
+        title_score: c.title,
+        author_score: c.author,
+        chapters: c.chapters,
+      })
+      .collect(),
+  })
+}
+
+/// What [`map_book`] did.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Mapped {
+  /// The device file is the EPUB itself: no mapping needed.
+  SameFile,
+  /// Mapped; the original's path.
+  To(String),
+}
+
+/// Maps the book with `id` on the device at `root` to the EPUB at `epub`,
+/// in the mappings shared with the CLI.
+pub fn map_book(root: &Path, id: &str, epub: &Path) -> Result<Mapped, String> {
+  let on = on_device(root, id)?;
+  let mut store = store()?;
+  let added = map::add(&mut store, &on, epub).map_err(|e| e.to_string())?;
+  Ok(match added.outcome {
+    Outcome::SameFile { .. } => Mapped::SameFile,
+    Outcome::Mapped { .. } => Mapped::To(added.original.path),
+  })
+}
+
+/// Removes the mapping with `key`.
+pub fn unmap(key: &str) -> Result<(), String> {
+  let mut store = store()?;
+  store.remove(key).map_err(|e| e.to_string())?;
+  store.save().map_err(|e| e.to_string())
+}
+
+fn store() -> Result<Store, String> {
+  let path = Store::default_path().ok_or("no data directory (HOME is not set)")?;
+  Store::load(&path).map_err(|e| e.to_string())
+}
+
+/// The library set up in the configuration file, if any.
+pub fn library() -> Result<Option<Library>, String> {
+  map::open_library(None, None).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -222,11 +351,10 @@ mod tests {
     });
   }
 
-  #[test]
-  fn tolino_books_without_library_sync_under_their_own_checksum() {
-    isolate();
+  /// A fake Tolino with the placeholder books, in a fresh directory.
+  fn fake_tolino(name: &str) -> PathBuf {
     let root =
-      std::env::temp_dir().join(format!("nickelinksync-gui-{}-tolino", std::process::id()));
+      std::env::temp_dir().join(format!("nickelinksync-gui-{}-{name}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(root.join(".kobo")).unwrap();
     fs::create_dir_all(root.join("Books")).unwrap();
@@ -249,6 +377,13 @@ mod tests {
       )
       .unwrap();
     }
+    root
+  }
+
+  #[test]
+  fn tolino_books_without_library_sync_under_their_own_checksum() {
+    isolate();
+    let root = fake_tolino("tolino");
     let before = fs::read(root.join(".kobo/KoboReader.sqlite")).unwrap();
     let mut seen = Vec::new();
     let loaded = load(&root, Kind::Nickel, &mut |done, total| {
@@ -286,5 +421,62 @@ mod tests {
     assert_eq!(loaded.device, "Kindle");
     assert_eq!(loaded.rows.len(), 3);
     assert!(loaded.rows.iter().all(|r| r.group == Group::NotMapped));
+  }
+  #[test]
+  fn suggest_map_and_unmap_a_kepub() {
+    isolate();
+    let root = fake_tolino("map");
+    let library_dir = root.with_extension("library");
+    let _ = fs::remove_dir_all(&library_dir);
+    fs::create_dir_all(&library_dir).unwrap();
+    for file in ["book-a.epub", "book-c.epub"] {
+      fs::copy(fixtures().join("epub").join(file), library_dir.join(file)).unwrap();
+    }
+    let library = Library::open(&library_dir).unwrap();
+    let kepub = "file:///mnt/onboard/Books/book-a.kepub.epub";
+
+    // Without a library only choosing a file is offered.
+    let none = suggest(&root, kepub, None).unwrap();
+    assert_eq!(none.library, None);
+    assert!(none.candidates.is_empty());
+
+    let s = suggest(&root, kepub, Some(&library)).unwrap();
+    assert_eq!(s.same, None);
+    let best = &s.candidates[0];
+    assert!(best.path.ends_with("book-a.epub"), "{s:?}");
+    assert!(best.score >= nickelinksync::suggest::LIKELY, "{best:?}");
+    // The plain EPUB on the device is the library's file itself.
+    let same = suggest(
+      &root,
+      "file:///mnt/onboard/Books/book-a.epub",
+      Some(&library),
+    )
+    .unwrap();
+    assert!(same.same.is_some_and(|p| p.ends_with("book-a.epub")));
+
+    let mapped = map_book(&root, kepub, &best.path).unwrap();
+    let Mapped::To(original) = mapped else {
+      panic!("{mapped:?}")
+    };
+    assert!(original.ends_with("book-a.epub"));
+    let loaded = load(&root, Kind::Nickel, &mut |_, _| {}).unwrap();
+    let row = loaded.rows.iter().find(|r| r.id == kepub).unwrap();
+    assert_eq!(row.group, Group::Mapped { original });
+    let key = row.key.clone().unwrap();
+
+    // Mapping the plain EPUB to itself needs no mapping.
+    assert_eq!(
+      map_book(&root, "file:///mnt/onboard/Books/book-a.epub", &best.path).unwrap(),
+      Mapped::SameFile
+    );
+
+    unmap(&key).unwrap();
+    let loaded = load(&root, Kind::Nickel, &mut |_, _| {}).unwrap();
+    let row = loaded.rows.iter().find(|r| r.id == kepub).unwrap();
+    assert!(matches!(row.group, Group::Same { .. }), "{row:?}");
+    assert_eq!(row.key, None);
+    assert!(unmap(&key).is_err());
+    fs::remove_dir_all(&root).unwrap();
+    fs::remove_dir_all(&library_dir).unwrap();
   }
 }

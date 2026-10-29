@@ -4,21 +4,19 @@ use std::process::ExitCode;
 use std::time::Duration;
 
 use clap::{Args, Parser, Subcommand};
-use nickelinksync::config::Config;
-use nickelinksync::db::{Book, Device};
-use nickelinksync::epub::Epub;
-use nickelinksync::hash::partial_md5;
+use nickelinksync::db::Book;
 use nickelinksync::kindle_device::{self, KindleBook};
 use nickelinksync::kosync::{self, Client, Progress, Update};
 use nickelinksync::library::{self, Library, LibraryBook};
-use nickelinksync::mapping::{DeviceBook, EpubState, Mapping, Original, Store};
+use nickelinksync::map::{self, candidates, DeviceChapters, OnDevice, Outcome};
+use nickelinksync::mapping::{DeviceBook, EpubState, Store};
 use nickelinksync::session::{
-  self, kindle_matches, select, Action, Identity, KindleSession, Options, Plugin, PullOutcome,
-  PushOutcome, Server, Session, Written,
+  self, Action, Identity, KindleSession, Options, Plugin, PullOutcome, PushOutcome, Server,
+  Session, Written,
 };
 use nickelinksync::suggest::{self, Candidate};
 use nickelinksync::sync::{
-  self, format_timestamp, iso_timestamp, outlook, Confirm, Direction, Local, Outlook, Side,
+  self, format_timestamp, outlook, Confirm, Direction, Local, Outlook, Side,
 };
 
 type Result<T> = session::Result<T>;
@@ -895,118 +893,47 @@ fn map_list(store: &Store) {
   }
 }
 
-/// A book on the device, as the mapping sees it.
-struct OnDevice {
-  book: DeviceBook,
-  /// What `--content-id` selects it by.
-  id: String,
-  /// Checksum of the file (Kobo, Tolino); a KFX has none that matters.
-  hash: Option<String>,
-  chapters: DeviceChapters,
-}
-
-/// What the device book's chapters are compared with.
-enum DeviceChapters {
-  /// Spine items of a kepub or EPUB, as paths from the EPUB root.
-  Spine(Vec<String>),
-  /// Sections of a KFX.
-  Sections(usize),
-  /// The device file could not be read as an EPUB.
-  Unknown(String),
-}
-
-impl DeviceChapters {
-  /// Matching chapters and how many there are.
-  fn overlap(&self, epub: &Epub) -> Option<(usize, usize)> {
-    match self {
-      DeviceChapters::Spine(spine) => Some(suggest::spine_overlap(spine, &epub.spine)),
-      DeviceChapters::Sections(n) => Some(suggest::section_overlap(*n, epub.spine.len())),
-      DeviceChapters::Unknown(_) => None,
+/// For `map add`: how far positions will translate by chapter, against
+/// the EPUB's spine.
+fn describe_chapters(chapters: &DeviceChapters, epub_spine: &[String]) -> String {
+  let spine = epub_spine.len();
+  match (chapters, chapters.overlap(epub_spine)) {
+    (DeviceChapters::Unknown(e), _) => format!("not compared: {e}"),
+    (DeviceChapters::Sections(n), _) if *n == spine => {
+      format!("{n} sections, as many as spine items in the EPUB")
     }
-  }
-
-  /// For `map add`: how far positions will translate by chapter.
-  fn describe(&self, epub: &Epub) -> String {
-    let spine = epub.spine.len();
-    match (self, self.overlap(epub)) {
-      (DeviceChapters::Unknown(e), _) => format!("not compared: {e}"),
-      (DeviceChapters::Sections(n), _) if *n == spine => {
-        format!("{n} sections, as many as spine items in the EPUB")
-      }
-      (DeviceChapters::Sections(n), _) => format!(
-        "{n} sections, {spine} spine items in the EPUB (Send-to-Kindle adds a cover and splits \
-         chapters): positions are found by their text"
-      ),
-      (DeviceChapters::Spine(own), Some((found, _)))
-        if found == own.len() && own.len() == spine =>
-      {
-        format!("all {found} spine items match")
-      }
-      (DeviceChapters::Spine(own), Some((0, _))) => format!(
-        "none of the {} spine items is in the EPUB ({spine} there): is it the same book? \
-         Positions fall back to the percentage",
-        own.len()
-      ),
-      (DeviceChapters::Spine(own), Some((found, _))) => format!(
-        "{found} of {} spine items found in the EPUB ({spine} there): positions elsewhere fall \
-         back to the percentage",
-        own.len()
-      ),
-      (DeviceChapters::Spine(_), None) => unreachable!("a spine always compares"),
+    (DeviceChapters::Sections(n), _) => format!(
+      "{n} sections, {spine} spine items in the EPUB (Send-to-Kindle adds a cover and splits \
+       chapters): positions are found by their text"
+    ),
+    (DeviceChapters::Spine(own), Some((found, _))) if found == own.len() && own.len() == spine => {
+      format!("all {found} spine items match")
     }
+    (DeviceChapters::Spine(own), Some((0, _))) => format!(
+      "none of the {} spine items is in the EPUB ({spine} there): is it the same book? \
+       Positions fall back to the percentage",
+      own.len()
+    ),
+    (DeviceChapters::Spine(own), Some((found, _))) => format!(
+      "{found} of {} spine items found in the EPUB ({spine} there): positions elsewhere fall \
+       back to the percentage",
+      own.len()
+    ),
+    (DeviceChapters::Spine(_), None) => unreachable!("a spine always compares"),
   }
 }
 
-/// The books on a Kobo, Tolino or Kindle, filtered like `--book` and
-/// `--content-id` filter `status`.
+/// [`map::device_books`], saying which KFX files could not be read.
 fn device_books(
   root: &std::path::Path,
   filter: Option<&str>,
   content_id: Option<&str>,
 ) -> Result<Vec<OnDevice>> {
-  if kindle_device::is_kindle(root) {
-    let (books, unreadable) = kindle_device::books(root)?;
-    for (path, e) in unreadable {
-      eprintln!("nickelinksync: skipped {}: {e}", path.display());
-    }
-    return Ok(
-      kindle_matches(root, books, filter, content_id)
-        .into_iter()
-        .map(|b| OnDevice {
-          id: b.content_id.clone(),
-          hash: None,
-          chapters: DeviceChapters::Sections(b.sections),
-          book: DeviceBook::Kindle {
-            content_id: b.content_id,
-            title: b.title,
-            author: b.author,
-          },
-        })
-        .collect(),
-    );
+  let (books, unreadable) = map::device_books(root, filter, content_id)?;
+  for (path, e) in unreadable {
+    eprintln!("nickelinksync: skipped {}: {e}", path.display());
   }
-  let device = Device::open(root, false)?;
-  let mut found = Vec::new();
-  for book in select(device.db.sideloaded_books()?, filter, content_id) {
-    let file = device.book_file(&book);
-    let hash = partial_md5(&file).map_err(|e| format!("{}: {e}", file.display()))?;
-    let chapters = match Epub::open(&file) {
-      Ok(epub) => DeviceChapters::Spine(epub.spine),
-      Err(e) => DeviceChapters::Unknown(e.to_string()),
-    };
-    found.push(OnDevice {
-      id: book.content_id.clone(),
-      hash: Some(hash.clone()),
-      chapters,
-      book: DeviceBook::File {
-        hash,
-        path: book.onboard_path().to_string(),
-        title: book.title,
-        author: book.author,
-      },
-    });
-  }
-  Ok(found)
+  Ok(books)
 }
 
 /// Exactly one book, or an error that lists the candidates.
@@ -1027,35 +954,13 @@ fn one_book(books: Vec<OnDevice>) -> Result<OnDevice> {
 }
 
 /// The library from `--library`, else from `library` in the configuration
-/// file; `None` if neither is set.
+/// file, and says so; `None` if neither is set.
 fn open_library(args: &LibraryArgs) -> Result<Option<Library>> {
-  let path = match &args.library {
-    Some(path) => Some(path.clone()),
-    None => {
-      let config = match &args.config {
-        Some(path) if !path.exists() => {
-          return Err(format!("{}: no such file", path.display()).into())
-        }
-        Some(path) => Some(path.clone()),
-        None => Config::default_path(),
-      };
-      match config {
-        Some(config) => Config::library_setting(&config)?,
-        None => None,
-      }
-    }
-  };
-  load_library(path)
-}
-
-/// Reads the library at `path` and says so.
-fn load_library(path: Option<PathBuf>) -> Result<Option<Library>> {
-  let Some(path) = path else {
-    return Ok(None);
-  };
-  let library = Library::open(&path)?;
-  print_library(&library);
-  Ok(Some(library))
+  let library = map::open_library(args.library.as_deref(), args.config.as_deref())?;
+  if let Some(library) = &library {
+    print_library(library);
+  }
+  Ok(library)
 }
 
 /// Says which library is used, and what in it was skipped.
@@ -1072,31 +977,6 @@ fn print_library(library: &Library) {
   for (path, e) in &library.skipped {
     eprintln!("nickelinksync: library: skipped {}: {e}", path.display());
   }
-}
-
-/// How many candidates get their chapters and checksum compared.
-const COMPARED: usize = 5;
-
-/// The library's best candidates for a device book, with chapters
-/// compared, and the library book that is the same file, if any.
-fn candidates<'a>(
-  on: &OnDevice,
-  library: &'a Library,
-) -> (Vec<Candidate<'a>>, Option<&'a LibraryBook>) {
-  let mut ranked = suggest::rank(&library.books, on.book.title(), on.book.author());
-  ranked.truncate(COMPARED);
-  let mut same = None;
-  for c in &mut ranked {
-    if on.hash.is_some() && c.book.hash().ok() == on.hash {
-      same = Some(c.book);
-    }
-    if let Ok(epub) = Epub::open(&c.book.path) {
-      c.chapters = on.chapters.overlap(&epub);
-    }
-  }
-  ranked.retain(|c| c.score() >= suggest::MIN_SCORE);
-  suggest::sort(&mut ranked);
-  (ranked, same)
 }
 
 /// A shell word in single quotes.
@@ -1245,52 +1125,34 @@ fn map_add(
 }
 
 fn add_mapping(store: &mut Store, on: OnDevice, epub_path: &std::path::Path) -> Result<bool> {
-  let epub_path = epub_path
-    .canonicalize()
-    .map_err(|e| format!("{}: {e}", epub_path.display()))?;
-  let epub = Epub::open(&epub_path).map_err(|e| format!("{}: {e}", epub_path.display()))?;
-  let epub_hash = partial_md5(&epub_path)?;
-  let original = Original {
-    path: epub_path
-      .to_str()
-      .ok_or_else(|| format!("{}: path is not UTF-8", epub_path.display()))?
-      .to_string(),
-    hash: epub_hash.clone(),
-    title: epub.title.clone(),
-    author: (!epub.authors.is_empty()).then(|| epub.authors.join(", ")),
-  };
+  let added = map::add(store, &on, epub_path)?;
+  let original = &added.original;
   println!("Device    {}", device_label(&on.book));
-  println!("EPUB      {} (checksum {epub_hash})", original.path);
-  if on.hash.as_deref() == Some(epub_hash.as_str()) {
-    println!(
-      "\nSame file as the EPUB (checksum {epub_hash}): it already syncs under that checksum, \
-       no mapping needed."
-    );
-    if let Some(old) = store.get(&on.book).cloned() {
-      store.remove(old.device.key())?;
-      store.save()?;
-      println!("Removed the old mapping to {}.", old.epub.path);
+  println!("EPUB      {} (checksum {})", original.path, original.hash);
+  match added.outcome {
+    Outcome::SameFile { removed } => {
+      println!(
+        "\nSame file as the EPUB (checksum {}): it already syncs under that checksum, \
+         no mapping needed.",
+        original.hash
+      );
+      if let Some(old) = removed {
+        println!("Removed the old mapping to {}.", old.epub.path);
+      }
     }
-    return Ok(true);
+    Outcome::Mapped { replaced } => {
+      println!(
+        "chapters  {}",
+        describe_chapters(&on.chapters, &added.spine)
+      );
+      if let Some(old) = replaced {
+        println!("\nMapped; this replaces the mapping to {}.", old.epub.path);
+      } else {
+        println!("\nMapped.");
+      }
+      println!("Saved in {}", store.path.display());
+    }
   }
-  println!("chapters  {}", on.chapters.describe(&epub));
-  let mapping = Mapping {
-    device: on.book,
-    epub: original,
-    created: iso_timestamp(
-      std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_secs() as i64,
-    ),
-  };
-  let replaced = store.insert(mapping);
-  store.save()?;
-  if let Some(old) = replaced {
-    println!("\nMapped; this replaces the mapping to {}.", old.epub.path);
-  } else {
-    println!("\nMapped.");
-  }
-  println!("Saved in {}", store.path.display());
   Ok(true)
 }
 

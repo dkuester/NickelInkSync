@@ -142,7 +142,9 @@ fixtures only.
   server, one step per book with the `confirm` question as data) moved
   from the CLI into the library (`session`), CLI output unchanged; E1, a
   read-only window (`gui/`, eframe) that finds connected devices and lists
-  their books by how they sync.
+  their books by how they sync; E2, mapping a book in the window
+  (suggestions with their scores, or an EPUB chosen by hand; change and
+  remove), on the mapping code moved from the CLI into the library.
 
 - **Read-only device database layer** (S–M): reading the books and their
   positions is done (`status --device`); still to do: resolve

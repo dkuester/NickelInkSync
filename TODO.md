@@ -32,7 +32,7 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0 und E1 erledigt).
+fertig, D2 läuft (E0, E1 und E2 erledigt).
 
 ## Grundlagen
 
@@ -220,8 +220,19 @@ fertig, D2 läuft (E0 und E1 erledigt).
     entfernen: jetzt Knopf „Kindle-Ordner entfernen“.
   - [x] **du:** Knopf geprüft (2026-10-29): Der Ordner verschwindet und
     bleibt nach dem Neustart weg.
-  - [ ] **ich:** **E2** Zuordnung in der GUI: Vorschläge mit Bewertung,
-    bestätigen oder EPUB selbst wählen, entfernen.
+  - [x] **ich:** **E2** Zuordnung in der GUI: Vorschläge mit Bewertung,
+    bestätigen oder EPUB selbst wählen, entfernen. Die Logik von
+    `map add`/`map suggest` liegt jetzt in der Bibliothek (`src/map.rs`:
+    `device_books`, `open_library`, `candidates`, `add`), die CLI gibt nur
+    noch aus (Ausgabe zeichengleich). In der GUI: „Zuordnen …“ bei Büchern
+    ohne Zuordnung, „Ändern …“ und „Entfernen“ (mit Rückfrage) bei
+    zugeordneten und kaputten; der Dialog zeigt die Kandidaten mit
+    Bewertung (der beste ab 80 % vorausgewählt, darunter „unsicher“), die
+    gleiche Datei in der Bibliothek, oder ohne Bibliothek nur „EPUB wählen
+    …“. Geschrieben wird nur `mappings.json`, nie das Gerät.
+  - [ ] **du:** E2 ausprobieren: ein Calibre-kepub auf dem Kobo neu
+    zuordnen (erst entfernen, dann „Zuordnen …“ mit dem Vorschlag), eins
+    per „EPUB wählen …“; danach `nickelinksync map list` in der CLI.
   - [ ] **ich:** **E3** Server-Positionen, Push/Pull per Knopf mit
     Rückfrage-Dialog, Rückschreiben am Tolino, Verlauf (`history.jsonl`,
     auch für die CLI), Geräteansicht nebeneinander (O5). Kobo nur „zum

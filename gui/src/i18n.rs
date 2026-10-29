@@ -73,6 +73,23 @@ pub struct Texts {
   pub never_opened: &'static str,
   pub no_books: &'static str,
   pub read_only: &'static str,
+  pub map_button: &'static str,
+  pub remap_button: &'static str,
+  pub unmap_button: &'static str,
+  pub map_title: &'static str,
+  pub comparing: &'static str,
+  pub no_library_for_suggestions: &'static str,
+  pub same_in_library: &'static str,
+  pub no_candidates: &'static str,
+  pub uncertain: &'static str,
+  pub choose_epub: &'static str,
+  /// Only where the EPUB path is typed in (no file dialog).
+  #[cfg_attr(any(target_os = "macos", target_os = "windows"), allow(dead_code))]
+  pub epub_path: &'static str,
+  pub chosen: &'static str,
+  pub map_confirm: &'static str,
+  pub cancel: &'static str,
+  pub map_failed: &'static str,
 }
 
 pub fn texts(lang: Lang) -> &'static Texts {
@@ -87,6 +104,62 @@ pub fn progress(lang: Lang, done: usize, total: usize) -> String {
   match lang {
     Lang::De => format!("{done} von {total} Büchern"),
     Lang::En => format!("{done} of {total} books"),
+  }
+}
+
+/// "92 %: title 100 %, author 100 %, chapters 30/30".
+pub fn score(
+  lang: Lang,
+  score: f64,
+  title: f64,
+  author: Option<f64>,
+  chapters: Option<(usize, usize)>,
+) -> String {
+  let p = |x: f64| format!("{:.0} %", x * 100.0);
+  let (t, a, none, c) = match lang {
+    Lang::De => ("Titel", "Autor", "Autor nicht verglichen", "Kapitel"),
+    Lang::En => ("title", "author", "author not compared", "chapters"),
+  };
+  let mut s = format!("{}: {t} {}", p(score), p(title));
+  match author {
+    Some(author) => s.push_str(&format!(", {a} {}", p(author))),
+    None => s.push_str(&format!(", {none}")),
+  }
+  if let Some((found, total)) = chapters {
+    s.push_str(&format!(", {c} {found}/{total}"));
+  }
+  s
+}
+
+pub fn unmap_question(lang: Lang, title: &str) -> String {
+  match lang {
+    Lang::De => {
+      format!("Zuordnung von „{title}“ entfernen? Das Buch wird dann nicht mehr synchronisiert.")
+    }
+    Lang::En => format!("Remove the mapping of “{title}”? The book is then no longer synced."),
+  }
+}
+
+pub fn mapped_notice(lang: Lang, title: &str, original: &str) -> String {
+  match lang {
+    Lang::De => format!("„{title}“ ist zugeordnet: {original}"),
+    Lang::En => format!("“{title}” is mapped: {original}"),
+  }
+}
+
+pub fn same_file_notice(lang: Lang, title: &str) -> String {
+  match lang {
+    Lang::De => {
+      format!("„{title}“ ist dieselbe Datei wie die gewählte EPUB und braucht keine Zuordnung.")
+    }
+    Lang::En => format!("“{title}” is the same file as the chosen EPUB and needs no mapping."),
+  }
+}
+
+pub fn unmapped_notice(lang: Lang, title: &str) -> String {
+  match lang {
+    Lang::De => format!("Zuordnung von „{title}“ entfernt."),
+    Lang::En => format!("Removed the mapping of “{title}”."),
   }
 }
 
@@ -134,7 +207,24 @@ static DE: Texts = Texts {
   why: "Grund",
   never_opened: "nie geöffnet",
   no_books: "Keine Bücher auf dem Gerät.",
-  read_only: "Nur lesend: In dieser Version schreibt die App nichts aufs Gerät.",
+  read_only: "Die App schreibt nichts aufs Gerät. Zuordnungen liegen auf diesem Rechner \
+              (mappings.json), gemeinsam mit der CLI.",
+  map_button: "Zuordnen …",
+  remap_button: "Ändern …",
+  unmap_button: "Entfernen",
+  map_title: "Zuordnung für",
+  comparing: "Vergleiche mit der Bibliothek …",
+  no_library_for_suggestions: "Keine Bibliothek eingestellt (library = in config.ini): wähle \
+                               die Original-EPUB selbst.",
+  same_in_library: "Dieselbe Datei liegt in der Bibliothek, es braucht keine Zuordnung:",
+  no_candidates: "Kein passendes Buch in der Bibliothek: wähle die Original-EPUB selbst.",
+  uncertain: "unsicher, bitte prüfen",
+  choose_epub: "EPUB wählen …",
+  epub_path: "Pfad der EPUB",
+  chosen: "Gewählt",
+  map_confirm: "Zuordnen",
+  cancel: "Abbrechen",
+  map_failed: "Zuordnen fehlgeschlagen",
 };
 
 static EN: Texts = Texts {
@@ -174,7 +264,24 @@ static EN: Texts = Texts {
   why: "Reason",
   never_opened: "never opened",
   no_books: "No books on the device.",
-  read_only: "Read-only: this version writes nothing to the device.",
+  read_only: "The app writes nothing to the device. Mappings are kept on this computer \
+              (mappings.json), shared with the CLI.",
+  map_button: "Map …",
+  remap_button: "Change …",
+  unmap_button: "Remove",
+  map_title: "Mapping for",
+  comparing: "Comparing with the library …",
+  no_library_for_suggestions: "No library set up (library = in config.ini): choose the \
+                               original EPUB yourself.",
+  same_in_library: "The same file is in the library, no mapping needed:",
+  no_candidates: "No matching book in the library: choose the original EPUB yourself.",
+  uncertain: "uncertain, please check",
+  choose_epub: "Choose EPUB …",
+  epub_path: "Path of the EPUB",
+  chosen: "Chosen",
+  map_confirm: "Map",
+  cancel: "Cancel",
+  map_failed: "Mapping failed",
 };
 
 #[cfg(test)]

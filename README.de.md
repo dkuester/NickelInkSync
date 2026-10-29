@@ -151,11 +151,14 @@ Die Zuordnungen liegen in `mappings.json` im Datenordner
 ### Desktop-Client (im Aufbau)
 
 Ein Fenster für dieselbe Arbeit, auf derselben Bibliothek (`gui/`, egui):
-`just gui` oder `cargo run -p nickelinksync-gui`. Bisher liest es nur: Es
-findet einen per USB angesteckten Kobo oder Tolino (macOS: `/Volumes`),
-nimmt eine Kopie der Bücher eines Kindle als Ordner und zeigt die Bücher
-danach, wie sie synchronisiert werden (nicht zugeordnet, zugeordnet,
-gleiche Datei), mit der Stelle auf dem Gerät. Beim Anstecken wird nichts
+`just gui` oder `cargo run -p nickelinksync-gui`. Es findet einen per USB
+angesteckten Kobo oder Tolino (macOS: `/Volumes`), nimmt eine Kopie der
+Bücher eines Kindle als Ordner und zeigt die Bücher danach, wie sie
+synchronisiert werden (nicht zugeordnet, zugeordnet, gleiche Datei), mit
+der Stelle auf dem Gerät. Dort ordnest du ein Buch auch zu: mit den
+Vorschlägen der Bibliothek samt Bewertung oder einer selbst gewählten
+EPUB; eine Zuordnung lässt sich ändern oder entfernen. Aufs Gerät
+schreibt es nichts, nur `mappings.json`. Beim Anstecken wird nichts
 synchronisiert. Deutsch oder Englisch nach Systemsprache, umschaltbar.
 `config.ini` und `mappings.json` teilt es mit der CLI; seine eigenen
 Einstellungen (Sprache, Kindle-Ordner) liegen in `gui.json` im
