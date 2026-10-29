@@ -20,6 +20,7 @@ pub mod library;
 pub mod mapping;
 pub mod not_in_line;
 pub mod position;
+pub mod session;
 pub mod suggest;
 pub mod sync;
 pub mod transfer;

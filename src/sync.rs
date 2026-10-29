@@ -215,6 +215,50 @@ fn doc_fragment(xpointer: &str) -> Option<usize> {
   rest[..rest.find(']')?].parse().ok()
 }
 
+/// What `push` and `pull` would do with a book, as `status` shows it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Outlook {
+  InSync,
+  /// The device is newer: `push` sends it.
+  Push,
+  /// The server is newer: `pull` would move the device.
+  Pull,
+  /// `direction` moves to the newer position, but asks first;
+  /// `backwards`: the newer position lies behind the other.
+  Asks {
+    direction: Direction,
+    backwards: bool,
+  },
+}
+
+/// The outlook for a book: the device position against the server's, if
+/// it has one.
+pub fn outlook(local: &Local, server: Option<&Progress>, confirm: Confirm) -> Outlook {
+  let Some(server) = server else {
+    return Outlook::Push;
+  };
+  let push = decide(Direction::Push, local, server, confirm);
+  let pull = decide(Direction::Pull, local, server, confirm);
+  // Otherwise one of them asks: the one moving to the newer position.
+  let (direction, ask) = match (push, pull) {
+    (Decision::InSync, _) => return Outlook::InSync,
+    (Decision::Apply, _) => return Outlook::Push,
+    (_, Decision::Apply) => return Outlook::Pull,
+    (Decision::Ask { newer: true, .. }, _) => (Direction::Push, push),
+    _ => (Direction::Pull, pull),
+  };
+  Outlook::Asks {
+    direction,
+    backwards: matches!(
+      ask,
+      Decision::Ask {
+        backwards: true,
+        ..
+      }
+    ),
+  }
+}
+
 /// The answer to "device or server?".
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Side {
@@ -413,6 +457,41 @@ mod tests {
     );
     p.percentage = n as f64 / 20.0;
     p
+  }
+
+  #[test]
+  fn outlook_says_who_moves() {
+    use Direction::*;
+    let d = device();
+    let b = Confirm::Backwards;
+    assert_eq!(outlook(&d, None, b), Outlook::Push);
+    assert_eq!(outlook(&d, Some(&sp(10, 5000)), b), Outlook::InSync);
+    // Device newer and ahead: push sends; server newer and ahead: pull.
+    assert_eq!(outlook(&d, Some(&sp(5, 999)), b), Outlook::Push);
+    assert_eq!(outlook(&d, Some(&sp(15, 1001)), b), Outlook::Pull);
+    // The newer side lies behind: that one asks.
+    assert_eq!(
+      outlook(&d, Some(&sp(15, 999)), b),
+      Outlook::Asks {
+        direction: Push,
+        backwards: true
+      }
+    );
+    assert_eq!(
+      outlook(&d, Some(&sp(5, 1001)), b),
+      Outlook::Asks {
+        direction: Pull,
+        backwards: true
+      }
+    );
+    // `always` asks also forwards.
+    assert_eq!(
+      outlook(&d, Some(&sp(15, 1001)), Confirm::Always),
+      Outlook::Asks {
+        direction: Pull,
+        backwards: false
+      }
+    );
   }
 
   #[test]

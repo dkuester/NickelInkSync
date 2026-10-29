@@ -1,32 +1,27 @@
-use std::collections::HashSet;
-use std::error::Error;
 use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::time::Duration;
 
 use clap::{Args, Parser, Subcommand};
-use nickelinksync::config::{self, Config, LocalSettings, PushPosition};
-use nickelinksync::db::{Book, Device, Write};
+use nickelinksync::config::Config;
+use nickelinksync::db::{Book, Device};
 use nickelinksync::epub::Epub;
 use nickelinksync::hash::partial_md5;
-use nickelinksync::kfx::Kfx;
-use nickelinksync::kindle;
 use nickelinksync::kindle_device::{self, KindleBook};
 use nickelinksync::kosync::{self, Client, Progress, Update};
 use nickelinksync::library::{self, Library, LibraryBook};
 use nickelinksync::mapping::{DeviceBook, EpubState, Mapping, Original, Store};
-use nickelinksync::not_in_line::NotInLine;
-use nickelinksync::position::{
-  from_xpointer, to_xpointer, PointFlavor, Position, Translated, XPointer,
+use nickelinksync::session::{
+  self, kindle_matches, select, Action, Identity, KindleSession, Options, Plugin, PullOutcome,
+  PushOutcome, Server, Session, Written,
 };
 use nickelinksync::suggest::{self, Candidate};
 use nickelinksync::sync::{
-  self, decide, format_timestamp, iso_timestamp, parse_timestamp, Confirm, Decision, Direction,
-  Local, Side,
+  self, format_timestamp, iso_timestamp, outlook, Confirm, Direction, Local, Outlook, Side,
 };
-use nickelinksync::transfer::{step_back, transfer, How};
 
-type Result<T> = std::result::Result<T, Box<dyn Error>>;
+type Result<T> = session::Result<T>;
 
 /// Sync the reading progress of sideloaded ebooks between Kobo, Tolino and
 /// KOReader through a KOSync server.
@@ -219,326 +214,78 @@ fn emit_error(emit: bool, e: &kosync::Error) {
   }
 }
 
-/// The opened device and its sideloaded books, with the header printed.
-struct Session {
-  device: Device,
-  /// Model name, or "Kobo" / "Tolino".
-  model: String,
-  flavor: PointFlavor,
-  books: Vec<Book>,
-  /// Book mappings; none on the device itself (`--live`).
-  store: Store,
-  /// The library of originals, if one is configured.
-  library: Option<Library>,
-  /// Checksums of the library's EPUBs, computed when first needed.
-  library_hashes: std::cell::OnceCell<HashSet<String>>,
-  /// Which place is sent (`position` in the configuration).
-  position: PushPosition,
-}
-
-/// Under which checksum a book is synced, if at all.
-enum Identity {
-  /// The device file's own checksum: the same file as in the library, or
-  /// no library to check against.
-  Own { hash: String, why: &'static str },
-  /// Mapped to an original EPUB: its checksum, and positions translated.
-  Mapped { hash: String, mapping: Mapping },
-  /// Not synced: `kind` for the plugin, and why.
-  Skip {
-    hash: Option<String>,
-    kind: &'static str,
-    message: String,
-  },
-}
-
-impl Identity {
-  /// The KOSync document: the checksum the server knows the book by.
-  fn document(&self) -> Option<&str> {
-    match self {
-      Identity::Own { hash, .. } => Some(hash),
-      Identity::Mapped { mapping, .. } => Some(&mapping.epub.hash),
-      Identity::Skip { .. } => None,
-    }
-  }
-
-  /// The device file's checksum.
-  fn device_hash(&self) -> Option<&str> {
-    match self {
-      Identity::Own { hash, .. } | Identity::Mapped { hash, .. } => Some(hash),
-      Identity::Skip { hash, .. } => hash.as_deref(),
-    }
-  }
-
-  /// What `status`, `push` and `pull` print about it.
-  fn describe(&self) -> String {
-    match self {
-      Identity::Own { why, .. } => format!("own checksum ({why})"),
-      Identity::Mapped { mapping, .. } => {
-        format!(
-          "mapped to {} (checksum {})",
-          mapping.epub.path, mapping.epub.hash
-        )
-      }
-      Identity::Skip { message, .. } => message.clone(),
+impl Target {
+  fn options(&self) -> Options {
+    Options {
+      device: self.device.clone(),
+      config: self.config.clone(),
+      book: self.book.clone(),
+      content_id: self.content_id.clone(),
+      live: self.live,
+      timeout: Duration::from_secs(self.timeout),
+      library: self.library.clone(),
     }
   }
 }
 
-impl Session {
-  fn open(target: &Target) -> Result<Self> {
-    let device = Device::open(&target.device, target.live)?;
-    let family = if device.db.is_tolino()? {
-      "Tolino"
-    } else {
-      "Kobo"
-    };
-    let model = device
-      .firmware
-      .as_ref()
-      .and_then(|fw| fw.model_name())
-      .unwrap_or(family)
-      .to_string();
-    match &device.firmware {
-      Some(fw) => println!(
-        "{model}, firmware {} (database version {})",
-        fw.version,
-        device.db.version()?
-      ),
-      None => println!("{model}, database version {}", device.db.version()?),
-    }
-    // How Nickel counts nodes in an Adobe point depends on the firmware line.
-    let flavor = match &device.firmware {
-      Some(fw) => PointFlavor::for_firmware(&fw.version),
-      None if family == "Tolino" => PointFlavor::AllNodes,
-      None => PointFlavor::JoinText,
-    };
-    let books = select(
-      device.db.sideloaded_books()?,
-      target.book.as_deref(),
-      target.content_id.as_deref(),
+/// Opens the device and prints its header.
+fn open_session(options: &Options) -> Result<Session> {
+  let session = Session::open(options)?;
+  let model = &session.model;
+  match &session.device.firmware {
+    Some(fw) => println!(
+      "{model}, firmware {} (database version {})",
+      fw.version,
+      session.device.db.version()?
+    ),
+    None => println!("{model}, database version {}", session.device.db.version()?),
+  }
+  if let Some(library) = &session.library {
+    print_library(library);
+  }
+  if !session.store.mappings.is_empty() {
+    println!(
+      "Mappings  {} in {}",
+      session.store.mappings.len(),
+      session.store.path.display()
     );
-    let settings = match target.config.clone().or_else(Config::default_path) {
-      Some(config) => Config::local_settings(&config)?,
-      None => LocalSettings::default(),
-    };
-    // The mappings and the library live on the desktop; the plugin syncs
-    // every book under its own checksum, as before.
-    let (store, library) = if target.live {
-      (Store::default(), None)
-    } else {
-      let store = match Store::default_path() {
-        Some(path) => Store::load(&path)?,
-        None => Store::default(),
-      };
-      let path = target.library.clone().or(settings.library);
-      (store, load_library(path)?)
-    };
-    if !store.mappings.is_empty() {
-      println!(
-        "Mappings  {} in {}",
-        store.mappings.len(),
-        store.path.display()
-      );
-    }
-    if books.is_empty() {
-      println!("\nNo sideloaded books.");
-    }
-    Ok(Session {
-      device,
-      model,
-      flavor,
-      books,
-      store,
-      library,
-      library_hashes: std::cell::OnceCell::new(),
-      position: settings.position,
-    })
   }
-
-  /// Under which checksum the book is synced. A mapping wins over the
-  /// file's own checksum; with a library, a book that is neither mapped
-  /// nor the same file as one there is not synced.
-  fn identity(&self, book: &Book) -> Identity {
-    let hash = match self.hash(book) {
-      Ok(hash) => hash,
-      Err(message) => {
-        return Identity::Skip {
-          hash: None,
-          kind: "skipped",
-          message,
-        }
-      }
-    };
-    if let Some(mapping) = self.store.for_file(&hash) {
-      return match mapping.check() {
-        EpubState::Ok => Identity::Mapped {
-          hash,
-          mapping: mapping.clone(),
-        },
-        state => Identity::Skip {
-          hash: Some(hash),
-          kind: "mapping-broken",
-          message: format!(
-            "not synced: the mapping to {} is {state}; map it again with `map add`",
-            mapping.epub.path
-          ),
-        },
-      };
-    }
-    let Some(library) = &self.library else {
-      return Identity::Own {
-        hash,
-        why: "no library configured to check it",
-      };
-    };
-    if self.store.mappings.iter().any(|m| m.epub.hash == hash) {
-      return Identity::Own {
-        hash,
-        why: "the original EPUB of a mapping",
-      };
-    }
-    let in_library = self
-      .library_hashes
-      .get_or_init(|| library.books.iter().filter_map(|b| b.hash().ok()).collect());
-    if in_library.contains(&hash) {
-      Identity::Own {
-        hash,
-        why: "the same file as in the library",
-      }
-    } else {
-      Identity::Skip {
-        hash: Some(hash),
-        kind: "not-mapped",
-        message: "not mapped: neither mapped nor the same file as in the library, so not \
-                  synced; see `nickelinksync map suggest`"
-          .into(),
-      }
-    }
+  if session.books.is_empty() {
+    println!("\nNo sideloaded books.");
   }
-
-  fn hash(&self, book: &Book) -> std::result::Result<String, String> {
-    partial_md5(&self.device.book_file(book)).map_err(|e| format!("file not readable: {e}"))
-  }
-
-  /// The stored position as a KOReader XPointer.
-  fn xpointer(&self, book: &Book, stored: &str) -> std::result::Result<XPointer, String> {
-    Epub::open(&self.device.book_file(book))
-      .map_err(|e| e.to_string())
-      .and_then(|mut epub| {
-        to_xpointer(&mut epub, &Position::parse(stored), self.flavor).map_err(|e| e.to_string())
-      })
-  }
-
-  /// A server XPointer (in the original EPUB, for a mapped book) as the
-  /// device would store it, and what was not exact about it.
-  fn translate(
-    &self,
-    book: &Book,
-    identity: &Identity,
-    xpointer: &str,
-    percentage: f64,
-  ) -> std::result::Result<(Translated, Option<String>), String> {
-    if book.is_kepub() {
-      // Nickel reads it as a kepub and expects a `#kobo.N.M` span.
-      return Err("positions back into a kepub are not translated yet".into());
-    }
-    let mut device = Epub::open(&self.device.book_file(book)).map_err(|e| e.to_string())?;
-    let (xpointer, how) = match identity {
-      Identity::Mapped { mapping, .. } => {
-        let mut original =
-          Epub::open(std::path::Path::new(&mapping.epub.path)).map_err(|e| e.to_string())?;
-        let t =
-          transfer(&mut original, xpointer, &mut device, percentage).map_err(|e| e.to_string())?;
-        (t.xpointer, Some(t.how))
-      }
-      _ => (xpointer.to_string(), None),
-    };
-    let translated =
-      from_xpointer(&mut device, &xpointer, self.flavor).map_err(|e| e.to_string())?;
-    let note = match how {
-      Some(how) if how != How::SameText => Some(how.to_string()),
-      _ if !translated.exact => Some("chapter only".to_string()),
-      _ => None,
-    };
-    Ok((translated, note))
-  }
-
-  /// The device position for KOSync (in the original EPUB, for a mapped
-  /// book), and what was not exact about it; or why there is none.
-  fn local(
-    &self,
-    book: &Book,
-    identity: &Identity,
-  ) -> std::result::Result<(Local, Option<String>), String> {
-    let stored = book.position.as_deref().ok_or("never opened")?;
-    let x = self
-      .xpointer(book, stored)
-      .map_err(|e| format!("not translated: {e}"))?;
-    let percentage = book.percent_read as f64 / 100.0;
-    let device_file = self.device.book_file(book);
-    let (xpointer, mut notes, sent_file) = match identity {
-      Identity::Mapped { mapping, .. } => {
-        let original = PathBuf::from(&mapping.epub.path);
-        let moved = Epub::open(&device_file)
-          .and_then(|device| Ok((device, Epub::open(&original)?)))
-          .map_err(|e| e.to_string())
-          .and_then(|(mut device, mut epub)| {
-            transfer(&mut device, &x.xpointer, &mut epub, percentage).map_err(|e| e.to_string())
-          })
-          .map_err(|e| format!("not translated into the original EPUB: {e}"))?;
-        let notes: Vec<String> = (moved.how != How::SameText)
-          .then(|| moved.how.to_string())
-          .into_iter()
-          .collect();
-        (moved.xpointer, notes, original)
-      }
-      _ => {
-        let notes = (!x.exact).then(|| "chapter only".to_string());
-        (x.xpointer, notes.into_iter().collect(), device_file)
-      }
-    };
-    // The start of the sentence or paragraph, which is easier to find on
-    // KOReader's page than a place mid-sentence.
-    let stepped = Epub::open(&sent_file)
-      .map_err(|e| e.to_string())
-      .and_then(|mut epub| {
-        step_back(&mut epub, &xpointer, self.position).map_err(|e| e.to_string())
-      })
-      .map_err(|e| format!("not translated: {e}"))?;
-    let xpointer = match stepped {
-      Some(s) => {
-        notes.push(s.to_string());
-        s.xpointer
-      }
-      None => xpointer,
-    };
-    let note = (!notes.is_empty()).then(|| notes.join("; "));
-    let local = Local {
-      xpointer,
-      percentage: book.percent_read as f64 / 100.0,
-      last_read: book.last_read.as_deref().and_then(parse_timestamp),
-    };
-    Ok((local, note))
-  }
+  Ok(session)
 }
 
-/// The books whose title or path contains `filter` (any case), and the one
-/// with exactly `content_id`.
-fn select(mut books: Vec<Book>, filter: Option<&str>, content_id: Option<&str>) -> Vec<Book> {
-  if let Some(filter) = filter {
-    let filter = filter.to_lowercase();
-    books.retain(|b| {
-      b.onboard_path().to_lowercase().contains(&filter)
-        || b
-          .title
-          .as_deref()
-          .is_some_and(|t| t.to_lowercase().contains(&filter))
-    });
+/// [`Server::open`], with its warning printed.
+fn open_server(options: &Options) -> Result<Option<Server>> {
+  let server = Server::open(options)?;
+  if let Some(warning) = server.as_ref().and_then(|s| s.warning.as_ref()) {
+    eprintln!("nickelinksync: warning: {warning}");
   }
-  if let Some(id) = content_id {
-    books.retain(|b| b.content_id == id);
+  Ok(server)
+}
+
+/// [`Server::require`], with its warning printed.
+fn require_server(options: &Options) -> Result<Server> {
+  let server = Server::require(options)?;
+  if let Some(warning) = &server.warning {
+    eprintln!("nickelinksync: warning: {warning}");
   }
-  books
+  Ok(server)
+}
+
+/// What `status`, `push` and `pull` print about a book's identity.
+fn describe_identity(identity: &Identity) -> String {
+  match identity {
+    Identity::Own { why, .. } => format!("own checksum ({why})"),
+    Identity::Mapped { mapping, .. } => {
+      format!(
+        "mapped to {} (checksum {})",
+        mapping.epub.path, mapping.epub.hash
+      )
+    }
+    Identity::Skip { message, .. } => message.clone(),
+  }
 }
 
 fn heading(book: &Book) {
@@ -547,61 +294,6 @@ fn heading(book: &Book) {
   match &book.author {
     Some(author) => println!("{title} — {author}"),
     None => println!("{title}"),
-  }
-}
-
-/// The configuration and a client for its server.
-struct Server {
-  config: Config,
-  client: Client,
-}
-
-impl Server {
-  /// With `--config` the file must exist; the default file may be missing,
-  /// then `None`.
-  fn open(target: &Target) -> Result<Option<Self>> {
-    let path = target.config.as_deref();
-    let (path, required) = match path {
-      Some(path) => (path.to_path_buf(), true),
-      None => match Config::default_path() {
-        Some(path) => (path, false),
-        None => return Ok(None),
-      },
-    };
-    if !required && !path.exists() {
-      return Ok(None);
-    }
-    // A file with only `library` or `position` sets up no server.
-    if path.exists() && !Config::local_settings(&path)?.server {
-      return Ok(None);
-    }
-    let config = Config::load(&path)?;
-    // On the device's FAT storage every file looks world-readable.
-    if !target.live {
-      if let Some(warning) = config::permission_warning(&path) {
-        eprintln!("nickelinksync: warning: {warning}");
-      }
-    }
-    let timeout = std::time::Duration::from_secs(target.timeout.max(1));
-    let client = Client::with_timeout(&config.server, &config.user, &config.key, timeout);
-    Ok(Some(Server { config, client }))
-  }
-
-  /// Like [`Server::open`], but a configuration is required.
-  fn require(target: &Target) -> Result<Self> {
-    Server::open(target)?.ok_or_else(|| {
-      let path = target
-        .config
-        .clone()
-        .or_else(Config::default_path)
-        .unwrap_or_else(|| "config.ini".into());
-      let what = if path.exists() {
-        "no server set up in"
-      } else {
-        "no configuration at"
-      };
-      format!("{what} {}; see README.md for the format", path.display()).into()
-    })
   }
 }
 
@@ -624,12 +316,12 @@ fn describe(p: &Progress) -> String {
 }
 
 fn status(target: &Target) -> Result<bool> {
-  if kindle_device::is_kindle(&target.device) {
-    return kindle_status(target);
+  let options = target.options();
+  if kindle_device::is_kindle(&options.device) {
+    return kindle_status(&options);
   }
-  let session = Session::open(target)?;
-  let not_in_line = NotInLine::load(&session.device.root)?;
-  let server = Server::open(target)?;
+  let session = open_session(&options)?;
+  let server = open_server(&options)?;
   match &server {
     Some(s) => println!("Server {} as {}", s.config.server, s.config.user),
     None => println!("Server not configured"),
@@ -644,7 +336,7 @@ fn status(target: &Target) -> Result<bool> {
     if let Some(hash) = identity.device_hash() {
       println!("  hash      {hash}");
     }
-    println!("  sync as   {}", identity.describe());
+    println!("  sync as   {}", describe_identity(&identity));
     println!(
       "  position  {}",
       book.position.as_deref().unwrap_or("(never opened)")
@@ -658,7 +350,7 @@ fn status(target: &Target) -> Result<bool> {
       };
       println!("  koreader  {koreader}");
     }
-    if let Some(at) = not_in_line.get(&book.content_id) {
+    if let Some(at) = session.not_in_line.get(&book.content_id) {
       println!("  plugin    not in line: Nickel opened at {at} instead of the server's position");
     }
     let state = match book.read_status {
@@ -704,29 +396,24 @@ fn status(target: &Target) -> Result<bool> {
 
 /// What `push` and `pull` would do with a book, for `status`.
 fn sync_note(local: &Local, remote: Option<&Progress>, confirm: Confirm) -> String {
-  let Some(remote) = remote else {
-    return "device is newer: push sends it".into();
-  };
-  let push = decide(Direction::Push, local, remote, confirm);
-  let pull = decide(Direction::Pull, local, remote, confirm);
-  // Otherwise one of them asks: the one moving to the newer position.
-  let (newer, other, command, ask) = match (push, pull) {
-    (Decision::InSync, _) => return "in sync".into(),
-    (Decision::Apply, _) => return "device is newer: push sends it".into(),
-    (_, Decision::Apply) => return "server is newer: pull would move the device".into(),
-    (Decision::Ask { newer: true, .. }, _) => ("device", "server", "push", push),
-    _ => ("server", "device", "pull", pull),
-  };
-  if matches!(
-    ask,
-    Decision::Ask {
-      backwards: true,
-      ..
+  match outlook(local, remote, confirm) {
+    Outlook::InSync => "in sync".into(),
+    Outlook::Push => "device is newer: push sends it".into(),
+    Outlook::Pull => "server is newer: pull would move the device".into(),
+    Outlook::Asks {
+      direction,
+      backwards,
+    } => {
+      let (newer, other, command) = match direction {
+        Direction::Push => ("device", "server", "push"),
+        Direction::Pull => ("server", "device", "pull"),
+      };
+      if backwards {
+        format!("{newer} is newer, but behind the {other}: {command} asks first")
+      } else {
+        format!("{newer} is newer: {command} asks first (confirm = {confirm})")
+      }
     }
-  ) {
-    format!("{newer} is newer, but behind the {other}: {command} asks first")
-  } else {
-    format!("{newer} is newer: {command} asks first (confirm = {confirm})")
   }
 }
 
@@ -794,14 +481,42 @@ fn unanswered_note(unanswered: usize) {
   }
 }
 
-fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool> {
-  if kindle_device::is_kindle(&target.device) {
-    return kindle_push(target, force, dry_run);
+/// Sends `update` and says so.
+fn send(
+  client: &Client,
+  update: &Update,
+  note: Option<String>,
+  emit: bool,
+) -> std::result::Result<(), kosync::Error> {
+  let what = sent_what(update, note);
+  match client.update(update) {
+    Ok(t) => {
+      match t {
+        Some(t) => println!("  sent      {what} at {}", format_timestamp(t)),
+        None => println!("  sent      {what}"),
+      }
+      if emit {
+        let percent = (update.percentage * 100.0).round().clamp(0.0, 100.0);
+        emit_line("SENT", &[&percent.to_string()]);
+      }
+      Ok(())
+    }
+    Err(e) => {
+      println!("  failed    {e}");
+      emit_error(emit, &e);
+      Err(e)
+    }
   }
-  let session = Session::open(target)?;
-  let mut not_in_line = NotInLine::load(&session.device.root)?;
+}
+
+fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool> {
+  let options = target.options();
+  if kindle_device::is_kindle(&options.device) {
+    return kindle_push(&options, force, dry_run);
+  }
+  let mut session = open_session(&options)?;
   let mut forced = Vec::new();
-  let server = Server::require(target)?;
+  let server = require_server(&options)?;
   let (device, device_id) = server.config.identity(&session.model);
   if let Err(e) = server.client.authorize() {
     emit_error(emit, &e);
@@ -817,120 +532,91 @@ fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool>
   let mut ok = true;
   for book in &session.books {
     heading(book);
-    let identity = session.identity(book);
-    let hash = match &identity {
-      Identity::Skip { kind, message, .. } => {
-        println!("  skipped   {message}");
-        if emit {
-          emit_line("NOT_SENT", &[kind, message]);
-        }
-        continue;
+    let step = session.push_step(book, &server.client, confirm_setting, force);
+    if let PushOutcome::Skip { kind, message } = &step.outcome {
+      println!("  skipped   {message}");
+      if emit {
+        emit_line("NOT_SENT", &[kind, message]);
       }
-      _ => identity.document().unwrap_or_default().to_string(),
-    };
-    let (local, note) = match session.local(book, &identity) {
-      Ok(local) => local,
-      Err(e) => {
-        println!("  skipped   {e}");
-        if emit {
-          emit_line("NOT_SENT", &["skipped", &e]);
-        }
-        continue;
-      }
-    };
-    if let Identity::Mapped { .. } = identity {
-      println!("  sync as   {}", identity.describe());
+      continue;
     }
+    if let Identity::Mapped { .. } = step.identity {
+      println!("  sync as   {}", describe_identity(&step.identity));
+    }
+    let hash = step.identity.document().unwrap_or_default();
     println!("  hash      {hash}");
-    if let Some(at) = not_in_line.get(&book.content_id) {
-      if !force {
+    let (local, note, remote, action) = match step.outcome {
+      PushOutcome::NotInLine { at } => {
         println!("  skipped   not in line: Nickel opened at {at} instead of the server's position");
         println!("            pull takes the server's position; --force sends the device's anyway");
         if emit {
-          emit_line("NOT_SENT", &["not-in-line", at]);
+          emit_line("NOT_SENT", &["not-in-line", &at]);
         }
         continue;
       }
-      forced.push(book.content_id.as_str());
-    }
-    let remote = match server.client.progress(&hash) {
-      Ok(remote) => remote,
-      Err(e) => {
+      PushOutcome::Failed(e) => {
         println!("  failed    {e}");
         emit_error(emit, &e);
         ok = false;
         continue;
       }
+      PushOutcome::Ready {
+        local,
+        note,
+        remote,
+        action,
+        forced: was_forced,
+      } => {
+        if was_forced {
+          forced.push(book.content_id.as_str());
+        }
+        (local, note, remote, action)
+      }
+      PushOutcome::Skip { .. } => unreachable!("handled above"),
     };
-    if let Some(remote) = &remote {
-      match decide(Direction::Push, &local, remote, confirm_setting) {
-        Decision::InSync => {
-          println!("  in sync   {}", describe(remote));
-          if emit {
-            emit_line("IN_SYNC", &[]);
-          }
-          continue;
+    let remote = remote.as_ref();
+    match action {
+      Action::InSync => {
+        println!("  in sync   {}", describe(remote.expect("both hold it")));
+        if emit {
+          emit_line("IN_SYNC", &[]);
         }
-        Decision::Apply => {}
-        _ if force => {}
-        Decision::Keep => {
-          println!("  skipped   server is newer: {}", describe(remote));
-          println!("            --force sends the device position anyway");
-          if emit {
-            emit_line("NOT_SENT", &["server-newer", &describe(remote)]);
-          }
-          continue;
+        continue;
+      }
+      Action::Apply => {}
+      Action::Keep => {
+        let remote = remote.expect("only a server position is kept");
+        println!("  skipped   server is newer: {}", describe(remote));
+        println!("            --force sends the device position anyway");
+        if emit {
+          emit_line("NOT_SENT", &["server-newer", &describe(remote)]);
         }
-        Decision::Ask { backwards, .. } => {
-          let answer = (backwards, confirm_setting);
-          if !confirm(
-            Direction::Push,
-            &local,
-            remote,
-            answer,
-            dry_run,
-            &mut unanswered,
-          )? {
-            continue;
-          }
+        continue;
+      }
+      Action::Ask { backwards } => {
+        let remote = remote.expect("asks only about a server position");
+        let answer = (backwards, confirm_setting);
+        if !confirm(
+          Direction::Push,
+          &local,
+          remote,
+          answer,
+          dry_run,
+          &mut unanswered,
+        )? {
+          continue;
         }
       }
     }
-    let update = Update {
-      document: hash,
-      progress: local.xpointer,
-      percentage: local.percentage,
-      device: device.clone(),
-      device_id: device_id.clone(),
-    };
-    let what = format!(
-      "{}{} ({})",
-      update.progress,
-      note.map(|n| format!(" ({n})")).unwrap_or_default(),
-      percent(update.percentage)
-    );
+    let update = session::update(hash, &local, &device, &device_id);
     if dry_run {
-      println!("  would send {what}");
+      println!("  would send {}", sent_what(&update, note));
       continue;
     }
-    match server.client.update(&update) {
-      Ok(t) => {
-        match t {
-          Some(t) => println!("  sent      {what} at {}", format_timestamp(t)),
-          None => println!("  sent      {what}"),
-        }
-        if emit {
-          let percent = (update.percentage * 100.0).round().clamp(0.0, 100.0);
-          emit_line("SENT", &[&percent.to_string()]);
-        }
-      }
-      Err(e) => {
-        println!("  failed    {e}");
-        emit_error(emit, &e);
-        ok = false;
-        if matches!(e, kosync::Error::Unauthorized) {
-          break;
-        }
+    if let Err(e) = send(&server.client, &update, note, emit) {
+      ok = false;
+      if matches!(e, kosync::Error::Unauthorized) {
+        break;
       }
     }
   }
@@ -942,21 +628,31 @@ fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool>
     println!("\nDry run: nothing was sent.");
   } else if ok {
     // Sent with --force: the server holds the device's position now.
-    not_in_line.remove(forced)?;
+    session.not_in_line.remove(forced)?;
   }
   Ok(ok)
 }
 
+/// The position `update` sends, with what was not exact about it.
+fn sent_what(update: &Update, note: Option<String>) -> String {
+  format!(
+    "{}{} ({})",
+    update.progress,
+    note.map(|n| format!(" ({n})")).unwrap_or_default(),
+    percent(update.percentage)
+  )
+}
+
 fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
-  if kindle_device::is_kindle(&target.device) {
+  let options = target.options();
+  if kindle_device::is_kindle(&options.device) {
     return Err(
       "a Kindle is only read: its position goes to the server with `push`, nothing comes back"
         .into(),
     );
   }
-  let session = Session::open(target)?;
-  let mut not_in_line = NotInLine::load(&session.device.root)?;
-  let server = Server::require(target)?;
+  let mut session = open_session(&options)?;
+  let server = require_server(&options)?;
   println!("Server {} as {}", server.config.server, server.config.user);
   let confirm_setting = server.config.confirm;
   let mut unanswered = 0;
@@ -964,27 +660,23 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
   let mut ok = true;
   for book in &session.books {
     heading(book);
-    let identity = session.identity(book);
-    let hash = match &identity {
-      Identity::Skip { kind, message, .. } => {
-        println!("  skipped   {message}");
-        if emit {
-          emit_line("NOT_TAKEN", &[kind, message]);
-        }
-        continue;
+    let step = session.pull_step(book, &server.client, confirm_setting, force);
+    if let PullOutcome::Skip { kind, message } = &step.outcome {
+      println!("  skipped   {message}");
+      if emit {
+        emit_line("NOT_TAKEN", &[kind, message]);
       }
-      _ => identity.document().unwrap_or_default().to_string(),
-    };
-    if let Identity::Mapped { .. } = identity {
-      println!("  sync as   {}", identity.describe());
+      continue;
     }
-    let remote = match server.client.progress(&hash) {
-      Ok(Some(remote)) => remote,
-      Ok(None) => {
+    if let Identity::Mapped { .. } = step.identity {
+      println!("  sync as   {}", describe_identity(&step.identity));
+    }
+    let (remote, local, plugin, action) = match step.outcome {
+      PullOutcome::NothingStored => {
         println!("  server    (nothing stored)");
         continue;
       }
-      Err(e) => {
+      PullOutcome::Failed(e) => {
         println!("  failed    {e}");
         emit_error(emit, &e);
         ok = false;
@@ -993,48 +685,40 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
         }
         continue;
       }
+      PullOutcome::Ready {
+        remote,
+        local,
+        plugin,
+        action,
+      } => (remote, local, plugin, action),
+      PullOutcome::Skip { .. } => unreachable!("handled above"),
     };
     println!(
       "  stored    {}",
       book.position.as_deref().unwrap_or("(never opened)")
     );
-    // Without a device position there is nothing on the device to keep.
-    let local = session.local(book, &identity).ok().map(|(local, _)| local);
-    // After a failed take Nickel's DateLastRead says nothing about reading.
-    let left_by_nickel = not_in_line.get(&book.content_id);
-    let decision = match (&local, left_by_nickel) {
-      (Some(_), Some(at)) if book.position.as_deref() == Some(at) => {
-        println!(
-          "  plugin    Nickel opened here instead of the server's position, nothing read since"
-        );
-        Decision::Apply
-      }
-      (Some(local), Some(_)) => {
-        println!(
-          "  plugin    read on since Nickel missed the server's position: the time does not count"
-        );
-        let undated = Local {
-          last_read: None,
-          ..local.clone()
-        };
-        decide(Direction::Pull, &undated, &remote, confirm_setting)
-      }
-      (Some(local), None) => decide(Direction::Pull, local, &remote, confirm_setting),
-      (None, _) => Decision::Apply,
-    };
-    let apply = match (decision, &local) {
-      (Decision::InSync, _) => {
+    match plugin {
+      Some(Plugin::NothingReadSince) => println!(
+        "  plugin    Nickel opened here instead of the server's position, nothing read since"
+      ),
+      Some(Plugin::ReadOnSince) => println!(
+        "  plugin    read on since Nickel missed the server's position: the time does not count"
+      ),
+      None => {}
+    }
+    let apply = match action {
+      Action::InSync => {
         println!("  in sync   {}", describe(&remote));
         false
       }
-      (Decision::Apply, _) => true,
-      (_, Some(_)) if force => true,
-      (Decision::Keep, _) => {
+      Action::Apply => true,
+      Action::Keep => {
         println!("  keep      device is newer than {}", describe(&remote));
         println!("            --force takes the server position anyway");
         false
       }
-      (Decision::Ask { backwards, .. }, Some(local)) => {
+      Action::Ask { backwards } => {
+        let local = local.as_ref().expect("asks only with a device position");
         let answer = (backwards, confirm_setting);
         confirm(
           Direction::Pull,
@@ -1045,88 +729,61 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
           &mut unanswered,
         )?
       }
-      (Decision::Ask { .. }, None) => unreachable!("asks only with a device position"),
     };
     if !apply {
       continue;
     }
     let verb = if write { "move to  " } else { "would move to" };
     println!("  {verb} {}", describe(&remote));
-    let (translated, note) =
-      match session.translate(book, &identity, &remote.progress, remote.percentage) {
-        Ok(t) => t,
-        Err(e) => {
-          println!("  skipped   not translated: {e}");
-          if emit {
-            emit_line("NOT_TAKEN", &["not-translated", &e]);
-          }
-          continue;
+    let take = match session.take(book, &step.identity, &remote, local.as_ref()) {
+      Ok(take) => take,
+      Err(e) => {
+        println!("  skipped   not translated: {e}");
+        if emit {
+          emit_line("NOT_TAKEN", &["not-translated", &e]);
         }
-      };
-    let note = note.map(|n| format!(" ({n})")).unwrap_or_default();
-    println!("  on device {}{note}", translated.position);
-    // Keep the server the newer side, so the next push does not send the
-    // old device position back: DateLastRead stays as it is unless it is
-    // newer than the server's position.
-    let last_read = local
-      .and_then(|l| l.last_read)
-      .filter(|&t| t >= remote.timestamp)
-      .map(|_| iso_timestamp(remote.timestamp - 1));
-    let percent = (remote.percentage * 100.0).round().clamp(0.0, 100.0) as i64;
+        continue;
+      }
+    };
+    let note = take.note.map(|n| format!(" ({n})")).unwrap_or_default();
+    println!("  on device {}{note}", take.write.position);
     if emit {
-      let position = translated.position.to_string();
-      emit_line("POSITION", &[&percent.to_string(), &position]);
+      emit_line(
+        "POSITION",
+        &[&take.write.percent.to_string(), &take.write.position],
+      );
       emit_line("FROM", &[&remote.device]);
     }
-    writes.push(Write {
-      content_id: book.content_id.clone(),
-      position: translated.position.to_string(),
-      percent,
-      last_read,
-    });
+    writes.push(take.write);
   }
   unanswered_note(unanswered);
   if emit && unanswered > 0 {
     // For the plugin: a position needs an answer it cannot give.
     emit_line("UNANSWERED", &[&unanswered.to_string()]);
   }
-  if !write && target.live {
+  if !write && options.live {
     println!("\nNothing was written to the device database (Nickel is running).");
   } else if !write {
     println!("\nDry run: nothing was written to the device; --write writes it.");
   } else if writes.is_empty() {
     println!("\nNothing to write to the device.");
   } else {
-    let dir = Config::backup_dir().ok_or("no directory for the backup (HOME is not set)")?;
-    let now = std::time::SystemTime::now()
-      .duration_since(std::time::UNIX_EPOCH)?
-      .as_secs() as i64;
-    let stamp: String = iso_timestamp(now)
-      .chars()
-      .filter(|c| !"-:".contains(*c))
-      .collect();
-    if target.live {
-      // Only the one book the plugin is about to open.
-      if target.content_id.is_none() {
-        return Err("--write with --live needs --content-id".into());
+    match session.write(&writes)? {
+      Written::Live { backup } => {
+        println!(
+          "\nWrote {} position(s) to the device database while Nickel runs.",
+          writes.len()
+        );
+        if let Some(backup) = backup {
+          println!("Backup of the database (one a day): {}", backup.display());
+        }
       }
-      let made = session.device.write_live(&writes, &dir, &stamp[..8])?;
-      not_in_line.remove(writes.iter().map(|w| w.content_id.as_str()))?;
-      println!(
-        "\nWrote {} position(s) to the device database while Nickel runs.",
-        writes.len()
-      );
-      if let Some(backup) = made {
-        println!("Backup of the database (one a day): {}", backup.display());
+      Written::Mounted { backup } => {
+        println!("\nWrote {} position(s) to the device.", writes.len());
+        println!("Backup of the database: {}", backup.display());
+        println!("Eject the device before you open the book.");
       }
-      return Ok(ok);
     }
-    let backup = dir.join(format!("KoboReader-{stamp}.sqlite"));
-    session.device.write_positions(&writes, &backup)?;
-    not_in_line.remove(writes.iter().map(|w| w.content_id.as_str()))?;
-    println!("\nWrote {} position(s) to the device.", writes.len());
-    println!("Backup of the database: {}", backup.display());
-    println!("Eject the device before you open the book.");
   }
   Ok(ok)
 }
@@ -1352,31 +1009,6 @@ fn device_books(
   Ok(found)
 }
 
-fn kindle_matches(
-  root: &std::path::Path,
-  mut books: Vec<KindleBook>,
-  filter: Option<&str>,
-  content_id: Option<&str>,
-) -> Vec<KindleBook> {
-  if let Some(filter) = filter {
-    let filter = filter.to_lowercase();
-    books.retain(|b| {
-      b.relative_path(root)
-        .to_string_lossy()
-        .to_lowercase()
-        .contains(&filter)
-        || [&b.title, &b.author].iter().any(|t| {
-          t.as_deref()
-            .is_some_and(|t| t.to_lowercase().contains(&filter))
-        })
-    });
-  }
-  if let Some(id) = content_id {
-    books.retain(|b| b.content_id.eq_ignore_ascii_case(id));
-  }
-  books
-}
-
 /// Exactly one book, or an error that lists the candidates.
 fn one_book(books: Vec<OnDevice>) -> Result<OnDevice> {
   match books.len() {
@@ -1422,6 +1054,12 @@ fn load_library(path: Option<PathBuf>) -> Result<Option<Library>> {
     return Ok(None);
   };
   let library = Library::open(&path)?;
+  print_library(&library);
+  Ok(Some(library))
+}
+
+/// Says which library is used, and what in it was skipped.
+fn print_library(library: &Library) {
   let kind = match library.kind {
     library::Kind::Calibre => "Calibre library",
     library::Kind::Folder => "folder",
@@ -1434,7 +1072,6 @@ fn load_library(path: Option<PathBuf>) -> Result<Option<Library>> {
   for (path, e) in &library.skipped {
     eprintln!("nickelinksync: library: skipped {}: {e}", path.display());
   }
-  Ok(Some(library))
 }
 
 /// How many candidates get their chapters and checksum compared.
@@ -1657,104 +1294,21 @@ fn add_mapping(store: &mut Store, on: OnDevice, epub_path: &std::path::Path) -> 
   Ok(true)
 }
 
-/// A Kindle: a mounted one, or a copy of its `documents` folder (a stock
-/// Kindle on a Mac only offers MTP). Each KFX book syncs under the EPUB it
-/// is mapped to; nothing is written to it.
-struct KindleSession {
-  books: Vec<KindleBook>,
-  store: Store,
-  position: PushPosition,
-}
-
-impl KindleSession {
-  fn open(target: &Target) -> Result<Self> {
-    let root = &target.device;
-    let (books, unreadable) = kindle_device::books(root)?;
-    println!(
-      "Kindle, {} KFX book(s) in {}",
-      books.len(),
-      kindle_device::documents(root).display()
-    );
-    for (path, e) in unreadable {
-      println!("  skipped   {}: {e}", path.display());
-    }
-    let books = kindle_matches(
-      root,
-      books,
-      target.book.as_deref(),
-      target.content_id.as_deref(),
-    );
-    let settings = match target.config.clone().or_else(Config::default_path) {
-      Some(config) => Config::local_settings(&config)?,
-      None => LocalSettings::default(),
-    };
-    let store = match Store::default_path() {
-      Some(path) => Store::load(&path)?,
-      None => Store::default(),
-    };
-    if books.is_empty() {
-      println!("\nNo KFX books.");
-    }
-    Ok(KindleSession {
-      books,
-      store,
-      position: settings.position,
-    })
+/// Opens the Kindle (or the copy of its books) and prints its header.
+fn open_kindle(options: &Options) -> Result<KindleSession> {
+  let session = KindleSession::open(options)?;
+  println!(
+    "Kindle, {} KFX book(s) in {}",
+    session.found,
+    kindle_device::documents(&session.root).display()
+  );
+  for (path, e) in &session.unreadable {
+    println!("  skipped   {}: {e}", path.display());
   }
-
-  /// The book's mapping, or why it is not synced.
-  fn mapping(&self, book: &KindleBook) -> std::result::Result<&Mapping, String> {
-    let mapping = self.store.for_kindle(&book.content_id).ok_or(
-      "not mapped: a KFX syncs only under the EPUB it is mapped to; see `nickelinksync map suggest`",
-    )?;
-    match mapping.check() {
-      EpubState::Ok => Ok(mapping),
-      state => Err(format!(
-        "not synced: the mapping to {} is {state}; map it again with `map add`",
-        mapping.epub.path
-      )),
-    }
+  if session.books.is_empty() {
+    println!("\nNo KFX books.");
   }
-
-  /// The position for KOSync in the mapped EPUB, what was not exact about
-  /// it, and the stored position for display.
-  fn local(
-    &self,
-    book: &KindleBook,
-    mapping: &Mapping,
-  ) -> std::result::Result<(Local, Option<String>, String), String> {
-    let state = book.reading_state()?.ok_or("never opened (no .yjf)")?;
-    let lpr = state.last_read.ok_or("never opened (no last page read)")?;
-    let kfx = Kfx::open(&book.kfx).map_err(|e| e.to_string())?;
-    let mut epub =
-      Epub::open(std::path::Path::new(&mapping.epub.path)).map_err(|e| e.to_string())?;
-    let x = kindle::to_xpointer(&kfx, &mut epub, &lpr.position)
-      .map_err(|e| format!("not translated: {e}"))?;
-    let mut notes = Vec::new();
-    if !x.exact {
-      notes.push("block not found exactly".to_string());
-    }
-    let xpointer =
-      match step_back(&mut epub, &x.xpointer, self.position).map_err(|e| e.to_string())? {
-        Some(s) => {
-          notes.push(s.to_string());
-          s.xpointer
-        }
-        None => x.xpointer,
-      };
-    let total = kfx.pid_count().max(1);
-    let shown = format!(
-      "block {}, offset {} (position {} of {total})",
-      lpr.position.eid, lpr.position.offset, lpr.position.pid
-    );
-    let local = Local {
-      xpointer,
-      percentage: (f64::from(lpr.position.pid) / f64::from(total)).clamp(0.0, 1.0),
-      last_read: lpr.time_ms.map(|ms| ms / 1000),
-    };
-    let note = (!notes.is_empty()).then(|| notes.join("; "));
-    Ok((local, note, shown))
-  }
+  Ok(session)
 }
 
 fn kindle_heading(root: &std::path::Path, book: &KindleBook) {
@@ -1768,16 +1322,16 @@ fn kindle_heading(root: &std::path::Path, book: &KindleBook) {
   println!("  content   {}", book.content_id);
 }
 
-fn kindle_status(target: &Target) -> Result<bool> {
-  let session = KindleSession::open(target)?;
-  let server = Server::open(target)?;
+fn kindle_status(options: &Options) -> Result<bool> {
+  let session = open_kindle(options)?;
+  let server = open_server(options)?;
   match &server {
     Some(s) => println!("Server {} as {}", s.config.server, s.config.user),
     None => println!("Server not configured"),
   }
   let mut server_error: Option<String> = None;
   for book in &session.books {
-    kindle_heading(&target.device, book);
+    kindle_heading(&session.root, book);
     let mapping = match session.mapping(book) {
       Ok(mapping) => mapping,
       Err(e) => {
@@ -1841,9 +1395,9 @@ fn kindle_status(target: &Target) -> Result<bool> {
   Ok(true)
 }
 
-fn kindle_push(target: &Target, force: bool, dry_run: bool) -> Result<bool> {
-  let session = KindleSession::open(target)?;
-  let server = Server::require(target)?;
+fn kindle_push(options: &Options, force: bool, dry_run: bool) -> Result<bool> {
+  let session = open_kindle(options)?;
+  let server = require_server(options)?;
   let (device, device_id) = server.config.identity("Kindle");
   if let Err(e) = server.client.authorize() {
     eprintln!("nickelinksync: {}: {e}", server.config.server);
@@ -1857,88 +1411,75 @@ fn kindle_push(target: &Target, force: bool, dry_run: bool) -> Result<bool> {
   let mut unanswered = 0;
   let mut ok = true;
   for book in &session.books {
-    kindle_heading(&target.device, book);
-    let mapping = match session.mapping(book) {
-      Ok(mapping) => mapping,
-      Err(e) => {
-        println!("  skipped   {e}");
+    kindle_heading(&session.root, book);
+    let step = session.push_step(book, &server.client, confirm_setting, force);
+    let mapping = match (&step.mapping, &step.outcome) {
+      (_, PushOutcome::Skip { message, .. }) => {
+        println!("  skipped   {message}");
         continue;
       }
+      (Some(mapping), _) => mapping,
+      (None, _) => unreachable!("only a skipped book has no mapping"),
     };
-    let (local, note) = match session.local(book, mapping) {
-      Ok((local, note, _)) => (local, note),
-      Err(e) => {
-        println!("  skipped   {e}");
-        continue;
-      }
-    };
-    let hash = mapping.epub.hash.clone();
+    let hash = &mapping.epub.hash;
     println!(
       "  sync as   mapped to {} (checksum {hash})",
       mapping.epub.path
     );
-    let remote = match server.client.progress(&hash) {
-      Ok(remote) => remote,
-      Err(e) => {
+    let (local, note, remote, action) = match step.outcome {
+      PushOutcome::Failed(e) => {
         println!("  failed    {e}");
         ok = false;
         continue;
       }
+      PushOutcome::Ready {
+        local,
+        note,
+        remote,
+        action,
+        ..
+      } => (local, note, remote, action),
+      PushOutcome::Skip { .. } | PushOutcome::NotInLine { .. } => {
+        unreachable!("a Kindle book is skipped above and has no plugin")
+      }
     };
-    if let Some(remote) = &remote {
-      match decide(Direction::Push, &local, remote, confirm_setting) {
-        Decision::InSync => {
-          println!("  in sync   {}", describe(remote));
+    let remote = remote.as_ref();
+    match action {
+      Action::InSync => {
+        println!("  in sync   {}", describe(remote.expect("both hold it")));
+        continue;
+      }
+      Action::Apply => {}
+      Action::Keep => {
+        let remote = remote.expect("only a server position is kept");
+        println!("  skipped   server is newer: {}", describe(remote));
+        println!("            --force sends the Kindle position anyway");
+        continue;
+      }
+      Action::Ask { backwards } => {
+        let remote = remote.expect("asks only about a server position");
+        let answer = (backwards, confirm_setting);
+        if !confirm(
+          Direction::Push,
+          &local,
+          remote,
+          answer,
+          dry_run,
+          &mut unanswered,
+        )? {
           continue;
-        }
-        Decision::Apply => {}
-        _ if force => {}
-        Decision::Keep => {
-          println!("  skipped   server is newer: {}", describe(remote));
-          println!("            --force sends the Kindle position anyway");
-          continue;
-        }
-        Decision::Ask { backwards, .. } => {
-          let answer = (backwards, confirm_setting);
-          if !confirm(
-            Direction::Push,
-            &local,
-            remote,
-            answer,
-            dry_run,
-            &mut unanswered,
-          )? {
-            continue;
-          }
         }
       }
     }
-    let update = Update {
-      document: hash,
-      progress: local.xpointer,
-      percentage: local.percentage,
-      device: device.clone(),
-      device_id: device_id.clone(),
-    };
-    let what = format!(
-      "{}{} ({})",
-      update.progress,
-      note.map(|n| format!(" ({n})")).unwrap_or_default(),
-      percent(update.percentage)
-    );
+    let update = session::update(hash, &local, &device, &device_id);
     if dry_run {
-      println!("  would send {what}");
+      println!("  would send {}", sent_what(&update, note));
       continue;
     }
-    match server.client.update(&update) {
-      Ok(Some(t)) => println!("  sent      {what} at {}", format_timestamp(t)),
-      Ok(None) => println!("  sent      {what}"),
-      Err(e) => {
-        println!("  failed    {e}");
-        ok = false;
-        if matches!(e, kosync::Error::Unauthorized) {
-          break;
-        }
+    if let Err(e) = send(&server.client, &update, note, false) {
+      ok = false;
+      if matches!(e, kosync::Error::Unauthorized) {
+        break;
       }
     }
   }

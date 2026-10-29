@@ -190,6 +190,12 @@ for the device. It owns all logic:
   the CLI asks "device or server?"; without one (the plugin, later) it
   overwrites nothing and reports the book. `--force` skips the question.
 
+The run itself (open the device and the server, then one step per book)
+is in the library too (`session`), not in the CLI: a step says what
+`push` or `pull` would do, and a question from `confirm` is part of it
+(`Action::Ask`). The CLI asks in the terminal, the desktop client in a
+dialog; both apply the same steps.
+
 Desktop use: `nickelinksync push|pull|status --device /Volumes/KOBOeReader`.
 On-device use: the same binary, called by the hook.
 
