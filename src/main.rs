@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use clap::{Args, Parser, Subcommand};
 use nickelinksync::db::Book;
+use nickelinksync::history;
 use nickelinksync::kindle_device::{self, KindleBook};
 use nickelinksync::kosync::{self, Client, Progress, Update};
 use nickelinksync::library::{self, Library, LibraryBook};
@@ -479,13 +480,13 @@ fn unanswered_note(unanswered: usize) {
   }
 }
 
-/// Sends `update` and says so.
+/// Sends `update` and says so; the server's time, if it gave one.
 fn send(
   client: &Client,
   update: &Update,
   note: Option<String>,
   emit: bool,
-) -> std::result::Result<(), kosync::Error> {
+) -> std::result::Result<Option<i64>, kosync::Error> {
   let what = sent_what(update, note);
   match client.update(update) {
     Ok(t) => {
@@ -497,7 +498,7 @@ fn send(
         let percent = (update.percentage * 100.0).round().clamp(0.0, 100.0);
         emit_line("SENT", &[&percent.to_string()]);
       }
-      Ok(())
+      Ok(t)
     }
     Err(e) => {
       println!("  failed    {e}");
@@ -611,10 +612,15 @@ fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool>
       println!("  would send {}", sent_what(&update, note));
       continue;
     }
-    if let Err(e) = send(&server.client, &update, note, emit) {
-      ok = false;
-      if matches!(e, kosync::Error::Unauthorized) {
-        break;
+    match send(&server.client, &update, note, emit) {
+      // The plugin's pushes on the device are not kept.
+      Ok(t) if !options.live => record(&[sent_entry(&update, t, book.title.clone())]),
+      Ok(_) => {}
+      Err(e) => {
+        ok = false;
+        if matches!(e, kosync::Error::Unauthorized) {
+          break;
+        }
       }
     }
   }
@@ -629,6 +635,27 @@ fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool>
     session.not_in_line.remove(forced)?;
   }
   Ok(ok)
+}
+
+/// A position sent, for the history.
+fn sent_entry(update: &Update, time: Option<i64>, title: Option<String>) -> history::Entry {
+  history::Entry {
+    time: time.unwrap_or_else(history::now),
+    direction: history::Direction::Push,
+    device: update.device.clone(),
+    title,
+    document: update.document.clone(),
+    position: update.progress.clone(),
+    percentage: update.percentage,
+    by: "cli".into(),
+  }
+}
+
+/// Adds to the sync history; a failure is only reported.
+fn record(entries: &[history::Entry]) {
+  if let Err(e) = history::record(entries) {
+    eprintln!("nickelinksync: history: {e}");
+  }
 }
 
 /// The position `update` sends, with what was not exact about it.
@@ -655,6 +682,8 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
   let confirm_setting = server.config.confirm;
   let mut unanswered = 0;
   let mut writes = Vec::new();
+  // For the history, once written.
+  let mut taken = Vec::new();
   let mut ok = true;
   for book in &session.books {
     heading(book);
@@ -752,6 +781,16 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
       );
       emit_line("FROM", &[&remote.device]);
     }
+    taken.push(history::Entry {
+      time: history::now(),
+      direction: history::Direction::Pull,
+      device: session.model.clone(),
+      title: book.title.clone(),
+      document: step.identity.document().unwrap_or_default().to_string(),
+      position: take.write.position.clone(),
+      percentage: remote.percentage,
+      by: "cli".into(),
+    });
     writes.push(take.write);
   }
   unanswered_note(unanswered);
@@ -766,7 +805,11 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
   } else if writes.is_empty() {
     println!("\nNothing to write to the device.");
   } else {
-    match session.write(&writes)? {
+    let written = session.write(&writes)?;
+    if !options.live {
+      record(&taken);
+    }
+    match written {
       Written::Live { backup } => {
         println!(
           "\nWrote {} position(s) to the device database while Nickel runs.",
@@ -1338,10 +1381,13 @@ fn kindle_push(options: &Options, force: bool, dry_run: bool) -> Result<bool> {
       println!("  would send {}", sent_what(&update, note));
       continue;
     }
-    if let Err(e) = send(&server.client, &update, note, false) {
-      ok = false;
-      if matches!(e, kosync::Error::Unauthorized) {
-        break;
+    match send(&server.client, &update, note, false) {
+      Ok(t) => record(&[sent_entry(&update, t, book.title.clone())]),
+      Err(e) => {
+        ok = false;
+        if matches!(e, kosync::Error::Unauthorized) {
+          break;
+        }
       }
     }
   }

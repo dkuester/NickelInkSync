@@ -10,6 +10,7 @@ pub mod db;
 pub mod dom;
 pub mod epub;
 pub mod hash;
+pub mod history;
 pub mod ion;
 pub mod kfx;
 pub mod kindle;
