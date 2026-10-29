@@ -63,7 +63,7 @@ pub fn is_nickel(root: &Path) -> bool {
 
 /// A Kindle that mounts as a drive (older models): `documents` and
 /// `system`. Other drives are not searched for KFX files.
-fn is_mounted_kindle(root: &Path) -> bool {
+pub fn is_mounted_kindle(root: &Path) -> bool {
   root.join("documents").is_dir() && root.join("system").is_dir() && !root.join(".kobo").exists()
 }
 

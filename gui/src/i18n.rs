@@ -47,6 +47,7 @@ pub struct Texts {
   pub choose_kindle_folder: &'static str,
   pub kindle_folder_hint: &'static str,
   pub kindle_folder_path: &'static str,
+  pub remove_kindle_folder: &'static str,
   pub not_a_kindle_folder: &'static str,
   pub no_auto_sync: &'static str,
   pub choose_device: &'static str,
@@ -107,6 +108,7 @@ static DE: Texts = Texts {
   kindle_folder_hint: "Ein Kindle bietet am Mac nur MTP: Kopiere seine Bücher (Ordner \
                        documents) z. B. mit OpenMTP und wähle die Kopie.",
   kindle_folder_path: "Pfad der Kopie",
+  remove_kindle_folder: "Kindle-Ordner entfernen",
   not_a_kindle_folder: "Kein Kindle-Ordner (kein documents/ und keine .kfx mit .sdr).",
   no_auto_sync: "Beim Anstecken wird nichts synchronisiert.",
   choose_device: "Wähle links ein Gerät.",
@@ -146,6 +148,7 @@ static EN: Texts = Texts {
   kindle_folder_hint: "On a Mac a Kindle only offers MTP: copy its books (the documents \
                        folder), e.g. with OpenMTP, and choose the copy.",
   kindle_folder_path: "Path of the copy",
+  remove_kindle_folder: "Remove Kindle folder",
   not_a_kindle_folder: "Not a Kindle folder (no documents/ and no .kfx with .sdr).",
   no_auto_sync: "Nothing is synced when a device is connected.",
   choose_device: "Choose a device on the left.",

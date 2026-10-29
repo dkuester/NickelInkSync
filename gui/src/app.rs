@@ -36,7 +36,6 @@ pub struct App {
   /// Shown under the Kindle button after a folder that is no Kindle copy.
   kindle_error: bool,
   /// Typed path of the Kindle copy, where there is no folder dialog.
-  #[cfg_attr(any(target_os = "macos", target_os = "windows"), allow(dead_code))]
   kindle_path: String,
 }
 
@@ -109,12 +108,45 @@ impl App {
     }
   }
 
+  /// Forgets the Kindle copy: it leaves the list (and the view, if shown).
+  fn clear_kindle_folder(&mut self) {
+    let Some(old) = self.settings.kindle_folder.take() else {
+      return;
+    };
+    self.save_settings();
+    self.kindle_error = false;
+    self.kindle_path.clear();
+    self.devices.retain(|f| f.root != old);
+    if self.selected.as_ref().is_some_and(|s| s.root == old) {
+      self.selected = None;
+      self.view = View::Nothing;
+    }
+    self.scan();
+  }
+
+  /// The remembered Kindle copy, with a button to forget it.
+  fn kindle_folder_line(&mut self, ui: &mut egui::Ui, t: &Texts) {
+    let Some(dir) = &self.settings.kindle_folder else {
+      return;
+    };
+    ui.weak(format!("{}: {}", t.kindle_folder_path, dir.display()));
+    if ui.button(t.remove_kindle_folder).clicked() {
+      self.clear_kindle_folder();
+    }
+  }
+
   fn handle_events(&mut self) {
     while let Ok(event) = self.worker.events.try_recv() {
       let current = |root: &PathBuf| self.selected.as_ref().is_some_and(|s| &s.root == root);
       match event {
-        Event::Devices(found) => {
+        Event::Devices(mut found) => {
           self.scanning = false;
+          // A scan sent before the Kindle copy was removed still lists it.
+          found.retain(|f| {
+            f.kind == Kind::Nickel
+              || self.settings.kindle_folder.as_ref() == Some(&f.root)
+              || crate::devices::is_mounted_kindle(&f.root)
+          });
           // A device that went away leaves the view.
           if let Some(selected) = &self.selected {
             if !found.iter().any(|f| f.root == selected.root) {
@@ -218,9 +250,7 @@ impl App {
         self.set_kindle_folder(path);
       }
     }
-    if let Some(dir) = &self.settings.kindle_folder {
-      ui.weak(format!("{}: {}", t.kindle_folder_path, dir.display()));
-    }
+    self.kindle_folder_line(ui, t);
     if self.kindle_error {
       ui.colored_label(ui.visuals().error_fg_color, t.not_a_kindle_folder);
     }
@@ -237,6 +267,7 @@ impl App {
       let path = PathBuf::from(self.kindle_path.trim());
       self.set_kindle_folder(path);
     }
+    self.kindle_folder_line(ui, t);
     if self.kindle_error {
       ui.colored_label(ui.visuals().error_fg_color, t.not_a_kindle_folder);
     }
