@@ -230,9 +230,12 @@ fertig, D2 läuft (E0, E1 und E2 erledigt).
     Bewertung (der beste ab 80 % vorausgewählt, darunter „unsicher“), die
     gleiche Datei in der Bibliothek, oder ohne Bibliothek nur „EPUB wählen
     …“. Geschrieben wird nur `mappings.json`, nie das Gerät.
-  - [ ] **du:** E2 ausprobieren: ein Calibre-kepub auf dem Kobo neu
-    zuordnen (erst entfernen, dann „Zuordnen …“ mit dem Vorschlag), eins
-    per „EPUB wählen …“; danach `nickelinksync map list` in der CLI.
+  - [x] **du:** E2 am Kobo ausprobiert (2026-10-29): „Acts of Contrition“
+    (neues kepub) in der GUI zugeordnet, klappt. Der Test zeigte zwei
+    Schwächen, beide behoben: Ohne `library =` standen ungeprüfte Bücher
+    unter „Gleiche Datei“ (jetzt „Eigene Prüfsumme“ mit Grund, auch dort
+    „Zuordnen …“), und die Knöpfe lagen bei langen Pfaden außerhalb des
+    Fensters (jetzt neben dem Titel).
   - [ ] **ich:** **E3** Server-Positionen, Push/Pull per Knopf mit
     Rückfrage-Dialog, Rückschreiben am Tolino, Verlauf (`history.jsonl`,
     auch für die CLI), Geräteansicht nebeneinander (O5). Kobo nur „zum
