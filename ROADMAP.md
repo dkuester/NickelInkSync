@@ -167,6 +167,14 @@ fixtures only.
 - **NickelHook plugin for the Kobo 6.0** (M–L): the Tolino plugin (Qt6)
   built and checked for Kobo 6.0 (symbols from its `libnickel.so`). The
   Qt5 plugin for 4.x is on hold: no 4.x device to test on.
+- **Book mappings on the device** (M): the plugin syncs every book under
+  its own checksum, so a mapped book (kepub, an EPUB changed by Calibre)
+  pushed from the device is useless to KOReader, which knows the
+  original EPUB. The desktop translates through the original EPUB, which
+  is not on the device: either a small translation table made with the
+  mapping (original checksum, chapter paths, text offsets) or the
+  original copied to the device, read by `--live`. After the desktop
+  client, before the Kobo plugin.
 
 ## Low priority (optional)
 

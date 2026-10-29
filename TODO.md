@@ -607,6 +607,28 @@ fertig, D2 läuft (E0 und E1 erledigt).
   - [ ] **ich (nach dem Test):** Gerätesprache: Das Log zeigt `QLocale()`
     beim Start; folgt sie Nickels Spracheinstellung, kommen die Meldungen
     auch auf Englisch.
+- [ ] **N6 Zuordnungen auf dem Gerät** (nach D2, vor dem Kobo-Plugin N2) ·
+  Lücke, die du am 2026-10-29 bemerkt hast: Am Rechner sendet `push` ein
+  zugeordnetes Buch (kepub, von Calibre verändertes EPUB) unter der
+  Prüfsumme der Original-EPUB, mit der Stelle in sie übersetzt; KOReader
+  findet sie, wenn er dieselbe Original-Datei hat. Das Plugin auf dem
+  Gerät (`--live`) kennt aber keine Zuordnungen und sendet unter der
+  eigenen Prüfsumme der Gerätedatei, mit der KOReader nichts anfangen
+  kann; dasselbe beim Holen. Für die Übersetzung braucht die Bibliothek
+  heute die Original-EPUB selbst, und die liegt nicht auf dem Gerät.
+  - [ ] **ich:** Weg wählen und vorschlagen: (a) beim Anlegen der
+    Zuordnung eine kleine Übersetzungstabelle erzeugen (Prüfsumme des
+    Originals, Kapitelpfade, Textlängen bzw. Offsets je Kapitel kepub ↔
+    Original) und nach `.adds/NickelInkSync/` aufs Gerät legen (die GUI
+    beim Kopieren in E5 oder per Knopf, die CLI per Befehl); (b) die
+    Original-EPUB verborgen mit aufs Gerät kopieren (einfacher, kostet
+    Speicher). Beide Richtungen, Kobo und Tolino.
+  - [ ] **ich:** Umsetzen in Bibliothek und CLI (`--live` liest die
+    Tabelle), Tests mit Book A/R (kepub ↔ EPUB) und Calibre-artiger
+    Umwandlung.
+  - [ ] **du:** Am Gerät prüfen: ein Calibre-kepub auf dem Kobo bzw. ein
+    Calibre-EPUB auf dem Tolino lesen, Buch verlassen, in KOReader mit der
+    Original-EPUB öffnen.
 
 ## Optional (später)
 
