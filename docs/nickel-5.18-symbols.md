@@ -396,8 +396,19 @@ proven: Nickel keeps a cache of rendered pages per book
 three that failed (`/1/4/136`, `/1/4/224`, `/1/4/314` in chapter 1) lay
 in a stretch with no cached page, and on 25.10. the page with
 `/1/4/314` had been cached. `.kobo/BookReader.sqlite` is encrypted.
-This work is paused until Kobalt's Tolino support (next beta) can be
-compared.
+
+**Cause: `tolino_bookmark`.** The database has a table `tolino_bookmark`
+(`uuid`, `position`, `currentPosition`, `lastPosition`, `progress`,
+`modified`, `deletedLocally`, `modifiedLocally`, ...); for a sideloaded
+book `uuid` is the ContentID and `position` the same Adobe point as
+`ChapterIDBookmarked`. On 28.10. Book R's row held
+`OEBPS/text/chapter1.xhtml#point(/1/4/2/1:0)`, the chapter start Nickel
+kept opening at, because the CLI and the plugin write only `content`. In
+the Nickel VM on 5.18.279364 a freshly imported book, with no such row,
+opened at the pulled place. Kobalt (MIT) writes this row on the Tolino
+(develop commit 8b144d2, `platforms/kobo/common/tolino_progress.h`). So
+the page-cache lead is most likely wrong; the fix is to write
+`tolino_bookmark` as well.
 
 Not tried, in case this is not enough: writing the position through
 Nickel instead of the CLI, as Kobalt does on the Kobo (concept only):

@@ -159,10 +159,9 @@ its own.
   after opening now waits until Nickel knows its place (it often does not
   after 3 s). **Paused (28.10.):** after the Tolino updated itself to
   firmware 5.18.279364, Nickel opens at the chapter start even without
-  the plugin (lead: its cache of rendered pages). Kobalt gets Tolino
-  support in its next beta; we look at that first. Otherwise: check the
-  page cache, the new `libnickel`, and writing the position through
-  Nickel itself (`VolumeManager::updateBookmark`).
+  the plugin Cause: Nickel takes the position from the table
+  `tolino_bookmark`, which the CLI and the plugin do not write yet (Kobalt
+  does). Next: write that row too.
 - **NickelHook plugin, Qt5 (Kobo 4.x)** (L): push on book close, pull on open,
   jump via Nickel's own navigation. Blocker: find the libnickel symbol for
   "open at position" on 4.46; verification is on-device only.

@@ -516,10 +516,14 @@ dürfen jederzeit dazwischengeschoben werden.
     Spur, nicht bewiesen: Nickels Cache gezeichneter Seiten
     (`CachePersistenceRenderedPageData`); alle fehlgeschlagenen Stellen
     lagen in Seiten, die dort fehlten.
-  - [ ] **Pausiert (28.10.), PR #26 als Entwurf:** Kobalt bekommt in der
-    nächsten Beta Tolino-Unterstützung. Dann Nicos Lösung ansehen, Lizenz
-    prüfen und entscheiden, ob wir sie übernehmen. Auf dem Tolino des
-    Owners ist das Plugin bis dahin aus (`config.ini.off`).
+  - [x] **ich:** Ursache gefunden (29.10.): Nickel nimmt die Stelle aus
+    der Tabelle `tolino_bookmark`; dort stand für Book R der
+    Kapitelanfang. CLI und Plugin schreiben nur `content`. Kobalt (MIT,
+    develop, `tolino_progress.h`) schreibt die Zeile mit.
+  - [ ] **ich:** `tolino_bookmark` beim Schreiben einer Position mit
+    setzen (CLI und Plugin), in der 5.18-VM prüfen, eigene PR. PR #26
+    bleibt bis dahin Entwurf; auf deinem Tolino ist das Plugin bis dahin
+    aus (`config.ini.off`).
   - [ ] **ich (nur falls Kobalt nicht hilft):** Seiten-Cache als Ursache
     prüfen (Cache-Zeilen des Buchs löschen, dann öffnen), `libnickel` von
     5.18.279364 beschaffen und die Symbole neu prüfen. Position über Nickel selbst
