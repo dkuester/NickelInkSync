@@ -217,8 +217,8 @@ Die Tabelle mit Lizenzen und Links steht im [englischen README](README.md#credit
   (KOSync-Protokoll), beide AGPL-3.0;
   [BookOrbit](https://github.com/bookorbit/bookorbit) (AGPL-3.0, Zuordnung
   über die KOReader-Prüfsumme); [Kobalt](https://github.com/nicoverbruggen/kobalt)
-  von Nico Verbruggen (MIT, Nickels Buch-Cache und Schreiben über Nickel
-  selbst); die [Amazon-Ion-1.0-Spezifikation](https://amazon-ion.github.io/ion-docs/)
+  von Nico Verbruggen (MIT, Nickels Buch-Cache, Schreiben über Nickel
+  selbst und die Leseposition des Tolino in `tolino_bookmark`); die [Amazon-Ion-1.0-Spezifikation](https://amazon-ion.github.io/ion-docs/)
   (KFX, Kindle-Machbarkeit).
 
 ## Lizenz

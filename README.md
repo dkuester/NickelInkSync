@@ -237,7 +237,7 @@ behavior; the AGPL-3.0 projects are references only, see
 | [KOReader](https://github.com/koreader/koreader) | the KOReader developers | AGPL-3.0 | The partial MD5 book hash, XPointers, the reading-progress sync |
 | [koreader-sync-server](https://github.com/koreader/koreader-sync-server) | the KOReader developers | AGPL-3.0 | The KOSync protocol |
 | [BookOrbit](https://github.com/bookorbit/bookorbit) | the BookOrbit developers | AGPL-3.0 | Matching books by the KOReader hash; the planned manual book mapping |
-| [Kobalt](https://github.com/nicoverbruggen/kobalt) | Nico Verbruggen | MIT | How Nickel caches books (`Cache<Volume>`) and how to write progress through Nickel itself |
+| [Kobalt](https://github.com/nicoverbruggen/kobalt) | Nico Verbruggen | MIT | How Nickel caches books (`Cache<Volume>`), how to write progress through Nickel itself, and that the Tolino keeps the reading position in `tolino_bookmark` |
 | [Amazon Ion 1.0](https://amazon-ion.github.io/ion-docs/) | Amazon | specification | Reading KFX books (Kindle feasibility check) |
 
 ## License
