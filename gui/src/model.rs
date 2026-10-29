@@ -18,8 +18,12 @@ use crate::devices::Kind;
 /// How a book syncs, if at all.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Group {
-  /// Under its own checksum, and why.
+  /// Under its own checksum, checked: the same file as in the library, or
+  /// the original of a mapping.
   Same { why: Own },
+  /// Under its own checksum, unchecked: no library to find its reference
+  /// EPUB (the file KOReader opens) and no mapping to one.
+  NoReference,
   /// Under the checksum of this original EPUB.
   Mapped { original: String },
   /// Neither mapped nor the same file as in the library.
@@ -96,6 +100,17 @@ fn load_nickel(
   for (i, book) in session.books.iter().enumerate() {
     let identity = session.identity(book);
     let group = match &identity {
+      // Without a library, the original of a mapping is still known.
+      Identity::Own {
+        why: Own::NoLibrary,
+        hash,
+      } if session.store.mappings.iter().any(|m| &m.epub.hash == hash) => Group::Same {
+        why: Own::OriginalOfMapping,
+      },
+      Identity::Own {
+        why: Own::NoLibrary,
+        ..
+      } => Group::NoReference,
       Identity::Own { why, .. } => Group::Same { why: *why },
       Identity::Mapped { mapping, .. } => Group::Mapped {
         original: mapping.epub.path.clone(),
@@ -218,9 +233,10 @@ fn load_kindle(
       last_read: None,
     });
   }
+  let library = map::open_library(None, None)?;
   Ok(Loaded {
     device: "Kindle".into(),
-    library: None,
+    library: library.map(|l| (l.root, l.kind, l.books.len())),
     mappings: session.store.mappings.len(),
     rows,
   })
@@ -396,12 +412,7 @@ mod tests {
       .iter()
       .find(|r| r.file == "Books/book-a.epub")
       .unwrap();
-    assert_eq!(
-      a.group,
-      Group::Same {
-        why: Own::NoLibrary
-      }
-    );
+    assert_eq!(a.group, Group::NoReference);
     assert_eq!(a.percent, Some(0.74));
     assert_eq!(
       a.xpointer.as_deref(),
@@ -465,6 +476,19 @@ mod tests {
     let row = loaded.rows.iter().find(|r| r.id == kepub).unwrap();
     assert_eq!(row.group, Group::Mapped { original });
     let key = row.key.clone().unwrap();
+    // The plain EPUB on the device is that original: checked, even without
+    // a library.
+    let plain = loaded
+      .rows
+      .iter()
+      .find(|r| r.file == "Books/book-a.epub")
+      .unwrap();
+    assert_eq!(
+      plain.group,
+      Group::Same {
+        why: Own::OriginalOfMapping
+      }
+    );
 
     // Mapping the plain EPUB to itself needs no mapping.
     assert_eq!(
@@ -475,7 +499,7 @@ mod tests {
     unmap(&key).unwrap();
     let loaded = load(&root, Kind::Nickel, &mut |_, _| {}).unwrap();
     let row = loaded.rows.iter().find(|r| r.id == kepub).unwrap();
-    assert!(matches!(row.group, Group::Same { .. }), "{row:?}");
+    assert_eq!(row.group, Group::NoReference);
     assert_eq!(row.key, None);
     assert!(unmap(&key).is_err());
     fs::remove_dir_all(&root).unwrap();

@@ -60,7 +60,8 @@ pub struct Texts {
   pub own_checksum_hint: &'static str,
   pub own_in_library: &'static str,
   pub own_original: &'static str,
-  pub own_no_library: &'static str,
+  pub no_reference: &'static str,
+  pub no_reference_hint: &'static str,
   pub mapped: &'static str,
   pub mapped_hint: &'static str,
   pub not_mapped: &'static str,
@@ -191,16 +192,19 @@ static DE: Texts = Texts {
   loading: "Lese Bücher …",
   failed: "Konnte das Gerät nicht lesen",
   library: "Bibliothek",
-  no_library: "Keine Bibliothek eingestellt (library = in config.ini): Bücher werden unter \
-               ihrer eigenen Prüfsumme synchronisiert.",
+  no_library: "Keine Bibliothek mit Referenz-EPUBs eingestellt (library = in config.ini): Die \
+               App kann nicht prüfen, ob KOReader diese Bücher kennt. Trag die Bibliothek ein \
+               oder ordne die Bücher selbst zu.",
   mappings: "Zuordnungen",
   own_checksum: "Eigene Prüfsumme",
   own_checksum_hint: "Synchronisiert unter der Prüfsumme der Datei auf dem Gerät. KOReader \
                       findet die Stelle nur, wenn er genau diese Datei hat.",
   own_in_library: "gleiche Datei wie in der Bibliothek",
   own_original: "Original einer Zuordnung",
-  own_no_library: "nicht geprüft, keine Bibliothek eingestellt: ein kepub oder umgewandeltes \
-                   EPUB braucht eine Zuordnung",
+  no_reference: "Ohne Referenz-EPUB",
+  no_reference_hint: "Keine Referenz-EPUB bekannt, also unklar, ob KOReader das Buch kennt: \
+                      Es würde unter der Prüfsumme der Datei auf dem Gerät gesendet. Ein kepub \
+                      oder umgewandeltes EPUB braucht eine Zuordnung.",
   mapped: "Zugeordnet",
   mapped_hint: "Synchronisiert unter der Prüfsumme der Original-EPUB.",
   not_mapped: "Nicht zugeordnet",
@@ -222,10 +226,12 @@ static DE: Texts = Texts {
   unmap_button: "Entfernen",
   map_title: "Zuordnung für",
   comparing: "Vergleiche mit der Bibliothek …",
-  no_library_for_suggestions: "Keine Bibliothek eingestellt (library = in config.ini): wähle \
-                               die Original-EPUB selbst.",
+  no_library_for_suggestions: "Keine Referenz-EPUB gefunden: Es ist keine Bibliothek \
+                               eingestellt (library = in config.ini). Wähle die Original-EPUB \
+                               selbst.",
   same_in_library: "Dieselbe Datei liegt in der Bibliothek, es braucht keine Zuordnung:",
-  no_candidates: "Kein passendes Buch in der Bibliothek: wähle die Original-EPUB selbst.",
+  no_candidates: "Keine Referenz-EPUB gefunden: kein passendes Buch in der Bibliothek. Wähle \
+                  die Original-EPUB selbst.",
   uncertain: "unsicher, bitte prüfen",
   choose_epub: "EPUB wählen …",
   epub_path: "Pfad der EPUB",
@@ -253,15 +259,19 @@ static EN: Texts = Texts {
   loading: "Reading books …",
   failed: "Could not read the device",
   library: "Library",
-  no_library: "No library set up (library = in config.ini): books sync under their own \
-               checksum.",
+  no_library: "No library with reference EPUBs set up (library = in config.ini): the app \
+               cannot check whether KOReader knows these books. Set up the library or map the \
+               books yourself.",
   mappings: "Mappings",
   own_checksum: "Own checksum",
   own_checksum_hint: "Synced under the checksum of the file on the device. KOReader finds the \
                       position only if it has exactly this file.",
   own_in_library: "the same file as in the library",
   own_original: "the original of a mapping",
-  own_no_library: "not checked, no library set up: a kepub or a converted EPUB needs a mapping",
+  no_reference: "No reference EPUB",
+  no_reference_hint: "No reference EPUB known, so it is unclear whether KOReader knows the \
+                      book: it would be sent under the checksum of the file on the device. A \
+                      kepub or a converted EPUB needs a mapping.",
   mapped: "Mapped",
   mapped_hint: "Synced under the checksum of the original EPUB.",
   not_mapped: "Not mapped",
@@ -283,10 +293,11 @@ static EN: Texts = Texts {
   unmap_button: "Remove",
   map_title: "Mapping for",
   comparing: "Comparing with the library …",
-  no_library_for_suggestions: "No library set up (library = in config.ini): choose the \
-                               original EPUB yourself.",
+  no_library_for_suggestions: "No reference EPUB found: no library is set up (library = \
+                               in config.ini). Choose the original EPUB yourself.",
   same_in_library: "The same file is in the library, no mapping needed:",
-  no_candidates: "No matching book in the library: choose the original EPUB yourself.",
+  no_candidates: "No reference EPUB found: no matching book in the library. Choose the \
+                  original EPUB yourself.",
   uncertain: "uncertain, please check",
   choose_epub: "Choose EPUB …",
   epub_path: "Path of the EPUB",

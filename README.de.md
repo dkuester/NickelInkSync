@@ -154,8 +154,9 @@ Ein Fenster für dieselbe Arbeit, auf derselben Bibliothek (`gui/`, egui):
 `just gui` oder `cargo run -p nickelinksync-gui`. Es findet einen per USB
 angesteckten Kobo oder Tolino (macOS: `/Volumes`), nimmt eine Kopie der
 Bücher eines Kindle als Ordner und zeigt die Bücher danach, wie sie
-synchronisiert werden (nicht zugeordnet, zugeordnet, gleiche Datei), mit
-der Stelle auf dem Gerät. Dort ordnest du ein Buch auch zu: mit den
+synchronisiert werden (nicht zugeordnet, ohne Referenz-EPUB, zugeordnet,
+eigene Prüfsumme), mit der Stelle auf dem Gerät; ohne Bibliothek warnt es,
+dass es nicht prüfen kann, welche Bücher KOReader kennt. Dort ordnest du ein Buch auch zu: mit den
 Vorschlägen der Bibliothek samt Bewertung oder einer selbst gewählten
 EPUB; eine Zuordnung lässt sich ändern oder entfernen. Aufs Gerät
 schreibt es nichts, nur `mappings.json`. Beim Anstecken wird nichts

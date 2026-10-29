@@ -236,6 +236,15 @@ fertig, D2 läuft (E0, E1 und E2 erledigt).
     unter „Gleiche Datei“ (jetzt „Eigene Prüfsumme“ mit Grund, auch dort
     „Zuordnen …“), und die Knöpfe lagen bei langen Pfaden außerhalb des
     Fensters (jetzt neben dem Titel).
+  - [x] **ich:** Auf deinen Wunsch: Ohne Referenz-EPUB gibt die App einen
+    Hinweis statt einer falschen Meldung. Ohne Bibliothek steht oben eine
+    Warnung, ungeprüfte Bücher stehen in der Gruppe „Ohne Referenz-EPUB“
+    (Warnfarbe, „Zuordnen …“), „Eigene Prüfsumme“ zeigt nur Geprüftes
+    (gleiche Datei wie in der Bibliothek, Original einer Zuordnung, Letzteres
+    auch ohne Bibliothek); der Dialog sagt „Keine Referenz-EPUB gefunden“.
+    Die CLI sendet ohne Bibliothek weiter unter der eigenen Prüfsumme; ob
+    die GUI solche Bücher beim Push überspringt oder fragt, entscheiden wir
+    in E3.
   - [ ] **ich:** **E3** Server-Positionen, Push/Pull per Knopf mit
     Rückfrage-Dialog, Rückschreiben am Tolino, Verlauf (`history.jsonl`,
     auch für die CLI), Geräteansicht nebeneinander (O5). Kobo nur „zum

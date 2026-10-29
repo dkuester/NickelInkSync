@@ -603,9 +603,8 @@ fn loaded_view(ui: &mut egui::Ui, t: &Texts, lang: Lang, loaded: &Loaded) -> Opt
         i18n::epubs(lang, *n)
       ));
     }
-    None if loaded.device == "Kindle" => {}
     None => {
-      ui.weak(t.no_library);
+      ui.colored_label(ui.visuals().warn_fg_color, t.no_library);
     }
   }
   ui.label(format!("{}: {}", t.mappings, loaded.mappings));
@@ -617,35 +616,54 @@ fn loaded_view(ui: &mut egui::Ui, t: &Texts, lang: Lang, loaded: &Loaded) -> Opt
   }
   let pick =
     |f: fn(&Group) -> bool| -> Vec<&Row> { loaded.rows.iter().filter(|r| f(&r.group)).collect() };
+  // Name, hint, books, and whether it is a warning: shown only with books,
+  // its hint in the warning colour.
   let sections = [
     (
       t.not_mapped,
       t.not_mapped_hint,
       pick(|g| matches!(g, Group::NotMapped)),
+      true,
+    ),
+    (
+      t.no_reference,
+      t.no_reference_hint,
+      pick(|g| matches!(g, Group::NoReference)),
+      false,
     ),
     (
       t.mapped,
       t.mapped_hint,
       pick(|g| matches!(g, Group::Mapped { .. })),
+      true,
     ),
     (
       t.own_checksum,
       t.own_checksum_hint,
       pick(|g| matches!(g, Group::Same { .. })),
+      true,
     ),
-    (t.problems, "", pick(|g| matches!(g, Group::Problem { .. }))),
+    (
+      t.problems,
+      "",
+      pick(|g| matches!(g, Group::Problem { .. })),
+      false,
+    ),
   ];
   let mut action = None;
   egui::ScrollArea::both().show(ui, |ui| {
-    for (i, (name, hint, rows)) in sections.iter().enumerate() {
-      if rows.is_empty() && i == 3 {
+    for (i, (name, hint, rows, shown_empty)) in sections.iter().enumerate() {
+      let warning = !shown_empty;
+      if rows.is_empty() && warning {
         continue;
       }
       egui::CollapsingHeader::new(format!("{name} ({})", rows.len()))
         .id_salt(i)
         .default_open(!rows.is_empty())
         .show(ui, |ui| {
-          if !hint.is_empty() {
+          if warning && !hint.is_empty() {
+            ui.colored_label(ui.visuals().warn_fg_color, *hint);
+          } else if !hint.is_empty() {
             ui.weak(*hint);
           }
           if rows.is_empty() {
@@ -680,7 +698,7 @@ fn book_table(ui: &mut egui::Ui, t: &Texts, id: usize, rows: &[&Row]) -> Option<
       ui.strong(t.last_read);
       ui.strong(match rows[0].group {
         Group::Mapped { .. } => t.original,
-        Group::NotMapped => t.file,
+        Group::NotMapped | Group::NoReference => t.file,
         _ => t.why,
       });
       ui.end_row();
@@ -696,10 +714,7 @@ fn book_table(ui: &mut egui::Ui, t: &Texts, id: usize, rows: &[&Row]) -> Option<
           let can_map = !row.id.is_empty();
           let map_label = match row.group {
             // Without a library nothing told whether it needs a mapping.
-            Group::NotMapped
-            | Group::Same {
-              why: Own::NoLibrary,
-            } => Some(t.map_button),
+            Group::NotMapped | Group::NoReference => Some(t.map_button),
             Group::Mapped { .. } | Group::Problem { .. } if row.key.is_some() => {
               Some(t.remap_button)
             }
@@ -739,11 +754,13 @@ fn book_table(ui: &mut egui::Ui, t: &Texts, id: usize, rows: &[&Row]) -> Option<
         ui.label(row.last_read.as_deref().unwrap_or("–"));
         match &row.group {
           Group::Mapped { original } => ui.label(file_name(original)).on_hover_text(original),
-          Group::NotMapped => ui.label(file_name(&row.file)).on_hover_text(&row.file),
+          Group::NotMapped | Group::NoReference => {
+            ui.label(file_name(&row.file)).on_hover_text(&row.file)
+          }
           Group::Same { why } => ui.weak(match why {
             Own::InLibrary => t.own_in_library,
             Own::OriginalOfMapping => t.own_original,
-            Own::NoLibrary => t.own_no_library,
+            Own::NoLibrary => t.no_reference,
           }),
           Group::Problem { message } => ui.colored_label(ui.visuals().warn_fg_color, message),
         };
