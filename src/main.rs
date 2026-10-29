@@ -1277,7 +1277,8 @@ impl DeviceChapters {
         format!("{n} sections, as many as spine items in the EPUB")
       }
       (DeviceChapters::Sections(n), _) => format!(
-        "{n} sections, but {spine} spine items in the EPUB: positions may land in the wrong chapter"
+        "{n} sections, {spine} spine items in the EPUB (Send-to-Kindle adds a cover and splits \
+         chapters): positions are found by their text"
       ),
       (DeviceChapters::Spine(own), Some((found, _)))
         if found == own.len() && own.len() == spine =>

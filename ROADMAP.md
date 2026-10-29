@@ -86,6 +86,18 @@ L = a week or more, including verification.
       KOReader in both directions. The renderer is TENG; changing Nickel's
       memory or `goToBookmark` did not move it
       ([docs/nickel-5.18-symbols.md](docs/nickel-5.18-symbols.md))
+- [x] Manual book mapping in the CLI (D1, PRs #28, #31, #32, #33): a book on
+      a device (kepub, an EPUB with another checksum, a Kindle KFX) linked to
+      its original EPUB (`mappings.json` in the data directory, keyed by the
+      device file's checksum or the Kindle `content_id`), `map add|list|
+      suggest|remove` with a library of originals (Calibre `metadata.db`
+      read-only, or a folder) and readable scores; `status`/`push`/`pull`
+      sync under the original's checksum, the position moved by chapter path
+      (calibre's split chapters joined) and visible text, with visible
+      fallbacks and `position = paragraph` by default; the Kindle read from a
+      copy of its books (MTP), store books with DRM skipped. Verified on the
+      Kobo 6.0 (calibre kepubs) and the Paperwhite (Send-to-Kindle): KOReader
+      opens the same page.
 
 ## Quick wins
 
@@ -98,8 +110,8 @@ L = a week or more, including verification.
 
 Order: everything the Tolino Shine Color (5.18) can test on its own comes
 first (reverse translation for plain EPUB, USB write-back, Qt6 symbols and
-plugin). **Right after that, before anything else: the manual book
-mapping in the CLI, then a desktop client with a graphical UI.**
+plugin). **Now, before anything else: the desktop client with a graphical UI**
+(the manual book mapping in the CLI is done, see "Recently completed").
 Maintenance and bug fixes may be slotted in at any time. The Kobo
 (kepub reverse translation, write-back, plugin) follows in a pass of its
 own. The reference Clara BW updated itself to firmware **6.0.279225** on
@@ -107,25 +119,6 @@ own. The reference Clara BW updated itself to firmware **6.0.279225** on
 no 4.x device left, and 4.x-only behaviour is checked against the 4.46
 fixtures only.
 
-- **Manual book mapping in the CLI** (M–L): link a book on a device
-  (kepub, an EPUB with another hash, a Kindle KFX) to the EPUB and its
-  KOReader hash, and sync through that link. Why: without the mapping
-  there is no sync between kepub and EPUB and no Kindle sync. A manual
-  link wins over the automatic hash match; translating the position
-  between two different files needs matching chapter hrefs or a text
-  anchor. Reference: BookOrbit's hash matching and position converter
-  (AGPL-3.0, concept only, see the license note in
-  [SCOPE.md](SCOPE.md#license)). Test case: *Heat 2* on the two reference
-  devices. Stage 1 done: the mapping store (`mappings.json` in the data
-  directory, keyed by the device file's checksum or the Kindle
-  `content_id`) and `map add|list|remove`. Stage 2 done: a library of
-  originals (Calibre `metadata.db` read-only, or a folder of EPUBs) and
-  `map suggest` with a readable score. Stage 3 done: `status`/`push`/
-  `pull` sync a mapped book under the original's checksum, the position
-  moved by chapter path (calibre's split chapters joined) and visible
-  text, with visible fallbacks. Stage 4 done: the Kindle in `status`/
-  `push` (read-only, a copy of its books where the Kindle offers only
-  MTP; store books with DRM skipped).
 - **Desktop client with a graphical UI** (L): right after the CLI
   mapping, on the same library: devices and books, creating mappings,
   starting a sync. egui/eframe (pure Rust, MIT/Apache, no WebView), one
