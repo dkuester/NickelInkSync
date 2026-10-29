@@ -175,6 +175,13 @@ fixtures only.
   mapping (original checksum, chapter paths, text offsets) or the
   original copied to the device, read by `--live`. After the desktop
   client, before the Kobo plugin.
+- **Store and cloud books without DRM** (S–M): downloaded Tolino store
+  books without encryption sit in `.kobo/kepub/<ContentID>` and store
+  positions like sideloaded EPUBs, but only sideloaded books sync so far.
+  Sync them through a mapping keyed by `ContentID` (the store adds
+  `cdp.info` to the file), skip books with DRM (detected by encrypted
+  text, `rights.xml`, LCP or Kobo store keys), push first; write-back only
+  after checking the store's own cloud sync. After the desktop client.
 
 ## Low priority (optional)
 

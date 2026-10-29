@@ -231,7 +231,8 @@ impl App {
   fn kindle_picker(&mut self, ui: &mut egui::Ui, t: &Texts) {
     ui.label(t.kindle_folder_path)
       .on_hover_text(t.kindle_folder_hint);
-    let edit = ui.text_edit_singleline(&mut self.kindle_path);
+    let edit =
+      ui.add(egui::TextEdit::singleline(&mut self.kindle_path).hint_text(t.choose_kindle_folder));
     if edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
       let path = PathBuf::from(self.kindle_path.trim());
       self.set_kindle_folder(path);

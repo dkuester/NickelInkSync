@@ -417,6 +417,32 @@ fertig, D2 läuft (E0 und E1 erledigt).
     `status` meldet „push asks first“, `push` fragt, Antwort `s` behält die
     Server-Position; mit `< /dev/null` wird nichts gesendet.
 
+- [ ] **P4 Shop- und Cloud-Bücher ohne DRM** (nach D2) · Bisher werden nur
+  seitengeladene Bücher (`file:///mnt/onboard/…`) synchronisiert, weil
+  Shop-Bücher als DRM-Bücher galten. Am Tolino (2026-10-29) liegen
+  heruntergeladene Shop-Bücher ohne Verschlüsselung in
+  `.kobo/kepub/<ContentID>` (Paradise Lost, Good Boy), Position wie bei
+  seitengeladenen EPUBs (`#point(...)`). Beim Herunterladen legt der
+  Tolino `META-INF/cdp.info` (Bestellnummer) ins EPUB, die Prüfsumme
+  weicht also immer von der eigenen Kopie ab.
+  - [ ] **ich:** DRM sicher erkennen: `encryption.xml` nur, wenn
+    Textdateien verschlüsselt sind (nicht bei verschleierten Schriften),
+    `rights.xml` (Adobe), `license.lcpl` (LCP), Kobo-Store-Schlüssel in
+    `content_keys`; zusätzlich muss das erste Kapitel als XHTML lesbar
+    sein, sonst überspringen und nennen.
+  - [ ] **ich:** Shop-Bücher in `status`/`push` und in der GUI: immer über
+    eine Zuordnung zur Original-EPUB, Schlüssel ist die **ContentID**
+    (wie die Kindle-`content_id`), weil sich die Datei beim erneuten
+    Herunterladen ändern kann; ohne Zuordnung nicht synchronisiert, auch
+    ohne Bibliothek. `SCOPE.md` anpassen („Out of scope“: Bücher mit DRM
+    statt Shop-Bücher).
+  - [ ] **du:** Good Boy auf dem Tolino zuordnen, `push`, in KOReader
+    öffnen.
+  - [ ] **ich + du (später):** Rückschreiben erst nach einem Test, ob der
+    eigene Cloud-Sync von Tolino/Kobo die geschriebene Stelle
+    überschreibt (Flugmodus, dann WLAN). Das Plugin bleibt bis dahin bei
+    seitengeladenen Büchern.
+
 ## Plugin
 
 - [!] **N1 Symbole für Kobo 4.46 (Qt5)** · blockiert: kein Kobo mit 4.x
