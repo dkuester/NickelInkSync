@@ -32,7 +32,7 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0 erledigt).
+fertig, D2 läuft (E0 und E1 erledigt).
 
 ## Grundlagen
 
@@ -204,12 +204,14 @@ fertig, D2 läuft (E0 erledigt).
     gibt aus oder fragt. Die CLI gibt aus und fragt wie bisher: Ihre
     Ausgabe ist über alle Aufrufe der Testsuite zeichengleich geblieben.
     Tests ohne CLI in `tests/session.rs`.
-  - [ ] **ich:** **E1** Workspace und Fenster, das nur anzeigt: angesteckte
+  - [x] **ich:** **E1** Workspace und Fenster, das nur anzeigt: angesteckte
     Kobo/Tolino (`/Volumes/*` mit `.kobo/KoboReader.sqlite`), Kindle-Ordner
     wählen, Bücher nach gleicher Prüfsumme, zugeordnet und „Nicht
     zugeordnet“, Position auf dem Gerät; Arbeits-Thread; Deutsch/Englisch
     (`sys-locale`, umschaltbar). CI: clippy/test mit `--workspace`,
-    Gerätebau mit `-p nickelinksync`.
+    Gerätebau mit `-p nickelinksync`, eigener Job `gui-macos` (kein
+    Pflicht-Check). eframe 0.37; Ordnerdialog (`rfd`) nur für macOS und
+    Windows, unter Linux wird der Pfad eingetippt. `just gui` startet.
   - [ ] **du:** E1 am Mac mit Kobo, Tolino und der Kindle-Kopie
     ausprobieren (`cargo run -p nickelinksync-gui`).
   - [ ] **ich:** **E2** Zuordnung in der GUI: Vorschläge mit Bewertung,

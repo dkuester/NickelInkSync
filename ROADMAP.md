@@ -140,7 +140,9 @@ fixtures only.
   [TODO.md](TODO.md)), the GUI as a second package in a Cargo workspace
   so the device build stays without it. Done: E0, the sync run (device,
   server, one step per book with the `confirm` question as data) moved
-  from the CLI into the library (`session`), CLI output unchanged.
+  from the CLI into the library (`session`), CLI output unchanged; E1, a
+  read-only window (`gui/`, eframe) that finds connected devices and lists
+  their books by how they sync.
 
 - **Read-only device database layer** (S–M): reading the books and their
   positions is done (`status --device`); still to do: resolve
