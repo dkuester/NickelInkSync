@@ -14,15 +14,18 @@ ln -sf /state/hwcfg.img /dev/disk/by-partlabel/hwcfg
 mkdir -p /mnt/onboard
 mount --bind /state/onboard /mnt/onboard
 
-# A battery at 80 %, not charging.
+# A battery at 80 %, not charging. 6.0 reads `battery`; 5.18 also reads
+# the PMIC's own `bd71827_bat`.
 mount -t tmpfs none /sys/class/power_supply
-mkdir -p /sys/class/power_supply/battery
-cd /sys/class/power_supply/battery || exit 1
-echo 80 > capacity
-echo 'Not charging' > status
-echo 0 > charging
-echo 0 > charger_type
-echo 0 > time_to_full_now
+for bat in battery bd71827_bat; do
+    mkdir -p /sys/class/power_supply/$bat
+    cd /sys/class/power_supply/$bat || exit 1
+    echo 80 > capacity
+    echo 'Not charging' > status
+    echo 0 > charging
+    echo 0 > charger_type
+    echo 0 > time_to_full_now
+done
 cd /
 
 # Nothing may power off the container or hand the user partition to USB.
@@ -37,6 +40,10 @@ done
 # into /usr/local/Kobo while it starts, which fails across file systems.
 mkdir -p /usr/local/Kobo/imageformats
 cp /state/imageformats/*.so /usr/local/Kobo/imageformats/ 2>/dev/null
+
+# 5.18 takes USB and other hardware events from this FIFO, which the
+# device's init script creates in /tmp (6.0 makes its own in /run/kobo).
+[ -p /tmp/nickel-hardware-status ] || mkfifo /tmp/nickel-hardware-status
 
 # Touchscreen: a FIFO fed by vmtouch, which reads commands from /tmp/touch.
 mkdir -p /dev/input
