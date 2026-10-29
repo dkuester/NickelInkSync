@@ -31,7 +31,8 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 **Client mit grafischer Oberfläche (D2)**, mit höchster Priorität und vor
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
-dürfen jederzeit dazwischengeschoben werden.
+dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
+fertig, als Nächstes kommt D2.
 
 ## Grundlagen
 
@@ -69,9 +70,9 @@ dürfen jederzeit dazwischengeschoben werden.
 
 ## Desktop-Client
 
-- [~] **D1 CLI mit manueller Buchzuordnung** · höchste Priorität nach dem
-  Tolino-Durchgang. Löst O1 ab und entblockt den Sync kepub ↔ EPUB und den
-  Kindle-Sync (L1). In Etappen, je ein PR: (1) Speicher und Befehle,
+- [x] **D1 CLI mit manueller Buchzuordnung** · PR #28, #31, #32, #33 ·
+  höchste Priorität nach dem Tolino-Durchgang. Löst O1 ab und entblockt
+  den Sync kepub ↔ EPUB und den Kindle-Sync (L1). In Etappen, je ein PR: (1) Speicher und Befehle,
   (2) Bibliothek mit Originalen und Vorschläge, (3) `status`/`push`/`pull`
   über die Zuordnung mit Positionsübersetzung, (4) Kindle in `status`/`push`.
   - [x] **ich:** Zuordnungsspeicher (`src/mapping.rs`): Buch auf dem Gerät
@@ -131,8 +132,10 @@ dürfen jederzeit dazwischengeschoben werden.
     und geteilte Kapitel (Block über den Text gesucht). Gekaufte Bücher
     (DRM) werden übersprungen. Geprüft an Kopien von „Good Boy“ und „Der
     wiedergefundene Freund“ (alle bzw. fast alle Blöcke exakt).
-  - [ ] **du:** Kindle-Test: „Good Boy“ auf dem Kindle ein Stück lesen,
-    Buch per OpenMTP kopieren, `map add` und `push`, in KOReader öffnen.
+  - [x] **du:** Kindle-Test (2026-10-29): „Good Boy“ (Send-to-Kindle, 16
+    Abschnitte gegen 14 Kapitel) bis 14 % gelesen, per OpenMTP kopiert,
+    `map add` über den Vorschlag, `push`: KOReader öffnet dieselbe Seite
+    („In the end it wasn't the stone“ oben rechts).
   - [ ] **ich (später, vor oder in D2):** Kindle direkt per MTP lesen
     (libmtp), ohne Kopie.
 - [ ] **D2 Desktop-Client mit grafischer Oberfläche** · direkt nach D1.
@@ -546,7 +549,7 @@ dürfen jederzeit dazwischengeschoben werden.
 
 ## Optional (später)
 
-- [~] **O1 Manuelle Zuordnung** von Büchern (kepub ↔ EPUB), Testfall Heat 2.
+- [x] **O1 Manuelle Zuordnung** von Büchern (kepub ↔ EPUB), Testfall Heat 2.
   **Geht in D1 auf** (CLI mit manueller Buchzuordnung, höchste Priorität).
   Vorbild: BookOrbit, nur als Konzept (AGPL-3.0). Blockiert auch den
   Kindle-Sync (L1): Nichts im KFX führt zur EPUB-Prüfsumme; Kandidaten für
