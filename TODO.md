@@ -212,8 +212,11 @@ fertig, D2 läuft (E0 und E1 erledigt).
     Gerätebau mit `-p nickelinksync`, eigener Job `gui-macos` (kein
     Pflicht-Check). eframe 0.37; Ordnerdialog (`rfd`) nur für macOS und
     Windows, unter Linux wird der Pfad eingetippt. `just gui` startet.
-  - [ ] **du:** E1 am Mac mit Kobo, Tolino und der Kindle-Kopie
-    ausprobieren (`cargo run -p nickelinksync-gui`).
+  - [~] **du:** E1 am Mac mit Kobo, Tolino und der Kindle-Kopie
+    ausprobieren (`just gui`). Tolino und Kobo geprüft (2026-10-29):
+    Bücher und Status stimmen. Am Tolino nur Book R, weil Paradise Lost
+    und Good Boy Shop-Bücher sind (siehe P4). Kindle-Ordner und
+    Sprachwechsel stehen noch aus.
   - [ ] **ich:** **E2** Zuordnung in der GUI: Vorschläge mit Bewertung,
     bestätigen oder EPUB selbst wählen, entfernen.
   - [ ] **ich:** **E3** Server-Positionen, Push/Pull per Knopf mit
