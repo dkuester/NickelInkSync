@@ -136,7 +136,11 @@ fixtures only.
   and mappings shared with the CLI; German and English; side-by-side device
   view, restoring the database backup, sync history, release notice.
   kepubify is bundled (one binary per platform, a pinned and
-  checksum-verified release, with its MIT notice).
+  checksum-verified release, with its MIT notice). Nine stages (E0–E8 in
+  [TODO.md](TODO.md)), the GUI as a second package in a Cargo workspace
+  so the device build stays without it. Done: E0, the sync run (device,
+  server, one step per book with the `confirm` question as data) moved
+  from the CLI into the library (`session`), CLI output unchanged.
 
 - **Read-only device database layer** (S–M): reading the books and their
   positions is done (`status --device`); still to do: resolve

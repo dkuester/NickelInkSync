@@ -32,7 +32,7 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, als Nächstes kommt D2.
+fertig, D2 läuft (E0 erledigt).
 
 ## Grundlagen
 
@@ -138,9 +138,10 @@ fertig, als Nächstes kommt D2.
     („In the end it wasn't the stone“ oben rechts).
   - [ ] **ich (später, vor oder in D2):** Kindle direkt per MTP lesen
     (libmtp), ohne Kopie.
-- [ ] **D2 Desktop-Client mit grafischer Oberfläche** · direkt nach D1.
+- [~] **D2 Desktop-Client mit grafischer Oberfläche** · direkt nach D1.
   Baut auf derselben Bibliothek auf: Geräte und Bücher anzeigen, Zuordnung
-  anlegen, Sync auslösen.
+  anlegen, Sync auslösen. In Etappen E0–E8, je ein PR (Plan vom
+  2026-10-29, unten).
   - [x] **du:** Plattformen festgelegt: zuerst **macOS**, dann **Windows**,
     Linux optional, dann für möglichst viele Distributionen und Versionen.
   - [x] **du:** Funktionsumfang der ersten Version festgelegt (2026-10-24):
@@ -175,22 +176,80 @@ fertig, als Nächstes kommt D2.
   - [x] **du:** kepubify wird **mitgeliefert**: ein Binary je Plattform
     (macOS, Windows, Linux im AppImage), mit dem MIT-Lizenzhinweis von
     kepubify in der App und im Paket.
-  - [ ] **ich:** kepubify-Binaries in der CI laden (feste Version, Prüfsumme
-    gegen das Release prüfen) und ins Paket legen; Lizenzhinweis in
-    „Über“ und neben dem Binary.
-  - [ ] **ich:** GUI mit **egui/eframe** (reines Rust, MIT/Apache, ohne
-    WebView, ein Code für alle drei Systeme).
-  - [ ] **ich:** macOS: `.app`-Bundle als `.dmg`, aus der CI (macOS-Runner);
-    ohne Apple Developer ID nicht notarisiert (erster Start per
-    Rechtsklick → „Öffnen“).
-  - [ ] **ich:** Windows: `.exe` aus der CI (Windows-Runner); ohne
+  - [x] **du:** Plan und offene Punkte entschieden (2026-10-29): macOS ab
+    **11** als Universal-Binary (arm64 + x86_64); bis E5 testest du per
+    `cargo run`, das `.dmg` kommt in E6; App-Name **NickelInkSync**, das
+    Icon entwerfe ich als SVG, du gibst Rückmeldung; im Schlüsselbund liegt
+    der **MD5-Schlüssel**, nicht das Passwort; Hinweis auf ein neues
+    Release höchstens einmal am Tag über die GitHub-API, abschaltbar;
+    Releases per Tag (`v0.2.0`) mit `.dmg`, später `.exe` und dem
+    Tolino-Paket; gemeinsamer Verlauf `history.jsonl` für CLI und GUI;
+    Windows als **ZIP** (`.exe`, `kepubify.exe`, Lizenzen) statt
+    Installer; für E7 testest du auf deinem Windows-Gaming-PC.
+  - Architektur: Das Paket `nickelinksync` (Bibliothek und CLI) bleibt,
+    wie es ist; die GUI kommt als zweites Paket `gui/`
+    (`nickelinksync-gui`) in einen Cargo-Workspace und hängt nur von der
+    Bibliothek ab. Der Gerätebau (`-p nickelinksync`) und das
+    Tolino-Paket bleiben ohne egui. Lange Vorgänge laufen in einem
+    Arbeits-Thread (Befehle und Ereignisse über Kanäle). Die Rückfrage
+    `confirm` ist Teil der Daten (`session::Action::Ask`): Die CLI fragt im
+    Terminal, die GUI im Dialog, beide wenden dieselben Schritte an.
+    Einstellungen nur für die GUI (Sprache, Kindle-Ordner,
+    Update-Prüfung) in `gui.json` im Datenordner, weil `config.ini`
+    unbekannte Schlüssel ablehnt.
+  - [x] **ich:** **E0** Sync-Ablauf in die Bibliothek (`src/session.rs`):
+    `Session`/`KindleSession`, `Server`, `Identity`, je Buch
+    `push_step`/`pull_step` mit `Action` (`InSync`, `Apply`, `Keep`,
+    `Ask`), `take`, `write`, `sync::outlook` für `status`; nichts darin
+    gibt aus oder fragt. Die CLI gibt aus und fragt wie bisher: Ihre
+    Ausgabe ist über alle Aufrufe der Testsuite zeichengleich geblieben.
+    Tests ohne CLI in `tests/session.rs`.
+  - [ ] **ich:** **E1** Workspace und Fenster, das nur anzeigt: angesteckte
+    Kobo/Tolino (`/Volumes/*` mit `.kobo/KoboReader.sqlite`), Kindle-Ordner
+    wählen, Bücher nach gleicher Prüfsumme, zugeordnet und „Nicht
+    zugeordnet“, Position auf dem Gerät; Arbeits-Thread; Deutsch/Englisch
+    (`sys-locale`, umschaltbar). CI: clippy/test mit `--workspace`,
+    Gerätebau mit `-p nickelinksync`.
+  - [ ] **du:** E1 am Mac mit Kobo, Tolino und der Kindle-Kopie
+    ausprobieren (`cargo run -p nickelinksync-gui`).
+  - [ ] **ich:** **E2** Zuordnung in der GUI: Vorschläge mit Bewertung,
+    bestätigen oder EPUB selbst wählen, entfernen.
+  - [ ] **ich:** **E3** Server-Positionen, Push/Pull per Knopf mit
+    Rückfrage-Dialog, Rückschreiben am Tolino, Verlauf (`history.jsonl`,
+    auch für die CLI), Geräteansicht nebeneinander (O5). Kobo nur „zum
+    Server“, bis P2 für den Kobo fertig ist.
+  - [ ] **ich:** **E4** Einstellungen; Schlüssel im Schlüsselbund bzw. in
+    der Anmeldeinformationsverwaltung (`keyring`, nur für macOS und
+    Windows, nicht im Gerätebau). Die CLI sucht `password`/`key` in der
+    Datei, dann im Schlüsselbund; die GUI bietet an, ein Passwort aus der
+    Datei dorthin zu verschieben.
+  - [ ] **ich:** **E5** Bücher aus Calibre auf Tolino oder Kobo kopieren,
+    beim Kobo auf Wunsch mit kepubify, Zuordnung entsteht dabei;
+    Sicherungskopie der Gerätedatenbank zurückspielen (Bibliothek und
+    CLI). Nichts auf dem Gerät überschreiben.
+  - [ ] **ich:** **E6** macOS: `.app` als `.dmg` aus der CI (macOS-Runner,
+    eigener Job, kein Pflicht-Check), kepubify-Binaries (feste Version,
+    SHA-256 gegen das Release geprüft) mit Lizenzhinweis in „Über“ und
+    neben dem Binary, Release-Workflow per Tag, Hinweis auf neue
+    Releases. Ohne Apple Developer ID nicht notarisiert: Seit macOS 15
+    öffnet Rechtsklick → „Öffnen“ die App nicht mehr, sondern
+    Systemeinstellungen → Datenschutz & Sicherheit → „Dennoch öffnen“
+    (README).
+  - [ ] **du:** Icon-Entwurf (SVG) ansehen; `.dmg` aus der CI installieren.
+  - [ ] **ich:** **E7** Windows: Pfade für Konfiguration und Daten
+    (`%APPDATA%`, heute nur `HOME`/XDG), Wechsellaufwerke erkennen,
+    Anmeldeinformationsverwaltung, ZIP aus der CI (Windows-Runner); ohne
     Code-Signing warnt SmartScreen beim ersten Start.
-  - [ ] **ich (optional):** Linux als **AppImage**, gebaut auf einer alten
-    glibc-Basis (ältestes noch unterstütztes Ubuntu LTS), damit es auf
+  - [ ] **du:** E7 auf dem Windows-PC mit Tolino oder Kobo.
+  - [ ] **ich (optional):** **E8** Linux als **AppImage**, gebaut auf einer
+    alten glibc-Basis (ältestes noch unterstütztes Ubuntu LTS), damit es auf
     möglichst vielen Distributionen und Versionen läuft; keine Abhängigkeit
     außer Grafik- und Fensterbibliotheken (X11/Wayland, OpenGL), die jede
     Desktop-Installation hat. Ein statischer musl-Build geht für die GUI
     nicht, weil die Grafiktreiber zur Laufzeit geladen werden.
+  - Nicht in D2: Kindle direkt per MTP (nach der ersten Version, siehe D1;
+    am Mac kollidiert libmtp mit `ptpcamerad`, Windows braucht WPD);
+    Rückschreiben am Kobo (Kobo-Durchgang).
 
 ## Kern
 
