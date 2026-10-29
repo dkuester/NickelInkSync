@@ -129,7 +129,7 @@ impl Server {
 pub enum Identity {
   /// The device file's own checksum: the same file as in the library, or
   /// no library to check against.
-  Own { hash: String, why: &'static str },
+  Own { hash: String, why: Own },
   /// Mapped to an original EPUB: its checksum, and positions translated.
   Mapped { hash: String, mapping: Mapping },
   /// Not synced: `kind` for the plugin, and why.
@@ -138,6 +138,28 @@ pub enum Identity {
     kind: &'static str,
     message: String,
   },
+}
+
+/// Why a book syncs under its own checksum.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Own {
+  /// No library is set up, so nothing was checked: a kepub or a converted
+  /// EPUB needs a mapping to reach KOReader.
+  NoLibrary,
+  /// The book is the original EPUB of a mapping.
+  OriginalOfMapping,
+  /// The same file is in the library.
+  InLibrary,
+}
+
+impl std::fmt::Display for Own {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_str(match self {
+      Own::NoLibrary => "no library configured to check it",
+      Own::OriginalOfMapping => "the original EPUB of a mapping",
+      Own::InLibrary => "the same file as in the library",
+    })
+  }
 }
 
 impl Identity {
@@ -412,13 +434,13 @@ impl Session {
     let Some(library) = &self.library else {
       return Identity::Own {
         hash,
-        why: "no library configured to check it",
+        why: Own::NoLibrary,
       };
     };
     if self.store.mappings.iter().any(|m| m.epub.hash == hash) {
       return Identity::Own {
         hash,
-        why: "the original EPUB of a mapping",
+        why: Own::OriginalOfMapping,
       };
     }
     let in_library = self
@@ -427,7 +449,7 @@ impl Session {
     if in_library.contains(&hash) {
       Identity::Own {
         hash,
-        why: "the same file as in the library",
+        why: Own::InLibrary,
       }
     } else {
       Identity::Skip {

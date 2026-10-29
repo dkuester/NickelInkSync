@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use eframe::egui;
 use nickelinksync::library;
+use nickelinksync::session::Own;
 use nickelinksync::suggest;
 
 use crate::devices::{Found, Kind};
@@ -628,8 +629,8 @@ fn loaded_view(ui: &mut egui::Ui, t: &Texts, lang: Lang, loaded: &Loaded) -> Opt
       pick(|g| matches!(g, Group::Mapped { .. })),
     ),
     (
-      t.same_file,
-      t.same_file_hint,
+      t.own_checksum,
+      t.own_checksum_hint,
       pick(|g| matches!(g, Group::Same { .. })),
     ),
     (t.problems, "", pick(|g| matches!(g, Group::Problem { .. }))),
@@ -701,13 +702,21 @@ fn book_table(ui: &mut egui::Ui, t: &Texts, id: usize, rows: &[&Row]) -> Option<
         match &row.group {
           Group::Mapped { original } => ui.label(original),
           Group::NotMapped => ui.label(&row.file),
-          Group::Same { why } => ui.weak(why),
+          Group::Same { why } => ui.weak(match why {
+            Own::InLibrary => t.own_in_library,
+            Own::OriginalOfMapping => t.own_original,
+            Own::NoLibrary => t.own_no_library,
+          }),
           Group::Problem { message } => ui.colored_label(ui.visuals().warn_fg_color, message),
         };
         ui.horizontal(|ui| {
           let can_map = !row.id.is_empty();
           let map_label = match row.group {
-            Group::NotMapped => Some(t.map_button),
+            // Without a library nothing told whether it needs a mapping.
+            Group::NotMapped
+            | Group::Same {
+              why: Own::NoLibrary,
+            } => Some(t.map_button),
             Group::Mapped { .. } | Group::Problem { .. } if row.key.is_some() => {
               Some(t.remap_button)
             }

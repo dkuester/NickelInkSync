@@ -10,7 +10,7 @@ use std::time::Duration;
 use nickelinksync::library::{self, Library};
 use nickelinksync::map::{self, OnDevice, Outcome};
 use nickelinksync::mapping::Store;
-use nickelinksync::session::{Identity, KindleSession, Options, Session};
+use nickelinksync::session::{Identity, KindleSession, Options, Own, Session};
 use nickelinksync::sync::{format_timestamp, parse_timestamp};
 
 use crate::devices::Kind;
@@ -18,9 +18,8 @@ use crate::devices::Kind;
 /// How a book syncs, if at all.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Group {
-  /// Under its own checksum; `why` (same file as in the library, no
-  /// library, the original of a mapping).
-  Same { why: String },
+  /// Under its own checksum, and why.
+  Same { why: Own },
   /// Under the checksum of this original EPUB.
   Mapped { original: String },
   /// Neither mapped nor the same file as in the library.
@@ -97,9 +96,7 @@ fn load_nickel(
   for (i, book) in session.books.iter().enumerate() {
     let identity = session.identity(book);
     let group = match &identity {
-      Identity::Own { why, .. } => Group::Same {
-        why: why.to_string(),
-      },
+      Identity::Own { why, .. } => Group::Same { why: *why },
       Identity::Mapped { mapping, .. } => Group::Mapped {
         original: mapping.epub.path.clone(),
       },
@@ -399,7 +396,12 @@ mod tests {
       .iter()
       .find(|r| r.file == "Books/book-a.epub")
       .unwrap();
-    assert!(matches!(&a.group, Group::Same { .. }), "{a:?}");
+    assert_eq!(
+      a.group,
+      Group::Same {
+        why: Own::NoLibrary
+      }
+    );
     assert_eq!(a.percent, Some(0.74));
     assert_eq!(
       a.xpointer.as_deref(),
