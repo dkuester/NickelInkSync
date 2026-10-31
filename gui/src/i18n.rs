@@ -130,6 +130,15 @@ pub struct Texts {
   pub time: &'static str,
   pub direction: &'static str,
   pub by: &'static str,
+  pub add_from_library: &'static str,
+  pub add_from_library_hint: &'static str,
+  pub kobo_read_only: &'static str,
+  pub copy_title: &'static str,
+  pub copy_hint: &'static str,
+  pub copy_search: &'static str,
+  pub copy_as_kepub: &'static str,
+  pub copy_as_kepub_hint: &'static str,
+  pub no_kepubify: &'static str,
   pub settings: &'static str,
   pub settings_hint: &'static str,
   pub user: &'static str,
@@ -344,6 +353,59 @@ pub fn report(lang: Lang, report: &crate::sync::Report) -> String {
   line
 }
 
+/// The copy button: "3 kopieren".
+pub fn copy_button(lang: Lang, n: usize) -> String {
+  match lang {
+    Lang::De => format!("{n} kopieren"),
+    Lang::En => format!("Copy {n}"),
+  }
+}
+
+/// Under a list cut short.
+pub fn more_matches(lang: Lang, n: usize) -> String {
+  match lang {
+    Lang::De => format!("… und {n} weitere; die Suche grenzt ein."),
+    Lang::En => format!("… and {n} more; searching narrows it down."),
+  }
+}
+
+/// What copying did: counts, then each book that was left out or failed.
+pub fn copied(lang: Lang, books: &[(String, nickelinksync::copy::Copied)]) -> String {
+  use nickelinksync::copy::Copied;
+  let done = books
+    .iter()
+    .filter(|(_, c)| matches!(c, Copied::Done { .. }))
+    .count();
+  let mapped = books
+    .iter()
+    .filter(|(_, c)| matches!(c, Copied::Done { mapped: true, .. }))
+    .count();
+  let mut line = match (lang, mapped) {
+    (Lang::De, 0) => format!("{done} kopiert."),
+    (Lang::En, 0) => format!("{done} copied."),
+    (Lang::De, m) => format!("{done} kopiert, {m} davon als kepub zugeordnet."),
+    (Lang::En, m) => format!("{done} copied, {m} of them as kepubs, mapped."),
+  };
+  for (title, c) in books {
+    let why = match (lang, c) {
+      (_, Copied::Done { .. }) => continue,
+      (Lang::De, Copied::NameTaken(p)) => format!("{p} gibt es schon, nicht überschrieben"),
+      (Lang::En, Copied::NameTaken(p)) => format!("{p} exists, not overwritten"),
+      (Lang::De, Copied::AlreadyThere(p)) => format!("schon auf dem Gerät als {p}"),
+      (Lang::En, Copied::AlreadyThere(p)) => format!("already on the device as {p}"),
+      (_, Copied::Failed(e)) => e.clone(),
+    };
+    line.push_str(&format!("\n{title}: {why}"));
+  }
+  if done > 0 {
+    line.push_str(match lang {
+      Lang::De => "\nNickel zeigt neue Bücher, nachdem du das Gerät ausgeworfen hast.",
+      Lang::En => "\nNickel shows new books once you eject the device.",
+    });
+  }
+  line
+}
+
 /// "12 EPUBs" after the library's path.
 pub fn epubs(lang: Lang, n: usize) -> String {
   match lang {
@@ -398,7 +460,8 @@ static DE: Texts = Texts {
   no_books: "Keine Bücher auf dem Gerät.",
   read_only: "Die App schreibt nichts aufs Gerät. Zuordnungen liegen auf diesem Rechner \
               (mappings.json), gemeinsam mit der CLI.",
-  writes_tolino: "„Holen“ schreibt die Stelle vom Server in die Datenbank des Tolino; vorher \
+  writes_tolino: "„Holen“ schreibt die Stelle vom Server in die Gerätedatenbank (am Kobo noch \
+                  nicht in kepubs); vorher \
                   legt die App eine Sicherung auf diesem Rechner an. Zuordnungen liegen auf \
                   diesem Rechner (mappings.json), gemeinsam mit der CLI.",
   kobalt: "Kobalt ist auf dem Gerät installiert und verwaltet die Lesepositionen selbst: \
@@ -456,6 +519,15 @@ static DE: Texts = Texts {
   time: "Zeit",
   direction: "Richtung",
   by: "von",
+  add_from_library: "Aus Bibliothek hinzufügen …",
+  add_from_library_hint: "Bücher aus der Bibliothek nach Books/ auf dem Gerät kopieren; nichts wird überschrieben.",
+  kobo_read_only: "Positionen schreibt die App nicht auf dieses Gerät; „Aus Bibliothek hinzufügen“ kopiert nur neue Bücher nach Books/. Zuordnungen liegen auf diesem Rechner (mappings.json), gemeinsam mit der CLI.",
+  copy_title: "Aus Bibliothek hinzufügen",
+  copy_hint: "Kopiert nach Books/ auf dem Gerät. Eine Datei gleichen Namens oder dieselbe EPUB bleibt, wie sie ist.",
+  copy_search: "Titel, Autor oder Datei suchen",
+  copy_as_kepub: "Als kepub (kepubify) und der EPUB zuordnen",
+  copy_as_kepub_hint: "Der Kobo liest kepubs mit seiner schnelleren Engine; die Zuordnung zur EPUB entsteht gleich mit, so synchronisiert das Buch mit KOReader.",
+  no_kepubify: "kepubify nicht gefunden (PATH, /opt/homebrew/bin, /usr/local/bin, ~/go/bin oder NICKELINKSYNC_KEPUBIFY): Kopie nur als EPUB.",
   settings: "Einstellungen",
   settings_hint: "Gespeichert in config.ini, gemeinsam mit der CLI; vorher legt die App config.ini.bak an.",
   user: "Benutzer",
@@ -529,7 +601,8 @@ static EN: Texts = Texts {
   no_books: "No books on the device.",
   read_only: "The app writes nothing to the device. Mappings are kept on this computer \
               (mappings.json), shared with the CLI.",
-  writes_tolino: "“Get” writes the server’s position into the Tolino’s database, after a \
+  writes_tolino: "“Get” writes the server’s position into the device database (on a Kobo not \
+                  into kepubs yet), after a \
                   backup of it on this computer. Mappings are kept on this computer \
                   (mappings.json), shared with the CLI.",
   kobalt: "Kobalt is installed on the device and manages its reading positions itself: \
@@ -587,6 +660,15 @@ static EN: Texts = Texts {
   time: "Time",
   direction: "Direction",
   by: "by",
+  add_from_library: "Add from library …",
+  add_from_library_hint: "Copy books of the library to Books/ on the device; nothing is overwritten.",
+  kobo_read_only: "The app writes no positions to this device; “Add from library” only copies new books to Books/. Mappings are kept on this computer (mappings.json), shared with the CLI.",
+  copy_title: "Add from library",
+  copy_hint: "Copies to Books/ on the device. A file of the same name, or the same EPUB, is left as it is.",
+  copy_search: "Search title, author or file",
+  copy_as_kepub: "As kepub (kepubify), mapped to the EPUB",
+  copy_as_kepub_hint: "The Kobo reads kepubs with its faster engine; the mapping to the EPUB is made at once, so the book syncs with KOReader.",
+  no_kepubify: "kepubify not found (PATH, /opt/homebrew/bin, /usr/local/bin, ~/go/bin or NICKELINKSYNC_KEPUBIFY): copies as EPUB only.",
   settings: "Settings",
   settings_hint: "Saved in config.ini, shared with the CLI; the app keeps config.ini.bak first.",
   user: "User",

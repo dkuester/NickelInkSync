@@ -219,3 +219,45 @@ fn pull_step_without_a_server_position() {
     "{step:?}"
   );
 }
+
+/// Kobo firmware 6.0 has the `tolino_*` tables too: the model, then the
+/// reseller, decide which family a device is.
+#[test]
+fn a_kobo_with_tolino_tables_stays_a_kobo() {
+  data_dir();
+  let open = |name: &str, version: &str, affiliate: Option<&str>| {
+    let root = fake_device(name, "kobo-clarabw-4.46-placeholder-books.sql", version);
+    rusqlite::Connection::open(root.join(".kobo/KoboReader.sqlite"))
+      .unwrap()
+      .execute_batch("CREATE TABLE tolino_bookmark (id INTEGER PRIMARY KEY);")
+      .unwrap();
+    if let Some(a) = affiliate {
+      fs::write(
+        root.join(".kobo/affiliate.conf"),
+        format!("[General]\naffiliate={a}\n"),
+      )
+      .unwrap();
+    }
+    let options = Options {
+      device: root.clone(),
+      config: Some(root.join("no-config.ini")),
+      book: None,
+      content_id: None,
+      live: false,
+      timeout: Duration::from_secs(5),
+      library: None,
+    };
+    let family = Session::open(&options).unwrap().family;
+    let _ = fs::remove_dir_all(&root);
+    family
+  };
+  // Clara BW (model 391).
+  assert_eq!(open("family-model", common::KOBO_VERSION, None), "Kobo");
+  // An unknown model: the reseller.
+  let unknown =
+    "N000000000000,4.9.77,6.0.279225,4.9.77,4.9.77,00000000-0000-0000-0000-000000000999\n";
+  assert_eq!(open("family-kobo", unknown, Some("Kobo")), "Kobo");
+  assert_eq!(open("family-thalia", unknown, Some("Thalia.de")), "Tolino");
+  // Neither: the tables.
+  assert_eq!(open("family-tables", unknown, None), "Tolino");
+}

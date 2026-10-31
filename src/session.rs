@@ -373,11 +373,7 @@ impl Session {
       kobalt.check()?;
     }
     let device = Device::open(&options.device, options.live)?;
-    let family = if device.db.is_tolino()? {
-      "Tolino"
-    } else {
-      "Kobo"
-    };
+    let family = family(&device)?;
     let model = device
       .firmware
       .as_ref()
@@ -824,6 +820,35 @@ impl Session {
       .remove(writes.iter().map(|w| w.content_id.as_str()))?;
     Ok(written)
   }
+}
+
+/// "Kobo" or "Tolino". Kobo firmware 6.0 has the `tolino_*` tables too,
+/// so the model in `.kobo/version` decides, then the reseller in
+/// `.kobo/affiliate.conf` (`Kobo`, or a Tolino bookseller such as
+/// `Thalia.de`), and only without both the tables.
+fn family(device: &Device) -> Result<&'static str> {
+  if let Some(name) = device.firmware.as_ref().and_then(|fw| fw.model_name()) {
+    return Ok(if name.starts_with("Tolino") {
+      "Tolino"
+    } else {
+      "Kobo"
+    });
+  }
+  let affiliate = std::fs::read_to_string(device.root.join(".kobo/affiliate.conf"))
+    .ok()
+    .and_then(|text| {
+      text.lines().find_map(|l| {
+        l.trim()
+          .strip_prefix("affiliate=")
+          .map(|v| v.trim().to_string())
+      })
+    });
+  Ok(match affiliate {
+    Some(a) if a.eq_ignore_ascii_case("kobo") => "Kobo",
+    Some(_) => "Tolino",
+    None if device.db.is_tolino()? => "Tolino",
+    None => "Kobo",
+  })
 }
 
 /// The books whose title or path contains `filter` (any case), and the one

@@ -162,13 +162,20 @@ mapped from there: the library's suggestions with their scores, or an
 EPUB chosen by hand; a mapping can be changed or removed. With a server
 in `config.ini` it shows the server's position next to the device's and
 sends positions per book or all at once; a `confirm` question comes as a
-dialog (keep the server's, or send the device's). On a Tolino "Get" and
-"Get all" write the server's position into the device database, after a
+dialog (keep the server's, or send the device's). On a Tolino or Kobo
+(not into kepubs yet, and not with Kobalt installed) "Get" and "Get all"
+write the server's position into the device database, after a
 backup of it in the data directory, as `pull --write` does; a `confirm`
 question comes as the same dialog (keep the device's, or take the
-server's), and the device is read again afterwards. Eject the Tolino
-before you open the book. "History" lists what the CLI and the window
-sent and wrote (`history.jsonl` in the data directory). "Settings" edits
+server's), and the device is read again afterwards. Eject the device
+before you open the book, and restart it when the notice says so. "History" lists what the CLI and the window
+sent and wrote (`history.jsonl` in the data directory). "Add from
+library" copies books of the library to `Books/` on a Kobo or Tolino,
+never over a file that is there or an EPUB already on the device; on a
+Kobo optionally as kepubs made by
+[kepubify](https://github.com/pgaskin/kepubify) (looked up in the `PATH`,
+Homebrew's folders, `~/go/bin` or `$NICKELINKSYNC_KEPUBIFY`), mapped to
+their EPUB at once. "Settings" edits
 `config.ini` (server, user, device name, `confirm`, `position`, library)
 line by line, keeping comments, after a backup (`config.ini.bak`); a
 password typed there is kept only as its key in the keychain, and a

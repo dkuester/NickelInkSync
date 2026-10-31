@@ -8,12 +8,14 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use eframe::egui;
+use nickelinksync::copy;
 use nickelinksync::history::{self, Entry};
 use nickelinksync::library;
 use nickelinksync::session::Own;
 use nickelinksync::suggest;
 use nickelinksync::sync::{format_timestamp, Outlook};
 
+use crate::copy_dialog::{self, CopyDialog};
 use crate::devices::{Found, Kind};
 use crate::i18n::{self, Choice, Lang, Texts};
 use crate::model::{Group, Loaded, Mapped, Row, Suggestions};
@@ -43,6 +45,8 @@ enum Action {
   Push(Vec<String>),
   /// Take the server's positions for the books with these ids (Tolino).
   Pull(Vec<String>),
+  /// Choose books of the library to copy onto the device.
+  AddFromLibrary { kobo: bool },
   /// Ask before pushing a book without a reference EPUB.
   PushUnreferenced { id: String, title: String },
 }
@@ -112,6 +116,7 @@ pub struct App {
   overview_open: bool,
   overview: Option<Overview>,
   settings_dialog: Option<SettingsDialog>,
+  copy_dialog: Option<CopyDialog>,
 }
 
 impl App {
@@ -149,6 +154,7 @@ impl App {
       overview_open: false,
       overview: None,
       settings_dialog: None,
+      copy_dialog: None,
       history: None,
     }
   }
@@ -280,6 +286,18 @@ impl App {
         }
         Event::History(entries) => self.history = Some(entries),
         Event::Overview(overview) => self.overview = Some(overview),
+        Event::LibraryBooks(result) => {
+          if let Some(dialog) = &mut self.copy_dialog {
+            dialog.books = Some(result);
+          }
+        }
+        Event::Copied { root, result } => {
+          let lang = self.lang();
+          self.copy_dialog = None;
+          if current(&root) {
+            self.notice = Some(result.map(|books| i18n::copied(lang, &books)));
+          }
+        }
         Event::Settings(result) => {
           if let Some(dialog) = &mut self.settings_dialog {
             dialog.edit = Some(result);
@@ -520,6 +538,10 @@ impl App {
       Some(Action::Unmap { key, title }) => self.unmap_dialog = Some(UnmapDialog { key, title }),
       Some(Action::Push(ids)) => self.push(ids),
       Some(Action::Pull(ids)) => self.pull(ids),
+      Some(Action::AddFromLibrary { kobo }) => {
+        self.copy_dialog = Some(CopyDialog::new(kobo, copy::kepubify().is_some()));
+        self.worker.send(Command::LibraryBooks);
+      }
       Some(Action::PushUnreferenced { id, title }) => self.unreferenced = Some((id, title)),
       None => {}
     }
@@ -665,6 +687,27 @@ impl App {
       }
       Some(false) => self.unreferenced = None,
       None if modal.should_close() => self.unreferenced = None,
+      None => {}
+    }
+  }
+
+  fn copy_dialog(&mut self, ctx: &egui::Context, t: &Texts) {
+    let lang = self.lang();
+    let Some(dialog) = &mut self.copy_dialog else {
+      return;
+    };
+    match copy_dialog::show(ctx, t, lang, dialog) {
+      Some(copy_dialog::Request::Copy { books, kepub }) => {
+        if let Some(selected) = &self.selected {
+          dialog.busy = true;
+          self.worker.send(Command::Copy {
+            root: selected.root.clone(),
+            books,
+            kepub,
+          });
+        }
+      }
+      Some(copy_dialog::Request::Close) => self.copy_dialog = None,
       None => {}
     }
   }
@@ -988,15 +1031,27 @@ fn loaded_view(
     }
   }
   ui.label(format!("{}: {}", t.mappings, loaded.mappings));
-  ui.weak(if loaded.writable {
-    t.writes_tolino
-  } else {
-    t.read_only
+  ui.weak(match loaded.family {
+    // Nothing is written with Kobalt installed.
+    Some(_) if loaded.writable => t.writes_tolino,
+    Some(_) => t.kobo_read_only,
+    None => t.read_only,
   });
   if loaded.kobalt {
     ui.colored_label(ui.visuals().warn_fg_color, t.kobalt);
   }
   let mut action = None;
+  if let Some(family) = loaded.family {
+    if ui
+      .button(t.add_from_library)
+      .on_hover_text(t.add_from_library_hint)
+      .clicked()
+    {
+      action = Some(Action::AddFromLibrary {
+        kobo: family == "Kobo",
+      });
+    }
+  }
   let compared = match server {
     Some(ServerState::Compared(compared)) => Some(compared),
     _ => None,
@@ -1032,12 +1087,17 @@ fn loaded_view(
       {
         action = Some(Action::Push(ids.clone()));
       }
+      // Not into a kepub yet (K4).
+      let pull_ids: Vec<String> = ids
+        .into_iter()
+        .filter(|id| !loaded.rows.iter().any(|r| &r.id == id && is_kepub(r)))
+        .collect();
       if loaded.writable
         && ui
-          .add_enabled(enabled, egui::Button::new(t.pull_all))
+          .add_enabled(!busy && !pull_ids.is_empty(), egui::Button::new(t.pull_all))
           .clicked()
       {
-        action = Some(Action::Pull(ids));
+        action = Some(Action::Pull(pull_ids));
       }
       if busy {
         ui.spinner();
@@ -1201,6 +1261,11 @@ fn file_name(path: &str) -> &str {
   path.rsplit(['/', '\\']).next().unwrap_or(path)
 }
 
+/// A kepub on a Kobo: positions are not translated back into it yet (K4).
+fn is_kepub(row: &Row) -> bool {
+  row.file.ends_with(".kepub.epub")
+}
+
 /// Device and server hold the same position.
 fn in_sync(compared: Option<&Compared>) -> bool {
   compared.is_some_and(|c| c.outlook == Some(Outlook::InSync))
@@ -1309,7 +1374,8 @@ fn book_table(
             }
           }
           // Like "Get all", not for a book without a reference EPUB.
-          let pullable = matches!(row.group, Group::Mapped { .. } | Group::Same { .. });
+          let pullable =
+            matches!(row.group, Group::Mapped { .. } | Group::Same { .. }) && !is_kepub(row);
           if writable && pullable && compared.is_some() {
             let pull = ui.add_enabled(can_send, egui::Button::new(t.pull_button).small());
             if pull.clicked() {
@@ -1377,6 +1443,7 @@ impl eframe::App for App {
     self.history_window(&ctx, t);
     self.overview_window(&ctx, t);
     self.settings_dialog(&ctx, t);
+    self.copy_dialog(&ctx, t);
   }
 }
 

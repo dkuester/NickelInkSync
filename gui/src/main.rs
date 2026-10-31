@@ -3,6 +3,7 @@
 //! sharing its configuration and mappings.
 
 mod app;
+mod copy_dialog;
 mod devices;
 mod i18n;
 mod model;
