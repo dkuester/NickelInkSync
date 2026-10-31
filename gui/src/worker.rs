@@ -8,6 +8,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
 use nickelinksync::config::{self, Config, Editable};
+use nickelinksync::copy::{self, Copied, Format};
 use nickelinksync::history::Entry;
 use nickelinksync::library::Library;
 
@@ -41,6 +42,15 @@ pub enum Command {
   History,
   /// Every device's position of each book side by side, with the server's.
   Overview { devices: Vec<Found> },
+  /// The library's books, to choose some to copy.
+  LibraryBooks,
+  /// Copy the EPUBs at `books` onto the device (as kepubs: `kepub`), then
+  /// read it again.
+  Copy {
+    root: PathBuf,
+    books: Vec<PathBuf>,
+    kepub: bool,
+  },
   /// The settings in `config.ini`.
   ReadSettings,
   /// Write the settings; a typed password goes in as its key.
@@ -83,6 +93,12 @@ pub enum Event {
   History(Result<Vec<Entry>, String>),
   Overview(Overview),
   Settings(Result<Editable, String>),
+  LibraryBooks(Result<Vec<nickelinksync::library::LibraryBook>, String>),
+  /// What copying did, by title; the device is read again after it.
+  Copied {
+    root: PathBuf,
+    result: Result<Vec<(String, Copied)>, String>,
+  },
   /// Settings saved (`false`) or the key moved (`true`), or why not.
   SettingsSaved(Result<bool, String>),
   Progress {
@@ -199,6 +215,41 @@ fn run(inbox: &Receiver<Command>, outbox: &Sender<Event>, repaint: &dyn Fn()) {
       }
       Command::History => send(Event::History(sync::history(200))),
       Command::Overview { devices } => send(Event::Overview(overview::build(&devices))),
+      Command::LibraryBooks => {
+        let result = match &library {
+          Some(library) => Ok(library.as_ref()),
+          None => model::library().map(|l| library.insert(l).as_ref()),
+        }
+        .and_then(|l| {
+          l.map(|l| l.books.clone())
+            .ok_or_else(|| "no library set up (library = in config.ini)".to_string())
+        });
+        send(Event::LibraryBooks(result));
+      }
+      Command::Copy { root, books, kepub } => {
+        let format = if kepub { Format::Kepub } else { Format::Epub };
+        let kepubify = copy::kepubify();
+        let result = nickelinksync::session::load_store()
+          .map_err(|e| e.to_string())
+          .map(|mut store| {
+            books
+              .iter()
+              .map(|book| {
+                let title = book
+                  .file_name()
+                  .map(|n| n.to_string_lossy().into_owned())
+                  .unwrap_or_default();
+                let copied = copy::copy(&root, book, format, kepubify.as_deref(), &mut store);
+                (title, copied)
+              })
+              .collect()
+          });
+        send(Event::Copied {
+          root: root.clone(),
+          result,
+        });
+        load(root, Kind::Nickel);
+      }
       Command::ReadSettings => send(Event::Settings(
         config_path().and_then(|p| Editable::read(&p).map_err(|e| e.to_string())),
       )),

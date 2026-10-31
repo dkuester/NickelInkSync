@@ -178,6 +178,12 @@ Gerätedatenbank, vorher legt es eine Sicherung im Datenordner an, wie
 Server übernehmen), danach liest es das Gerät neu ein. Wirf den Tolino
 aus, bevor du das Buch öffnest. „Verlauf“ zeigt, was CLI und Fenster
 gesendet und geschrieben haben (`history.jsonl` im Datenordner).
+„Aus Bibliothek hinzufügen“ kopiert Bücher der Bibliothek nach `Books/`
+auf einem Kobo oder Tolino, nie über eine vorhandene Datei und nicht, wenn
+dieselbe EPUB schon auf dem Gerät liegt; auf dem Kobo auf Wunsch als
+kepub über [kepubify](https://github.com/pgaskin/kepubify) (gesucht im
+`PATH`, in den Homebrew-Ordnern, in `~/go/bin` oder über
+`$NICKELINKSYNC_KEPUBIFY`), gleich der EPUB zugeordnet.
 „Einstellungen“ bearbeitet `config.ini` (Server, Benutzer, Gerätename,
 `confirm`, `position`, Bibliothek) zeilenweise, Kommentare bleiben, vorher
 legt es `config.ini.bak` an; ein dort eingegebenes Passwort landet nur als

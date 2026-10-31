@@ -8,12 +8,14 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use eframe::egui;
+use nickelinksync::copy;
 use nickelinksync::history::{self, Entry};
 use nickelinksync::library;
 use nickelinksync::session::Own;
 use nickelinksync::suggest;
 use nickelinksync::sync::{format_timestamp, Outlook};
 
+use crate::copy_dialog::{self, CopyDialog};
 use crate::devices::{Found, Kind};
 use crate::i18n::{self, Choice, Lang, Texts};
 use crate::model::{Group, Loaded, Mapped, Row, Suggestions};
@@ -43,6 +45,8 @@ enum Action {
   Push(Vec<String>),
   /// Take the server's positions for the books with these ids (Tolino).
   Pull(Vec<String>),
+  /// Choose books of the library to copy onto the device.
+  AddFromLibrary { kobo: bool },
   /// Ask before pushing a book without a reference EPUB.
   PushUnreferenced { id: String, title: String },
 }
@@ -112,6 +116,7 @@ pub struct App {
   overview_open: bool,
   overview: Option<Overview>,
   settings_dialog: Option<SettingsDialog>,
+  copy_dialog: Option<CopyDialog>,
 }
 
 impl App {
@@ -149,6 +154,7 @@ impl App {
       overview_open: false,
       overview: None,
       settings_dialog: None,
+      copy_dialog: None,
       history: None,
     }
   }
@@ -280,6 +286,18 @@ impl App {
         }
         Event::History(entries) => self.history = Some(entries),
         Event::Overview(overview) => self.overview = Some(overview),
+        Event::LibraryBooks(result) => {
+          if let Some(dialog) = &mut self.copy_dialog {
+            dialog.books = Some(result);
+          }
+        }
+        Event::Copied { root, result } => {
+          let lang = self.lang();
+          self.copy_dialog = None;
+          if current(&root) {
+            self.notice = Some(result.map(|books| i18n::copied(lang, &books)));
+          }
+        }
         Event::Settings(result) => {
           if let Some(dialog) = &mut self.settings_dialog {
             dialog.edit = Some(result);
@@ -520,6 +538,10 @@ impl App {
       Some(Action::Unmap { key, title }) => self.unmap_dialog = Some(UnmapDialog { key, title }),
       Some(Action::Push(ids)) => self.push(ids),
       Some(Action::Pull(ids)) => self.pull(ids),
+      Some(Action::AddFromLibrary { kobo }) => {
+        self.copy_dialog = Some(CopyDialog::new(kobo, copy::kepubify().is_some()));
+        self.worker.send(Command::LibraryBooks);
+      }
       Some(Action::PushUnreferenced { id, title }) => self.unreferenced = Some((id, title)),
       None => {}
     }
@@ -665,6 +687,27 @@ impl App {
       }
       Some(false) => self.unreferenced = None,
       None if modal.should_close() => self.unreferenced = None,
+      None => {}
+    }
+  }
+
+  fn copy_dialog(&mut self, ctx: &egui::Context, t: &Texts) {
+    let lang = self.lang();
+    let Some(dialog) = &mut self.copy_dialog else {
+      return;
+    };
+    match copy_dialog::show(ctx, t, lang, dialog) {
+      Some(copy_dialog::Request::Copy { books, kepub }) => {
+        if let Some(selected) = &self.selected {
+          dialog.busy = true;
+          self.worker.send(Command::Copy {
+            root: selected.root.clone(),
+            books,
+            kepub,
+          });
+        }
+      }
+      Some(copy_dialog::Request::Close) => self.copy_dialog = None,
       None => {}
     }
   }
@@ -988,12 +1031,23 @@ fn loaded_view(
     }
   }
   ui.label(format!("{}: {}", t.mappings, loaded.mappings));
-  ui.weak(if loaded.writable {
-    t.writes_tolino
-  } else {
-    t.read_only
+  ui.weak(match loaded.family {
+    Some("Tolino") => t.writes_tolino,
+    Some(_) => t.kobo_read_only,
+    None => t.read_only,
   });
   let mut action = None;
+  if let Some(family) = loaded.family {
+    if ui
+      .button(t.add_from_library)
+      .on_hover_text(t.add_from_library_hint)
+      .clicked()
+    {
+      action = Some(Action::AddFromLibrary {
+        kobo: family == "Kobo",
+      });
+    }
+  }
   let compared = match server {
     Some(ServerState::Compared(compared)) => Some(compared),
     _ => None,
@@ -1374,6 +1428,7 @@ impl eframe::App for App {
     self.history_window(&ctx, t);
     self.overview_window(&ctx, t);
     self.settings_dialog(&ctx, t);
+    self.copy_dialog(&ctx, t);
   }
 }
 

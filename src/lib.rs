@@ -6,6 +6,7 @@
 //! architecture.
 
 pub mod config;
+pub mod copy;
 pub mod credentials;
 pub mod db;
 pub mod dom;

@@ -63,6 +63,8 @@ pub struct Loaded {
   /// The server's positions can be written into it: a Tolino (on a Kobo
   /// not yet, P2; a Kindle is only read).
   pub writable: bool,
+  /// "Kobo" or "Tolino": books can be copied onto it; `None` for a Kindle.
+  pub family: Option<&'static str>,
 }
 
 pub(crate) fn options(root: &Path) -> Options {
@@ -174,6 +176,7 @@ fn load_nickel(
     mappings: session.store.mappings.len(),
     rows,
     writable: session.family == "Tolino",
+    family: Some(session.family),
   })
 }
 
@@ -251,6 +254,7 @@ fn load_kindle(
     mappings: session.store.mappings.len(),
     rows,
     writable: false,
+    family: None,
   })
 }
 
