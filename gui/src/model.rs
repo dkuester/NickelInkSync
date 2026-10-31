@@ -352,20 +352,11 @@ pub fn library() -> Result<Option<Library>, String> {
 mod tests {
   use super::*;
   use std::fs;
-  use std::sync::OnceLock;
+
+  use crate::test_data::isolate;
 
   fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures")
-  }
-
-  /// No configuration and no mappings of the machine running the tests.
-  fn isolate() {
-    static DONE: OnceLock<()> = OnceLock::new();
-    DONE.get_or_init(|| {
-      let dir = std::env::temp_dir().join(format!("nickelinksync-gui-{}-data", std::process::id()));
-      std::env::set_var("NICKELINKSYNC_DATA_DIR", &dir);
-      std::env::set_var("NICKELINKSYNC_CONFIG", dir.join("no-config.ini"));
-    });
   }
 
   /// A fake Tolino with the placeholder books, in a fresh directory.
@@ -399,7 +390,7 @@ mod tests {
 
   #[test]
   fn tolino_books_without_library_sync_under_their_own_checksum() {
-    isolate();
+    let _data = isolate();
     let root = fake_tolino("tolino");
     let before = fs::read(root.join(".kobo/KoboReader.sqlite")).unwrap();
     let mut seen = Vec::new();
@@ -433,7 +424,7 @@ mod tests {
 
   #[test]
   fn kindle_books_without_mapping_are_not_mapped() {
-    isolate();
+    let _data = isolate();
     let loaded = load(&fixtures().join("kindle"), Kind::Kindle, &mut |_, _| {}).unwrap();
     assert_eq!(loaded.device, "Kindle");
     assert_eq!(loaded.rows.len(), 3);
@@ -441,7 +432,7 @@ mod tests {
   }
   #[test]
   fn suggest_map_and_unmap_a_kepub() {
-    isolate();
+    let _data = isolate();
     let root = fake_tolino("map");
     let library_dir = root.with_extension("library");
     let _ = fs::remove_dir_all(&library_dir);

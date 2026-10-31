@@ -14,6 +14,8 @@ mod worker;
 #[cfg(test)]
 #[path = "../../tests/common/mod.rs"]
 mod common;
+#[cfg(test)]
+mod test_data;
 
 fn main() -> eframe::Result {
   let options = eframe::NativeOptions {

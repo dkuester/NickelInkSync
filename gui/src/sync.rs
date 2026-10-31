@@ -507,12 +507,12 @@ mod tests {
   use super::*;
   use std::fs;
   use std::path::PathBuf;
-  use std::sync::{Mutex, OnceLock};
   use std::time::Duration;
 
   use nickelinksync::hash::partial_md5;
 
   use crate::common::{fake_device, fixtures, MockServer, KOBO_VERSION, PASSWORD, TOLINO_VERSION};
+  use crate::test_data::{isolate, DataDir};
 
   /// Where book-a.epub is on the fake Tolino, as KOReader's XPointer.
   const XPOINTER: &str = "/body[1]/DocFragment[82]/body[1]/div[1]/text()[1].0";
@@ -526,21 +526,6 @@ mod tests {
   const BEHIND: &str = "/body[1]/DocFragment[40]/body[1]/p[1]/text()[1].0";
   const BOOK_A: &str = "file:///mnt/onboard/Books/book-a.epub";
 
-  /// No configuration and no mappings of the machine running the tests;
-  /// the history in a directory of its own.
-  fn isolate() -> PathBuf {
-    static DIR: OnceLock<PathBuf> = OnceLock::new();
-    DIR
-      .get_or_init(|| {
-        let dir =
-          std::env::temp_dir().join(format!("nickelinksync-gui-{}-data", std::process::id()));
-        std::env::set_var("NICKELINKSYNC_DATA_DIR", &dir);
-        std::env::set_var("NICKELINKSYNC_CONFIG", dir.join("no-config.ini"));
-        dir
-      })
-      .clone()
-  }
-
   fn book_hash() -> String {
     partial_md5(&fixtures().join("epub/book-a.epub")).unwrap()
   }
@@ -549,11 +534,12 @@ mod tests {
     root: PathBuf,
     server: MockServer,
     options: Options,
+    _data: DataDir,
   }
 
   impl Setup {
     fn new(name: &str) -> Self {
-      isolate();
+      let data = isolate();
       let root = fake_device(
         &format!("gui-{name}"),
         "tolino-shinecolor-5.18-placeholder-books.sql",
@@ -574,6 +560,7 @@ mod tests {
         root,
         server,
         options,
+        _data: data,
       }
     }
   }
@@ -642,10 +629,6 @@ mod tests {
     );
   }
 
-  /// Held while a test writes: the backups share a directory, and two
-  /// tests could pick the same free name at once.
-  static WRITING: Mutex<()> = Mutex::new(());
-
   /// `ChapterIDBookmarked` and `___PercentRead` of book-a.epub.
   fn row(root: &std::path::Path) -> (String, i64) {
     let session = Session::open(&Options {
@@ -664,7 +647,6 @@ mod tests {
 
   #[test]
   fn pull_writes_after_a_backup_and_records_it() {
-    let _writing = WRITING.lock().unwrap_or_else(|e| e.into_inner());
     let s = Setup::new("pull");
     s.server.store(&book_hash(), AHEAD, 0.9, LAST_READ + 60);
     let report = pull(&s.options, &[BOOK_A.to_string()]).unwrap();
@@ -691,7 +673,6 @@ mod tests {
 
   #[test]
   fn after_a_pull_inside_a_paragraph_the_server_column_says_same() {
-    let _writing = WRITING.lock().unwrap_or_else(|e| e.into_inner());
     let s = Setup::new("pull-inside");
     let inside = "/body[1]/DocFragment[90]/body[1]/p[1]/text()[1].20";
     s.server.store(&book_hash(), inside, 0.9, LAST_READ + 60);
@@ -709,7 +690,6 @@ mod tests {
   #[test]
   fn a_pull_back_is_written_only_after_the_answer() {
     // The server is newer but further back than the device.
-    let _writing = WRITING.lock().unwrap_or_else(|e| e.into_inner());
     let s = Setup::new("pull-ask");
     s.server.store(&book_hash(), BEHIND, 0.5, LAST_READ + 60);
     let before = row(&s.root);
@@ -729,7 +709,7 @@ mod tests {
 
   #[test]
   fn a_kobo_is_not_written() {
-    isolate();
+    let _data = isolate();
     let root = fake_device(
       "gui-pull-kobo",
       "kobo-clarabw-4.46-placeholder-books.sql",
