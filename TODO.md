@@ -513,7 +513,7 @@ der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
     Tolino Shine Color, Buch in KOReader mit Sync geöffnet: landet an der
     richtigen Stelle (Book R, siehe K4).
   - [ ] **du:** Ein Durchlauf mit Kobo, Tolino und KOReader am selben Buch.
-- [~] **P2 Rückschreiben per USB** (erst Tolino, Kobo im Kobo-Durchgang)
+- [x] **P2 Rückschreiben per USB** (erst Tolino, Kobo im Kobo-Durchgang)
   - [x] **ich:** `pull --write` (`db::Device::write_positions`):
     Sicherungskopie nach `~/.local/share/nickelinksync/backups/`, dann in
     einer Transaktion `ChapterIDBookmarked` und `___PercentRead` setzen;
@@ -528,8 +528,9 @@ der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
     Nach dem Auswerfen öffnet Nickel die Seite mit dieser Stelle (oben
     R2-133) und speichert beim Schließen den eigenen Seitenanfang
     (`#point(/1/4/268/1:46)`, 57 %). **Nickel übernimmt die Position.**
-  - [ ] **ich (C1):** dasselbe für den Kobo (braucht K4
-    rückwärts für kepub).
+  - [x] **ich (C1):** dasselbe für den Kobo, EPUB und zugeordnetes kepub
+    (PR #55); am Clara BW (6.0) geprüft 2026-10-31, öffnet nach dem
+    Neustart an der Stelle (siehe K4).
 
 - [x] **P3 Rückfrage bei abweichender Position (einstellbar)** · PR #18
   - [x] **ich:** `confirm = never | backwards | always` in der Konfiguration
