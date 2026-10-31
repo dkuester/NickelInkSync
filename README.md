@@ -108,7 +108,9 @@ in the other file, for example calibre's `titlepage.xhtml`). `pull
 --write` moves the server position back into a mapped EPUB on the Tolino
 the same way; into a kepub it writes nothing yet.
 
-**Kindle.** `status` and `push` also read a Kindle's books, for every KFX
+**Kindle (experimental).** Kindle support stays as it is until Kobo and
+Tolino are stable: no further work on it, and no device test before 0.1.0.
+`status` and `push` also read a Kindle's books, for every KFX
 that is mapped to its EPUB (`map add`): the last page read (`lpr` in the
 `.sdr` folder) is translated into the EPUB and sent under its checksum.
 Nothing is written to the Kindle, and `pull` refuses. A recent Kindle

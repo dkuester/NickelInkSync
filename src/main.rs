@@ -88,7 +88,7 @@ enum MapCommand {
   List,
   /// Map one book on the device to its original EPUB
   Add {
-    /// Mount point of the device (Kobo, Tolino or Kindle)
+    /// Mount point of the device (Kobo, Tolino, or a Kindle: experimental)
     #[arg(long)]
     device: PathBuf,
     /// The book whose title or file path contains this text
@@ -108,7 +108,7 @@ enum MapCommand {
   /// Suggest an original EPUB from the library for each book on the device
   /// that is neither mapped nor the same file as one in the library
   Suggest {
-    /// Mount point of the device (Kobo, Tolino or Kindle)
+    /// Mount point of the device (Kobo, Tolino, or a Kindle: experimental)
     #[arg(long)]
     device: PathBuf,
     /// Only books whose title or file path contains this text
@@ -139,7 +139,7 @@ struct LibraryArgs {
 #[derive(Args)]
 struct Target {
   /// Mount point of the device, e.g. /Volumes/KOBOeReader (/mnt/onboard on
-  /// the device itself)
+  /// the device itself), or a copy of a Kindle's books (experimental)
   #[arg(long)]
   device: PathBuf,
   /// Configuration file [default: ~/.config/nickelinksync/config.ini]

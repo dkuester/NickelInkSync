@@ -1037,6 +1037,9 @@ fn loaded_view(
     Some(_) => t.kobo_read_only,
     None => t.read_only,
   });
+  if loaded.family.is_none() {
+    ui.colored_label(ui.visuals().warn_fg_color, t.kindle_experimental);
+  }
   if loaded.kobalt {
     ui.colored_label(ui.visuals().warn_fg_color, t.kobalt);
   }
