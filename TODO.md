@@ -334,8 +334,9 @@ der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
     Entscheidung (2026-10-31): „Holen“ auch am Kobo wie am Tolino, vorerst
     nur für EPUBs; kepubs folgen mit der Rückübersetzung (K4, eigene
     Session).
-  - [ ] **du:** E5a: ein Buch auf den Tolino kopieren, eins als kepub auf
-    den Kobo; auswerfen, Bücher prüfen; danach Senden am Kobo.
+  - [x] **du:** E5a: ein Buch auf den Tolino kopieren, eins als kepub auf
+    den Kobo (2026-10-31): Tolino als EPUB, Kobo als kepub und gleich
+    zugeordnet; am Kobo „Holen“ bei EPUBs, bei kepubs nur „Senden“.
   - [ ] **ich:** **E5b** Sicherungskopie der Gerätedatenbank zurückspielen
     (Bibliothek, CLI `restore`, Dialog im Fenster).
   - [ ] **ich:** **E6** macOS: `.app` als `.dmg` aus der CI (macOS-Runner,
