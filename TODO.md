@@ -284,7 +284,9 @@ fertig, D2 läuft (E0 bis E3c erledigt; als Nächstes E4).
     Stelle mitten im Absatz galt das Buch als „Server neuer“, weil der
     Rückweg zum XPointer an den Absatzanfang rückt; jetzt gilt es als
     gleich, wenn auf dem Gerät genau das steht, was Holen schreiben würde
-    (`Session::against`, für `status`, `push`, `pull` und die GUI).
+    (`Session::against`, für `status`, `push`, `pull` und die GUI). Bei
+    „gleich“ sind „Senden“ und „Holen“ ausgegraut; „Alle senden“ und „Alle
+    holen“ lassen solche Bücher aus.
   - [ ] **ich:** Geräteansicht nebeneinander (O5): aus E3c herausgenommen,
     die Gestaltung ist noch offen (siehe Frage im PR).
   - [ ] **du:** E3c: Book R vom Server auf den Tolino holen, auswerfen,

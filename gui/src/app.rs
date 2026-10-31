@@ -898,12 +898,14 @@ fn loaded_view(
         format!("{}: {e}", t.server_failed),
       );
     }
-    Some(ServerState::Compared(_)) => {
-      // Books without a reference EPUB are sent one by one, after a yes.
+    Some(ServerState::Compared(compared)) => {
+      // Books without a reference EPUB are sent one by one, after a yes;
+      // books already in sync are left out.
       let ids: Vec<String> = loaded
         .rows
         .iter()
         .filter(|r| matches!(r.group, Group::Mapped { .. } | Group::Same { .. }))
+        .filter(|r| !in_sync(compared.get(&r.id)))
         .map(|r| r.id.clone())
         .collect();
       let enabled = !busy && !ids.is_empty();
@@ -1001,6 +1003,11 @@ fn file_name(path: &str) -> &str {
   path.rsplit(['/', '\\']).next().unwrap_or(path)
 }
 
+/// Device and server hold the same position.
+fn in_sync(compared: Option<&Compared>) -> bool {
+  compared.is_some_and(|c| c.outlook == Some(Outlook::InSync))
+}
+
 /// The server's side of a book: "57 % · KOReader · server newer".
 fn server_cell(t: &Texts, compared: Option<&Compared>) -> (String, Option<String>) {
   let Some(c) = compared else {
@@ -1089,6 +1096,8 @@ fn book_table(
             row.group,
             Group::Mapped { .. } | Group::Same { .. } | Group::NoReference
           );
+          // Nothing to send or get once both sides agree.
+          let can_send = can_send && !in_sync(compared.and_then(|c| c.get(&row.id)));
           if sendable && compared.is_some() {
             let send = ui.add_enabled(can_send, egui::Button::new(t.send_button).small());
             if send.clicked() {
