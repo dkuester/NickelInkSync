@@ -102,8 +102,9 @@ entscheiden für jedes Buch, unter welcher Prüfsumme es synchronisiert wird
 | zugeordnet, EPUB unverändert | unter der Prüfsumme der Original-EPUB, Position übersetzt (siehe unten) |
 | zugeordnet, EPUB fehlt oder geändert | gar nicht, bis es neu zugeordnet ist |
 | dieselbe Datei wie in der Bibliothek, oder die Original-EPUB einer Zuordnung | unter der eigenen Prüfsumme |
+| ein kepub (`.kepub.epub` oder MimeType `application/x-kobo-epub+zip`) ohne Zuordnung | gar nicht („not mapped“), mit oder ohne Bibliothek: KOReader kennt das Buch nur unter seiner Original-EPUB, ein kepub wird also nie unter seiner eigenen Prüfsumme synchronisiert |
 | nichts davon, Bibliothek eingerichtet | gar nicht („not mapped“; `map suggest` hilft) |
-| keine Bibliothek eingerichtet | unter der eigenen Prüfsumme, wie bisher |
+| keine Bibliothek eingerichtet (EPUB) | unter der eigenen Prüfsumme, wie bisher |
 
 Die Position wird zwischen Gerätedatei und Original über das Kapitel (den
 Pfad der Datei; von Calibre geteilte Kapitel `ch1_split_000.xhtml`,
@@ -114,7 +115,9 @@ wurde über die 32 Zeichen danach gefunden), *chapter start only* (die
 Stelle im Kapitel wurde nicht gefunden), *from the percentage only* (das
 Kapitel fehlt in der anderen Datei, z. B. Calibres `titlepage.xhtml`).
 `pull --write` bringt die Server-Position genauso in eine zugeordnete EPUB
-auf dem Tolino zurück; in ein kepub schreibt es noch nichts.
+auf dem Tolino zurück und in ein zugeordnetes kepub auf einem Kobo mit
+Firmware 6.x als die Stelle, die Nickel speichert (`#kobo.N.M:offset`); in
+ein kepub auf Kobo-Firmware 4.x schreibt es nichts.
 
 **Kindle.** `status` und `push` lesen auch die Bücher eines Kindle, und
 zwar jedes KFX, das seiner EPUB zugeordnet ist (`map add`): Die zuletzt
@@ -172,8 +175,8 @@ EPUB; eine Zuordnung lässt sich ändern oder entfernen. Mit einem Server
 in `config.ini` zeigt es die Stelle auf dem Server neben der auf dem
 Gerät und sendet je Buch oder alle auf einmal; eine Rückfrage nach
 `confirm` kommt als Dialog (Server behalten oder Gerät senden). Am
-Tolino und am Kobo (dort noch nicht in kepubs, und nicht mit installiertem
-Kobalt) schreiben „Holen“ und „Alle holen“ die Stelle vom Server in die
+Tolino und am Kobo (ein kepub erst, wenn es zugeordnet ist, und nicht mit
+installiertem Kobalt) schreiben „Holen“ und „Alle holen“ die Stelle vom Server in die
 Gerätedatenbank, vorher legt es eine Sicherung im Datenordner an, wie
 `pull --write`; eine Rückfrage kommt im selben Dialog (Gerät behalten oder
 Server übernehmen), danach liest es das Gerät neu ein. Wirf das Gerät
@@ -262,8 +265,10 @@ neuere Position vom Server, und das Buch öffnet dort; beim Verlassen des
 Buchs sendet es deine. Es
 ruft dasselbe Programm `nickelinksync` auf dem Gerät auf und folgt derselben
 Regel `confirm`; fragen kann es noch nicht, eine Position, die eine Antwort
-bräuchte, bleibt deshalb unverändert und steht im Log. Auf einem Kobo bleibt
-das Plugin vorerst inaktiv.
+bräuchte, bleibt deshalb unverändert und steht im Log. Zuordnungen kennt das
+Plugin nicht (sie liegen auf dem Rechner); ein kepub synchronisiert es
+deshalb nie, die Meldung sagt dann „kepub ohne Zuordnung“. Auf einem Kobo
+bleibt das Plugin vorerst inaktiv.
 
 1. `NickelInkSync-tolino` aus dem letzten CI-Lauf holen (oder `just
    package`, siehe [Bauen](#bauen)). Darin liegen `Kobo.tgz` und ein Ordner
@@ -331,8 +336,8 @@ wird nur beim Start geprüft).
 - Vorerst muss auf jedem Gerät **dieselbe Datei** liegen. Der Sync-Server
   erkennt Bücher an einer Prüfsumme der Datei, ein kepub auf dem einen und das
   ursprüngliche EPUB auf dem anderen Gerät gelten also als zwei verschiedene
-  Bücher. Die manuelle Zuordnung ist im Aufbau (siehe
-  [Buchzuordnung](#buchzuordnung-im-aufbau)).
+  Bücher. Ein kepub wird erst synchronisiert, wenn es seiner Original-EPUB
+  zugeordnet ist (siehe [Buchzuordnung](#buchzuordnung-im-aufbau)).
 
 ## Vorgeschichte
 
