@@ -111,7 +111,9 @@ the same way, and into a mapped kepub on a Kobo with firmware 6.x as the
 span Nickel stores (`#kobo.N.M:offset`); a kepub on Kobo firmware 4.x is
 not written.
 
-**Kindle.** `status` and `push` also read a Kindle's books, for every KFX
+**Kindle (experimental).** Kindle support stays as it is until Kobo and
+Tolino are stable: no further work on it, and no device test before 0.1.0.
+`status` and `push` also read a Kindle's books, for every KFX
 that is mapped to its EPUB (`map add`): the last page read (`lpr` in the
 `.sdr` folder) is translated into the EPUB and sent under its checksum.
 Nothing is written to the Kindle, and `pull` refuses. A recent Kindle
