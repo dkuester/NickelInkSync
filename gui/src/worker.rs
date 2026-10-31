@@ -1,5 +1,5 @@
 //! Everything slow (searching drives, hashing and reading books, comparing
-//! library books, later the network and copying) runs on one worker
+//! library books, the server, later copying) runs on one worker
 //! thread, so the window never waits. The window sends [`Command`]s; the
 //! worker answers with [`Event`]s and asks for a repaint after each.
 
@@ -7,16 +7,32 @@ use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
+use nickelinksync::history::Entry;
 use nickelinksync::library::Library;
 
 use crate::devices::{self, Found, Kind};
 use crate::model::{self, Loaded, Mapped, Suggestions};
+use crate::sync::{self, Question, Report, ServerState};
 
 pub enum Command {
   /// Search the drives, plus the chosen Kindle copy.
   Scan { kindle_folder: Option<PathBuf> },
-  /// Read the books of a device.
+  /// Read the books of a device, then ask the server about them.
   Load { root: PathBuf, kind: Kind },
+  /// Push the books with `ids`, then ask the server again.
+  Push {
+    root: PathBuf,
+    kind: Kind,
+    ids: Vec<String>,
+  },
+  /// Send the positions of the questions answered with "device".
+  Answer {
+    root: PathBuf,
+    kind: Kind,
+    questions: Vec<Question>,
+  },
+  /// The last entries of the sync history.
+  History,
   /// The library's candidates for one book.
   Suggest { root: PathBuf, id: String },
   /// Map one book to an EPUB, then read the device again.
@@ -36,6 +52,17 @@ pub enum Command {
 
 pub enum Event {
   Devices(Vec<Found>),
+  /// The server's positions for the books of a device.
+  Compared {
+    root: PathBuf,
+    state: ServerState,
+  },
+  /// What a push did; the server is asked again after it.
+  Pushed {
+    root: PathBuf,
+    result: Result<Report, String>,
+  },
+  History(Result<Vec<Entry>, String>),
   Progress {
     root: PathBuf,
     done: usize,
@@ -85,6 +112,10 @@ fn run(inbox: &Receiver<Command>, outbox: &Sender<Event>, repaint: &dyn Fn()) {
     let _ = outbox.send(event);
     repaint();
   };
+  let compare = |root: PathBuf, kind: Kind| {
+    let state = sync::compare(&model::options(&root), kind);
+    send(Event::Compared { root, state });
+  };
   let load = |root: PathBuf, kind: Kind| {
     let result = model::load(&root, kind, &mut |done, total| {
       send(Event::Progress {
@@ -93,7 +124,14 @@ fn run(inbox: &Receiver<Command>, outbox: &Sender<Event>, repaint: &dyn Fn()) {
         total,
       })
     });
-    send(Event::Loaded { root, result });
+    let loaded = result.is_ok();
+    send(Event::Loaded {
+      root: root.clone(),
+      result,
+    });
+    if loaded {
+      compare(root, kind);
+    }
   };
   // Read once, when first needed: a big library takes a while.
   let mut library: Option<Option<Library>> = None;
@@ -109,6 +147,27 @@ fn run(inbox: &Receiver<Command>, outbox: &Sender<Event>, repaint: &dyn Fn()) {
         send(Event::Devices(found));
       }
       Command::Load { root, kind } => load(root, kind),
+      Command::Push { root, kind, ids } => {
+        let result = sync::push(&model::options(&root), kind, &ids);
+        send(Event::Pushed {
+          root: root.clone(),
+          result,
+        });
+        compare(root, kind);
+      }
+      Command::Answer {
+        root,
+        kind,
+        questions,
+      } => {
+        let result = sync::send_answers(&model::options(&root), questions);
+        send(Event::Pushed {
+          root: root.clone(),
+          result,
+        });
+        compare(root, kind);
+      }
+      Command::History => send(Event::History(sync::history(200))),
       Command::Suggest { root, id } => {
         let result = match &library {
           Some(library) => Ok(library.as_ref()),

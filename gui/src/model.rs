@@ -1,8 +1,7 @@
 //! What the window shows of a device, read with the library's
 //! [`Session`]/[`KindleSession`]: the books, grouped by how they sync, with
 //! the position on the device; and making or removing a book's mapping
-//! (in the data directory, never on the device). The server is not asked
-//! yet.
+//! (in the data directory, never on the device). The server: `sync`.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -61,7 +60,7 @@ pub struct Loaded {
   pub rows: Vec<Row>,
 }
 
-fn options(root: &Path) -> Options {
+pub(crate) fn options(root: &Path) -> Options {
   Options {
     device: root.to_path_buf(),
     config: None,

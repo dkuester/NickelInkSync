@@ -149,8 +149,12 @@ mapped, no reference EPUB, mapped, own checksum) with their position on
 the device; without a library it warns that it cannot check which books
 KOReader knows. A book is
 mapped from there: the library's suggestions with their scores, or an
-EPUB chosen by hand; a mapping can be changed or removed. It writes
-nothing to the device, only `mappings.json`.
+EPUB chosen by hand; a mapping can be changed or removed. With a server
+in `config.ini` it shows the server's position next to the device's and
+sends positions per book or all at once; a `confirm` question comes as a
+dialog (keep the server's, or send the device's). "History" lists what
+the CLI and the window sent (`history.jsonl` in the data directory). It
+writes nothing to the device, only `mappings.json` and the history.
 Nothing is synced when a device is connected. German or English after the
 system language, switchable. It shares `config.ini` and `mappings.json`
 with the CLI; its own settings (language, Kindle folder) are in

@@ -32,7 +32,7 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0, E1, E2 und E3a erledigt; als Nächstes E3b).
+fertig, D2 läuft (E0 bis E3b erledigt; als Nächstes E3c).
 
 ## Grundlagen
 
@@ -252,7 +252,7 @@ fertig, D2 läuft (E0, E1, E2 und E3a erledigt; als Nächstes E3b).
     Position, Richtung, Gerät, Titel, Dokument, Stelle, Prozent, `by`).
     Die CLI schreibt nach `push` (Kobo/Tolino und Kindle) und nach
     `pull --write`, nicht auf dem Gerät (`--live`); Ausgabe unverändert.
-  - [ ] **ich:** **E3b** GUI: Server-Positionen in der Bücherliste (Spalte
+  - [x] **ich:** **E3b** GUI: Server-Positionen in der Bücherliste (Spalte
     „Server“ mit Prozent, Gerät, Zeit und Aussage nach `sync::outlook`),
     „Senden“ je Buch und „Alle senden“ über `Session::push_step`; Fragen
     (`Action::Ask`) sammeln und in einem Dialog beantworten (Gerät,
@@ -260,7 +260,14 @@ fertig, D2 läuft (E0, E1, E2 und E3a erledigt; als Nächstes E3b).
     ohne Referenz-EPUB überspringt „Alle senden“, „Senden“ am einzelnen
     Buch fragt vorher; Verlauf (`by: "gui"`) als Fenster. Kindle über
     `KindleSession::push_step`. Tests in `gui/` mit dem Mock-Server aus
-    `tests/common` (`#[path]`).
+    `tests/common` (`#[path]`). Umgesetzt in `gui/src/sync.rs`: nach dem
+    Einlesen fragt die App den Server (Spalte „Server“: Prozent, Gerät,
+    „gleich“/„Gerät neuer“/„Server neuer“/„fragt vorher“); „Senden“ je
+    Buch, „Alle senden“ oben; Fragen kommen in einen Dialog mit „Server
+    behalten“ (vorgewählt) oder „Gerät senden“; danach fragt sie den
+    Server erneut. Knopf „Verlauf“ oben rechts (letzte 200 Einträge, von
+    CLI und GUI). Ohne Server in `config.ini` ein Hinweis statt der
+    Knöpfe.
   - [ ] **du:** E3b: Book R am Tolino senden, einmal mit Rückfrage
     (KOReader weiter vorn), Verlauf ansehen; Kindle-Kopie senden.
   - [ ] **ich:** **E3c** Holen und Rückschreiben am Tolino in der GUI

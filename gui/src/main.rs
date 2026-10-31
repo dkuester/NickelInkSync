@@ -7,7 +7,13 @@ mod devices;
 mod i18n;
 mod model;
 mod settings;
+mod sync;
 mod worker;
+
+/// The CLI tests' fake devices and KOSync mock server.
+#[cfg(test)]
+#[path = "../../tests/common/mod.rs"]
+mod common;
 
 fn main() -> eframe::Result {
   let options = eframe::NativeOptions {

@@ -158,8 +158,13 @@ synchronisiert werden (nicht zugeordnet, ohne Referenz-EPUB, zugeordnet,
 eigene Prüfsumme), mit der Stelle auf dem Gerät; ohne Bibliothek warnt es,
 dass es nicht prüfen kann, welche Bücher KOReader kennt. Dort ordnest du ein Buch auch zu: mit den
 Vorschlägen der Bibliothek samt Bewertung oder einer selbst gewählten
-EPUB; eine Zuordnung lässt sich ändern oder entfernen. Aufs Gerät
-schreibt es nichts, nur `mappings.json`. Beim Anstecken wird nichts
+EPUB; eine Zuordnung lässt sich ändern oder entfernen. Mit einem Server
+in `config.ini` zeigt es die Stelle auf dem Server neben der auf dem
+Gerät und sendet je Buch oder alle auf einmal; eine Rückfrage nach
+`confirm` kommt als Dialog (Server behalten oder Gerät senden). „Verlauf“
+zeigt, was CLI und Fenster gesendet haben (`history.jsonl` im
+Datenordner). Aufs Gerät schreibt es nichts, nur `mappings.json` und den
+Verlauf. Beim Anstecken wird nichts
 synchronisiert. Deutsch oder Englisch nach Systemsprache, umschaltbar.
 `config.ini` und `mappings.json` teilt es mit der CLI; seine eigenen
 Einstellungen (Sprache, Kindle-Ordner) liegen in `gui.json` im
