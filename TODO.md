@@ -331,6 +331,9 @@ der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
     dafür „Holen“ am Kobo). Jetzt entscheidet das Modell in
     `.kobo/version`, dann der Händler in `.kobo/affiliate.conf` (`Kobo`
     oder z. B. `Thalia.de`), erst zuletzt die Tabellen.
+    Entscheidung (2026-10-31): „Holen“ auch am Kobo wie am Tolino, vorerst
+    nur für EPUBs; kepubs folgen mit der Rückübersetzung (K4, eigene
+    Session).
   - [ ] **du:** E5a: ein Buch auf den Tolino kopieren, eins als kepub auf
     den Kobo; auswerfen, Bücher prüfen; danach Senden am Kobo.
   - [ ] **ich:** **E5b** Sicherungskopie der Gerätedatenbank zurückspielen

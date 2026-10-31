@@ -460,7 +460,8 @@ static DE: Texts = Texts {
   no_books: "Keine Bücher auf dem Gerät.",
   read_only: "Die App schreibt nichts aufs Gerät. Zuordnungen liegen auf diesem Rechner \
               (mappings.json), gemeinsam mit der CLI.",
-  writes_tolino: "„Holen“ schreibt die Stelle vom Server in die Datenbank des Tolino; vorher \
+  writes_tolino: "„Holen“ schreibt die Stelle vom Server in die Gerätedatenbank (am Kobo noch \
+                  nicht in kepubs); vorher \
                   legt die App eine Sicherung auf diesem Rechner an. Zuordnungen liegen auf \
                   diesem Rechner (mappings.json), gemeinsam mit der CLI.",
   kobalt: "Kobalt ist auf dem Gerät installiert und verwaltet die Lesepositionen selbst: \
@@ -600,7 +601,8 @@ static EN: Texts = Texts {
   no_books: "No books on the device.",
   read_only: "The app writes nothing to the device. Mappings are kept on this computer \
               (mappings.json), shared with the CLI.",
-  writes_tolino: "“Get” writes the server’s position into the Tolino’s database, after a \
+  writes_tolino: "“Get” writes the server’s position into the device database (on a Kobo not \
+                  into kepubs yet), after a \
                   backup of it on this computer. Mappings are kept on this computer \
                   (mappings.json), shared with the CLI.",
   kobalt: "Kobalt is installed on the device and manages its reading positions itself: \

@@ -359,14 +359,10 @@ pub fn push(options: &Options, kind: Kind, ids: &[String]) -> Result<Report, Str
   Ok(report)
 }
 
-/// Opens the device for writing: a Tolino. On a Kobo the position is not
-/// written back yet (P2), only sent.
-fn tolino(options: &Options) -> Result<Session, String> {
-  let session = Session::open(options).map_err(|e| e.to_string())?;
-  if session.family != "Tolino" {
-    return Err("only a Tolino takes positions from the server for now".into());
-  }
-  Ok(session)
+/// Opens the Kobo or Tolino for writing. A kepub on a Kobo is not written
+/// into yet (K4): its step is skipped as not translated.
+fn writable(options: &Options) -> Result<Session, String> {
+  Session::open(options).map_err(|e| e.to_string())
 }
 
 /// Writes `writes` into the device after a backup, and keeps `taken` in the
@@ -404,12 +400,13 @@ fn write(
   Ok(())
 }
 
-/// Takes the server's positions for the books with `ids` into a Tolino:
+/// Takes the server's positions for the books with `ids` into a Kobo or
+/// Tolino:
 /// what needs no answer is written at once (after a backup of the
 /// database), the rest comes back as questions.
 pub fn pull(options: &Options, ids: &[String]) -> Result<Report, String> {
   let server = server(options)?.ok_or("no server set up in config.ini")?;
-  let mut session = tolino(options)?;
+  let mut session = writable(options)?;
   let confirm = server.config.confirm;
   let mut report = Report::default();
   let mut writes = Vec::new();
@@ -513,7 +510,7 @@ pub fn answer(options: &Options, questions: Vec<Question>) -> Result<Report, Str
     record(&sent, &mut report);
   }
   if !pulls.is_empty() {
-    let mut session = tolino(options)?;
+    let mut session = writable(options)?;
     let writes = pulls
       .into_iter()
       .map(|q| match q.answer {
@@ -814,12 +811,12 @@ mod tests {
   }
 
   #[test]
-  fn a_kobo_is_not_written() {
+  fn a_kobo_takes_epubs_but_not_kepubs() {
     let _data = isolate();
     let root = fake_device(
       "gui-pull-kobo",
       "kobo-clarabw-4.46-placeholder-books.sql",
-      KOBO_VERSION,
+      "N000000000000,4.9.77,6.0.279225,4.9.77,4.9.77,00000000-0000-0000-0000-000000000391\n",
     );
     let server = MockServer::start();
     let options = Options {
@@ -831,12 +828,19 @@ mod tests {
       timeout: Duration::from_secs(5),
       library: None,
     };
-    let before = fs::read(root.join(".kobo/KoboReader.sqlite")).unwrap();
-    assert!(pull(&options, &[BOOK_A.to_string()]).is_err());
-    assert_eq!(
-      fs::read(root.join(".kobo/KoboReader.sqlite")).unwrap(),
-      before
+    server.store(&book_hash(), AHEAD, 0.9, LAST_READ + 60);
+    let report = pull(&options, &[BOOK_A.to_string()]).unwrap();
+    assert_eq!(report.books, [("Book A".to_string(), Outcome::Written)]);
+    // A kepub (here under its own checksum) is not translated back yet.
+    let kepub = "file:///mnt/onboard/Books/book-a.kepub.epub";
+    let kepub_hash = partial_md5(&root.join("Books/book-a.kepub.epub")).unwrap();
+    server.store(&kepub_hash, AHEAD, 0.9, LAST_READ + 60);
+    let report = pull(&options, &[kepub.to_string()]).unwrap();
+    assert!(
+      matches!(&report.books[..], [(_, Outcome::Skipped(e))] if e.contains("kepub")),
+      "{report:?}"
     );
+    assert_eq!(report.backup, None);
     let _ = fs::remove_dir_all(&root);
   }
 

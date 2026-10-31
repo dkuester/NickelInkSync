@@ -60,8 +60,9 @@ pub struct Loaded {
   pub library: Option<(PathBuf, library::Kind, usize)>,
   pub mappings: usize,
   pub rows: Vec<Row>,
-  /// The server's positions can be written into it: a Tolino (on a Kobo
-  /// not yet, P2; a Kindle is only read) without Kobalt installed.
+  /// The server's positions can be written into it: a Kobo or Tolino
+  /// without Kobalt installed (on a Kobo not into kepubs yet, K4; a Kindle
+  /// is only read).
   pub writable: bool,
   /// "Kobo" or "Tolino": books can be copied onto it; `None` for a Kindle.
   pub family: Option<&'static str>,
@@ -178,7 +179,7 @@ fn load_nickel(
       .map(|l| (l.root.clone(), l.kind, l.books.len())),
     mappings: session.store.mappings.len(),
     rows,
-    writable: session.family == "Tolino" && !session.kobalt.blocks(),
+    writable: !session.kobalt.blocks(),
     family: Some(session.family),
     kobalt: session.kobalt.blocks(),
   })
