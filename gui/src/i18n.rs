@@ -319,14 +319,24 @@ pub fn report(lang: Lang, report: &crate::sync::Report) -> String {
     }
   }
   if let Some(backup) = &report.backup {
+    let n = report.pages_dropped;
     line.push_str(&match lang {
-      Lang::De => format!(
-        "\nSicherung der Gerätedatenbank: {}\nGerät auswerfen, bevor du das Buch öffnest.",
-        backup.display()
+      Lang::De => format!("\nSicherung der Gerätedatenbank: {}", backup.display()),
+      Lang::En => format!("\nBackup of the device database: {}", backup.display()),
+    });
+    // Nickel keeps the dropped pages in memory until it restarts.
+    line.push_str(&match (lang, n) {
+      (Lang::De, 0) => "\nGerät auswerfen, bevor du das Buch öffnest.".to_string(),
+      (Lang::En, 0) => "\nEject the device before you open the book.".to_string(),
+      (Lang::De, n) => format!(
+        "\n{n} zwischengespeicherte Seiten von Nickel verdeckten die Stelle und wurden entfernt. \
+         Gerät auswerfen und neu starten, bevor du das Buch öffnest: Nickel hält diese Seiten \
+         bis zum Neustart im Speicher."
       ),
-      Lang::En => format!(
-        "\nBackup of the device database: {}\nEject the device before you open the book.",
-        backup.display()
+      (Lang::En, n) => format!(
+        "\nDropped {n} of Nickel's cached pages that hid the place. Eject the device and \
+         restart it before you open the book: Nickel keeps those pages in memory until it \
+         restarts."
       ),
     });
   }

@@ -788,6 +788,9 @@ fertig, D2 läuft (E0 bis E4 und O5 erledigt; als Nächstes E5).
   - [x] **ich:** CLI verwirft beim Schreiben die gespeicherten Seiten des
     Zielkapitels, wenn keine die Stelle enthält (USB und live); über USB
     meldet sie, dass das Gerät neu gestartet werden muss.
+  - [x] **ich:** Der Desktop-Client sagt es auch: Nach „Holen“ mit
+    verworfenen Seiten verlangt die Meldung, das Gerät auszuwerfen und neu
+    zu starten (deutsch und englisch), sonst nur auszuwerfen.
   - [x] **du:** Gerätetest (31.10.): über USB 4 Seiten verworfen, nach
     Neustart R2-116 für R2-117; über das Plugin ohne Neustart 14 Seiten
     verworfen, R3-66 für R3-67.
