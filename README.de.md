@@ -160,6 +160,17 @@ Die Zuordnungen liegen in `mappings.json` im Datenordner
 
 ### Desktop-Client (im Aufbau)
 
+**macOS (ab 11, Apple Silicon und Intel):** `NickelInkSync-<Version>-macos.dmg`
+öffnen und NickelInkSync in „Programme“ ziehen. Die App ist nicht
+notarisiert (keine Apple Developer ID), daher blockiert macOS sie beim
+ersten Start: einmal öffnen, dann Systemeinstellungen → Datenschutz &
+Sicherheit → „Dennoch öffnen“ (seit macOS 15 genügt Rechtsklick → „Öffnen“
+nicht mehr). Die CLI kommt als `nickelinksync-<Version>-macos.zip`; nach
+dem Entpacken lässt `xattr -d com.apple.quarantine nickelinksync` sie
+laufen. In der App steckt [kepubify](https://github.com/pgaskin/kepubify)
+(MIT); seine Lizenz liegt in der App und auf dem Disk-Image.
+`packaging/macos/package.sh` baut beide Dateien (CI: Job `package-macos`).
+
 Ein Fenster für dieselbe Arbeit, auf derselben Bibliothek (`gui/`, egui):
 `just gui` oder `cargo run -p nickelinksync-gui`. Es findet einen per USB
 angesteckten Kobo oder Tolino (macOS: `/Volumes`), nimmt eine Kopie der
@@ -387,7 +398,9 @@ Die Tabelle mit Lizenzen und Links steht im [englischen README](README.md#credit
 - **Code, den es nutzt:** [NickelHook](https://github.com/pgaskin/NickelHook)
   von Patrick Gaskin (MIT), die Grundlage des Plugins, und dessen Qt6-Port im
   [Branch `qt6-support`](https://github.com/nicoverbruggen/NickelHook/tree/qt6-support)
-  von Nico Verbruggen (MIT), das Submodul des Plugins; dazu die Rust-Crates
+  von Nico Verbruggen (MIT), das Submodul des Plugins;
+  [kepubify](https://github.com/pgaskin/kepubify) 4.0.4 von Patrick Gaskin
+  (MIT), in der macOS-App mitgeliefert; dazu die Rust-Crates
   aus `Cargo.toml` (clap, md-5, quick-xml, rusqlite mit SQLite, serde, ureq
   mit rustls, zip).
 - **Ideen und Dokumentation, kein Code** (nachgebaut nach dem beschriebenen

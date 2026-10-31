@@ -26,6 +26,10 @@ build-device:
 gui:
   cargo run -p nickelinksync-gui
 
+# macOS release files in dist/: the app as a .dmg and the CLI as a ZIP
+package-macos:
+  packaging/macos/package.sh
+
 # Build the device binary and run `--version` in an ARMv7 container (Docker, QEMU)
 check-device: build-device
   file {{ device_bin }}
