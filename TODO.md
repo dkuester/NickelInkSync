@@ -32,7 +32,7 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0 bis E3c und O5 erledigt; als Nächstes E4).
+fertig, D2 läuft (E0 bis E4 und O5 erledigt; als Nächstes E5).
 
 ## Grundlagen
 
@@ -299,11 +299,22 @@ fertig, D2 läuft (E0 bis E3c und O5 erledigt; als Nächstes E4).
     öffnen (2026-10-31): Holen schreibt die richtige Stelle, danach „gleich“
     und ausgegraute Knöpfe. Nickel öffnet nur am Kapitelanfang (R2-1 statt
     R2-19), das ist N5 (PR #40), nicht E3c.
-  - [ ] **ich:** **E4** Einstellungen; Schlüssel im Schlüsselbund bzw. in
+  - [x] **ich:** **E4** Einstellungen; Schlüssel im Schlüsselbund bzw. in
     der Anmeldeinformationsverwaltung (`keyring`, nur für macOS und
     Windows, nicht im Gerätebau). Die CLI sucht `password`/`key` in der
     Datei, dann im Schlüsselbund; die GUI bietet an, ein Passwort aus der
-    Datei dorthin zu verschieben.
+    Datei dorthin zu verschieben. Umgesetzt: Knopf „Einstellungen“
+    (Server, Benutzer, Passwort, Gerätename, `confirm`, `position`,
+    Bibliothek); `config.ini` wird zeilenweise geändert (Kommentare,
+    Reihenfolge und `notify`/`device_id` bleiben), vorher `config.ini.bak`,
+    Rechte 600. Ein eingegebenes Passwort wird nur als MD5-Schlüssel
+    gespeichert (Schlüsselbund, Dienst „NickelInkSync“, Konto
+    `<user>@<server>`; ohne Schlüsselbund als `key =` in der Datei);
+    ändern sich Server oder Benutzer, zieht der Schlüssel mit. `keyring`
+    3.6.3 nur für macOS und Windows. Tests mit einem Ordner statt des
+    Schlüsselbunds (`NICKELINKSYNC_KEYCHAIN_DIR`).
+  - [ ] **du:** E4: Einstellungen öffnen, „In den Schlüsselbund
+    verschieben“, danach `status` in der CLI.
   - [ ] **ich:** **E5** Bücher aus Calibre auf Tolino oder Kobo kopieren,
     beim Kobo auf Wunsch mit kepubify, Zuordnung entsteht dabei;
     Sicherungskopie der Gerätedatenbank zurückspielen (Bibliothek und

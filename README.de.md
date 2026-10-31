@@ -168,7 +168,11 @@ Gerätedatenbank, vorher legt es eine Sicherung im Datenordner an, wie
 Server übernehmen), danach liest es das Gerät neu ein. Wirf den Tolino
 aus, bevor du das Buch öffnest. „Verlauf“ zeigt, was CLI und Fenster
 gesendet und geschrieben haben (`history.jsonl` im Datenordner).
-„Übersicht“ zeigt alle angesteckten Geräte nebeneinander: eine Zeile je
+„Einstellungen“ bearbeitet `config.ini` (Server, Benutzer, Gerätename,
+`confirm`, `position`, Bibliothek) zeilenweise, Kommentare bleiben, vorher
+legt es `config.ini.bak` an; ein dort eingegebenes Passwort landet nur als
+Schlüssel im Schlüsselbund, und ein Passwort oder Schlüssel aus der Datei
+lässt sich dorthin verschieben. „Übersicht“ zeigt alle angesteckten Geräte nebeneinander: eine Zeile je
 Buch, je Gerät eine Spalte mit seiner Stelle, dazu die des Servers. Auf einen
 Kobo oder Kindle schreibt es nichts, nur `mappings.json` und den
 Verlauf. Beim Anstecken wird nichts
@@ -225,7 +229,12 @@ du in KOReader erreicht hast. Im Terminal antwortest du mit `d` (Gerät) oder
 
 Das Passwort steht nur in dieser Datei, nie in der Befehlszeile. Halte die
 Datei privat (`chmod 600`); NickelInkSync warnt, wenn andere sie lesen
-können.
+können. Unter macOS und Windows kann der Schlüssel stattdessen im
+Schlüsselbund (Windows: Anmeldeinformationsverwaltung) liegen: Stehen
+weder `password` noch `key` in der Datei, sucht die CLI dort (Dienst
+„NickelInkSync“, Konto `<user>@<server>`). Die Einstellungen des
+Desktop-Clients legen ihn dort ab; auf dem Gerät und unter Linux bleibt er
+in der Datei.
 
 ## Plugin für den Tolino (experimentell)
 

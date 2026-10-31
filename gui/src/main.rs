@@ -8,6 +8,7 @@ mod i18n;
 mod model;
 mod overview;
 mod settings;
+mod settings_dialog;
 mod sync;
 mod worker;
 

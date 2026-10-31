@@ -158,7 +158,11 @@ backup of it in the data directory, as `pull --write` does; a `confirm`
 question comes as the same dialog (keep the device's, or take the
 server's), and the device is read again afterwards. Eject the Tolino
 before you open the book. "History" lists what the CLI and the window
-sent and wrote (`history.jsonl` in the data directory). "Overview"
+sent and wrote (`history.jsonl` in the data directory). "Settings" edits
+`config.ini` (server, user, device name, `confirm`, `position`, library)
+line by line, keeping comments, after a backup (`config.ini.bak`); a
+password typed there is kept only as its key in the keychain, and a
+password or key found in the file can be moved there. "Overview"
 shows all connected devices side by side: one line per book, one column
 per device with its position, and the server's. To a Kobo or a
 Kindle it writes nothing, only `mappings.json` and the history.
@@ -203,6 +207,11 @@ password = your password
   Keep the file private (`chmod 600`); NickelInkSync warns if others can
   read it. Only the MD5 of the password is sent, as the KOSync protocol
   requires.
+- On macOS and Windows the key can live in the system keychain
+  (Credential Manager on Windows) instead: without `password` and `key` in
+  the file, the CLI looks there (service "NickelInkSync", account
+  `<user>@<server>`). The desktop client's settings put it there; the
+  device and Linux keep it in the file.
 - Without `device`, each e-reader appears under its model name (for example
   "Tolino Shine Color"), with a `device_id` derived from that name. Set both
   only if one configuration should always report the same device.
