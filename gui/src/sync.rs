@@ -378,8 +378,8 @@ fn write(
   }
   let only: Vec<Write> = writes.iter().map(|(_, w, _)| w.clone()).collect();
   let backup = match session.write(&only).map_err(|e| e.to_string())? {
-    Written::Mounted { backup } => Some(backup),
-    Written::Live { backup } => backup,
+    Written::Mounted { backup, .. } => Some(backup),
+    Written::Live { backup, .. } => backup,
   };
   report.backup = backup;
   let mut taken = Vec::new();

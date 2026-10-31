@@ -769,9 +769,24 @@ fertig, D2 läuft (E0 bis E3c und O5 erledigt; als Nächstes E4).
     die gezogene Stelle, Nickel öffnete trotzdem am Kapitelanfang. Damit
     ist `tolino_bookmark` nicht die Ursache; beide Stellen lagen wieder
     außerhalb der gespeicherten Seiten.
-  - [ ] **ich:** Seiten-Cache als Ursache
-    prüfen (Cache-Zeilen des Buchs löschen, dann öffnen), `libnickel` von
-    5.18.279364 beschaffen und die Symbole neu prüfen. Position über Nickel selbst
+  - [x] **du + ich:** Ursache bewiesen (31.10., Syslog über NickelMenu):
+    Nickel öffnet aus seinem Seiten-Cache und nimmt die erste gespeicherte
+    Seite des Kapitels, wenn keine die Stelle enthält. Nur die Seiten des
+    Zielkapitels löschen und neu starten: Book R öffnete bei R2-149, die
+    Seiten von Kapitel 3 blieben. Auf dem Kobo 6.0 genauso.
+  - [x] **ich:** CLI verwirft beim Schreiben die gespeicherten Seiten des
+    Zielkapitels, wenn keine die Stelle enthält (USB und live); über USB
+    meldet sie, dass das Gerät neu gestartet werden muss.
+  - [x] **du:** Gerätetest (31.10.): über USB 4 Seiten verworfen, nach
+    Neustart R2-116 für R2-117; über das Plugin ohne Neustart 14 Seiten
+    verworfen, R3-66 für R3-67.
+  - [x] **ich:** Über USB blieb seit 5.18.279364 immer eine `-wal`-Datei
+    liegen und blockierte das Schreiben; die CLI arbeitet sie jetzt nach
+    einer Sicherung ein.
+  - [ ] **ich (falls das Plugin ohne Neustart nicht reicht):** die Seiten
+    über Nickel selbst verwerfen (`PersistedCacheManager`); als letzter
+    Ausweg `deleteAllRelatedToBookInfo`. Früherer Plan, falls auch das
+    nicht hilft: Position über Nickel selbst
     schreiben, Vorbild Kobalt (MIT, nur das Konzept):
     `VolumeManager::updateBookmark`, `updateFields` in einer
     `DatabaseAdapter`-Transaktion; die CLI entscheidet dann nur noch

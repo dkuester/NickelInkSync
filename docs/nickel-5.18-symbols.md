@@ -428,6 +428,63 @@ between `DatabaseAdapter::beginTransaction(QString)` and
 `_ZN15DatabaseAdapter14endTransactionE7QStringb`). All are in the Tolino
 list; their signatures still need checking before use.
 
+### Step 6: Nickel's cache of rendered pages (the cause)
+
+Proven on 31.10. on the Tolino (5.18.279364), seen the same way on the
+Kobo Clara BW (6.0.279225). A NickelMenu item that saves `logread` to
+`.adds/NickelInkSync/syslog.txt` showed what Nickel does when it opens a
+book: the reader (`PageImageReader`, `CacheAndLiveEngine`,
+`SinglePageCacheEngine`) first looks in its persistent cache of rendered
+pages, and logs
+
+    SinglePageCacheEngine.debug) initializeBookFromPersistentCache - inferred position with getByChapterInPersistence
+
+when no cached page holds the bookmarked place: it then takes the first
+cached page of that chapter, which is the chapter start in practice. Only
+the chapter of `ChapterIDBookmarked` counts then, not the point.
+
+| Purpose | Symbol (5.18.279364) |
+|---|---|
+| Open from the cache | `_ZN21SinglePageCacheEngine33initializeBookFromPersistentCacheERK6VolumeRK15ContentLocation` |
+| Page that holds a place | `_ZN21SinglePageCacheEngine32getByWithinLocationInPersistenceERK15ContentLocation` |
+| First page of the chapter (the fallback) | `_ZN21SinglePageCacheEngine25getByChapterInPersistenceERK15ContentLocation` |
+| The cache's store | `_Z21persistedCacheManagerv` (a function-local static) |
+| Drop one page | `_ZN21PersistedCacheManager10deletePageERK7QString`: `this` is not used; one `DatabaseAdapter::remove` of the row with that `id` |
+| Drop all of a book | `_ZN21PersistedCacheManager26deleteAllRelatedToBookInfoEiRK7QStringS2_b`; the owner reports that it drops all of the book's data and the book is read in again; last resort only |
+
+The cache is three tables, keyed by `contentId` (the ContentID):
+`CachePersistenceBookInfo` (one row per book, `contentRenderPath` under
+`/mnt/aux/rendering`), `CachePersistenceRenderedPageData` (one row per
+page, `pageStartLocation`/`pageEndLocation` in the same form as
+`ChapterIDBookmarked`, `previousEntryId`/`nextEntryId`) and
+`CachePersistenceRenderedPageChapterData` (per page,
+`cachePersistenceRenderedPageDataId`).
+
+Device tests (Book R, plugin off, position written over USB):
+
+| What was dropped | Restart | Opened at |
+|---|---|---|
+| nothing | yes | chapter start (log line above) |
+| all three tables' rows of the book (Kobo) | no | chapter start; Nickel wrote the pages back from memory |
+| all three tables' rows of the book (Tolino) | yes | the written place, R2-63; the log shows a fresh render ("received live rendering") |
+| only the pages of the target chapter and their chapter rows (Tolino) | yes | the written place, R2-149; chapter 3's 14 pages and the book row stayed |
+
+Ruled out on the way: `tolino_bookmark` (both rows held the place, PR
+#40), `CurrentChapterProgress`, and the page cache alone without a restart.
+The fix (`drop_stale_pages` in `src/db.rs`): when the CLI writes a
+position and no cached page of the book holds it, it drops the cached
+pages of that chapter in the same transaction, over USB and live. Over USB
+the device then needs a restart. Device test of this code (31.10.): over
+USB 4 pages were dropped and after a restart Book R opened at R2-116 for
+R2-117; through the plugin (live, no restart) 14 pages were dropped and
+Book R opened at R3-66 for R3-67. Nickel knew its place only after 8 s
+there, the last retry of the check after opening.
+
+Since 5.18.279364 Nickel also leaves `KoboReader.sqlite-wal` and `-shm` on
+the USB partition (4 MB, also after restarts; their content was already in
+the database). The USB write now folds them in after a backup made through
+SQLite; a rollback journal (`-journal`) still blocks it.
+
 ## The push path
 
 After the original `leavingReadingExperience()` the position is saved,

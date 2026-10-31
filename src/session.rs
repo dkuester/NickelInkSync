@@ -319,9 +319,17 @@ pub struct Take {
 #[derive(Debug)]
 pub enum Written {
   /// Written while Nickel runs; a backup is made once a day.
-  Live { backup: Option<PathBuf> },
-  /// Written to a mounted device.
-  Mounted { backup: PathBuf },
+  Live {
+    backup: Option<PathBuf>,
+    /// Cached pages dropped so Nickel opens at the place.
+    pages_dropped: usize,
+  },
+  /// Written to a mounted device. With pages dropped, Nickel only takes the
+  /// place after a restart.
+  Mounted {
+    backup: PathBuf,
+    pages_dropped: usize,
+  },
 }
 
 /// A Kobo or Tolino and its sideloaded books.
@@ -760,8 +768,11 @@ impl Session {
       if self.content_id.is_none() {
         return Err("--write with --live needs --content-id".into());
       }
-      let backup = self.device.write_live(writes, &dir, &stamp[..8])?;
-      Written::Live { backup }
+      let (backup, pages_dropped) = self.device.write_live(writes, &dir, &stamp[..8])?;
+      Written::Live {
+        backup,
+        pages_dropped,
+      }
     } else {
       // A second write in the same second (two clicks in the desktop
       // client) gets a backup of its own.
@@ -772,8 +783,11 @@ impl Session {
         })
         .find(|p| !p.exists())
         .expect("a free name");
-      self.device.write_positions(writes, &backup)?;
-      Written::Mounted { backup }
+      let pages_dropped = self.device.write_positions(writes, &backup)?;
+      Written::Mounted {
+        backup,
+        pages_dropped,
+      }
     };
     self
       .not_in_line
