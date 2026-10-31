@@ -118,3 +118,25 @@ jobs:
         run: cargo test -p nickelinksync-gui
       - name: Build
         run: cargo build --release -p nickelinksync-gui
+
+  # The macOS release files (universal .app in a .dmg, the CLI as a ZIP),
+  # as an artifact; the release workflow builds them the same way. Not a
+  # required check.
+  package-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - name: rsvg-convert for the icon
+        run: brew install librsvg
+      - name: Package
+        run: packaging/macos/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NickelInkSync-macos
+          path: |
+            dist/*.dmg
+            dist/*.zip

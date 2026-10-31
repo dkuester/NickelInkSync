@@ -10,6 +10,17 @@ priority** (highest value, worth the effort), and **low priority (optional)**
 for other device families, beyond the current scope. Effort: S = an afternoon, M = a few days,
 L = a week or more, including verification.
 
+## Release 0.1.0
+
+Decided by the owner (2026-10-31): version 0.1.0, once D2 and the
+translation back into kepubs (PR #55) are done. Assets: the desktop client
+for macOS (`.dmg`) and Windows (ZIP), the CLI for macOS and Windows as
+files of their own, and `SHA256SUMS`; the Tolino plugin package and the
+ARM device build stay CI artifacts. No Linux yet: the AppImage (E8) and
+the Kobo client (C0–C7) follow in the release after. Release notes in
+English, then German. A workflow builds the assets on a `v*` tag and
+drafts the release; only the owner tags and publishes.
+
 ## Recently completed
 
 - [x] Scope fixed: Rust core + CLI (desktop and on-device) plus a NickelHook plugin
@@ -184,7 +195,9 @@ fixtures only.
   without overwriting anything, on a Kobo optionally as kepubs (kepubify)
   mapped to their EPUB; E5b, putting a backup of the device database back
   (`restore` in the CLI and a dialog), only onto the device it came from
-  and the same database version.
+  and the same database version; E6a, the macOS package (universal app in
+  a `.dmg` with kepubify, the CLI as a ZIP, built by
+  `packaging/macos/package.sh` and the CI job `package-macos`).
 
 - **Read-only device database layer** (S–M): reading the books and their
   positions is done (`status --device`); still to do: resolve

@@ -163,6 +163,17 @@ The mappings are kept in `mappings.json` in the data directory
 
 ### Desktop client (in progress)
 
+**macOS (11 or later, Apple silicon and Intel):** open
+`NickelInkSync-<version>-macos.dmg` and drag NickelInkSync into
+Applications. The app is not notarized (no Apple Developer ID), so macOS
+blocks it the first time: open it once, then System Settings → Privacy &
+Security → "Open Anyway" (since macOS 15 a right-click → "Open" no longer
+does it). The CLI comes as `nickelinksync-<version>-macos.zip`; after
+unpacking, `xattr -d com.apple.quarantine nickelinksync` lets it run. The
+app ships [kepubify](https://github.com/pgaskin/kepubify) (MIT) inside;
+its licence is in the app and on the disk image. `packaging/macos/package.sh`
+builds both files (CI: job `package-macos`).
+
 A window for the same work, built on the same library (`gui/`, egui):
 `just gui` or `cargo run -p nickelinksync-gui`. It finds a Kobo or
 Tolino connected over USB (macOS: `/Volumes`), takes a copy of a
@@ -420,6 +431,7 @@ NickelInkSync builds on the work of these projects and their maintainers.
 |---|---|---|---|
 | [NickelHook](https://github.com/pgaskin/NickelHook) | Patrick Gaskin | MIT | Hooking Nickel; the plugin is built on it |
 | [NickelHook, branch `qt6-support`](https://github.com/nicoverbruggen/NickelHook/tree/qt6-support) | Nico Verbruggen | MIT | Qt6 port of NickelHook for firmware 5.x, the plugin's submodule |
+| [kepubify](https://github.com/pgaskin/kepubify) 4.0.4 | Patrick Gaskin | MIT | Shipped with the macOS app: converting EPUBs to kepubs when copying to a Kobo |
 | Rust crates: [clap](https://github.com/clap-rs/clap), [md-5](https://github.com/RustCrypto/hashes), [quick-xml](https://github.com/tafia/quick-xml), [rusqlite](https://github.com/rusqlite/rusqlite) (with [SQLite](https://sqlite.org)), [serde](https://github.com/serde-rs/serde), [ureq](https://github.com/algesten/ureq) (with [rustls](https://github.com/rustls/rustls)), [zip](https://github.com/zip-rs/zip2) | their authors | MIT / Apache-2.0, SQLite public domain | The CLI (see `Cargo.toml`) |
 
 **Ideas and documentation, no code** (re-implemented from the described

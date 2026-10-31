@@ -42,9 +42,10 @@ pub enum Copied {
   Failed(String),
 }
 
-/// The kepubify program: `$NICKELINKSYNC_KEPUBIFY`, else `kepubify` in the
-/// `PATH`, in Homebrew's folders or in `~/go/bin` (`go install`); an app
-/// started from the Finder does not get the shell's `PATH`.
+/// The kepubify program: `$NICKELINKSYNC_KEPUBIFY`, else the one shipped
+/// next to the program (the macOS app, the Windows ZIP), else `kepubify` in
+/// the `PATH`, in Homebrew's folders or in `~/go/bin` (`go install`); an
+/// app started from the Finder does not get the shell's `PATH`.
 pub fn kepubify() -> Option<PathBuf> {
   if let Some(path) = std::env::var_os("NICKELINKSYNC_KEPUBIFY").filter(|v| !v.is_empty()) {
     return Some(PathBuf::from(path));
@@ -54,6 +55,13 @@ pub fn kepubify() -> Option<PathBuf> {
   } else {
     "kepubify"
   };
+  let shipped = std::env::current_exe()
+    .ok()
+    .and_then(|exe| Some(exe.parent()?.join(name)))
+    .filter(|p| p.is_file());
+  if shipped.is_some() {
+    return shipped;
+  }
   let path = std::env::var_os("PATH").unwrap_or_default();
   let go = std::env::var_os("HOME").map(|home| PathBuf::from(home).join("go/bin"));
   std::env::split_paths(&path)

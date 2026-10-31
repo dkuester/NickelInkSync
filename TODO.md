@@ -32,8 +32,24 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0 bis E5b und O5 erledigt; als Nächstes E6). **Danach
+fertig, D2 läuft (E0 bis E6a und O5 erledigt; als Nächstes E6b). **Danach
 der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
+
+## Release 0.1.0
+
+Entscheidungen des Besitzers (2026-10-31):
+
+- Version **0.1.0**; Voraussetzung: D2 und die kepub-Rückübersetzung (PR #55)
+  sind abgeschlossen.
+- **Release-Assets:** der Desktop-Client für macOS (`.dmg`) und Windows
+  (ZIP), dazu die CLI `nickelinksync` für macOS und Windows als eigene
+  Dateien, und `SHA256SUMS`. Das Tolino-Plugin-Paket und die ARM-Fassung
+  fürs Gerät gehören **nicht** ins Release, sie bleiben CI-Artefakte.
+- **Kein Linux:** E8 (AppImage) kommt im Release danach.
+- **Kobo-Client** (C0–C7) kommt im Release danach.
+- Release-Notes **englisch, darunter deutsch**, wie die READMEs.
+- Ein Workflow baut die Assets bei einem Tag `v*` und legt einen Entwurf an;
+  den Tag setzt und das Release veröffentlicht nur der Besitzer.
 
 ## Grundlagen
 
@@ -349,19 +365,33 @@ der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
   - [ ] **du:** E5b: am Tolino eine Stelle holen, dann „Sicherung
     zurückspielen …“ mit der eben angelegten Sicherung; auswerfen, neu
     starten, Buch öffnen (alte Stelle).
-  - [ ] **ich:** **E6** macOS: `.app` als `.dmg` aus der CI (macOS-Runner,
-    eigener Job, kein Pflicht-Check), kepubify-Binaries (feste Version,
-    SHA-256 gegen das Release geprüft) mit Lizenzhinweis in „Über“ und
-    neben dem Binary, Release-Workflow per Tag, Hinweis auf neue
-    Releases. Ohne Apple Developer ID nicht notarisiert: Seit macOS 15
-    öffnet Rechtsklick → „Öffnen“ die App nicht mehr, sondern
-    Systemeinstellungen → Datenschutz & Sicherheit → „Dennoch öffnen“
-    (README).
-  - [ ] **du:** Icon-Entwurf (SVG) ansehen; `.dmg` aus der CI installieren.
+  - [x] **ich:** **E6a** macOS-Paket: `packaging/macos/package.sh` baut
+    `NickelInkSync-<Version>-macos.dmg` (Universal-App arm64 + x86_64,
+    ab macOS 11, ad hoc signiert, nicht notarisiert, mit `/Applications`-
+    Verknüpfung und Lizenzen) und `nickelinksync-<Version>-macos.zip`
+    (Universal-CLI). kepubify 4.0.4 (MIT) liegt neben dem Programm in der
+    App, SHA-256 der beiden macOS-Binaries im Skript fest; die App sucht
+    kepubify zuerst neben sich. Icon-Entwurf `packaging/icon.svg`. CI-Job
+    `package-macos` (kein Pflicht-Check) lädt beide als Artefakt hoch.
+    README: Gatekeeper (seit macOS 15 „Dennoch öffnen“ in den
+    Systemeinstellungen), `xattr` für die CLI.
+  - [x] **du:** Icon ansehen; `.dmg` installieren (2026-10-31): Variante A
+    gewählt (zwei E-Reader und ein Smartphone im Sync-Kreis), bis 32 Pixel
+    das erste Icon mit einem E-Reader; Gatekeeper hat nichts verhindert;
+    das Icon stimmt auch bei laufender App.
+  - [ ] **ich:** **E6b** Hinweis auf neue Releases (höchstens einmal am Tag
+    über die GitHub-API, abschaltbar) und Fenster „Über“ mit Version und
+    Lizenzen (NickelInkSync, kepubify).
   - [ ] **ich:** **E7** Windows: Pfade für Konfiguration und Daten
     (`%APPDATA%`, heute nur `HOME`/XDG), Wechsellaufwerke erkennen,
     Anmeldeinformationsverwaltung, ZIP aus der CI (Windows-Runner); ohne
     Code-Signing warnt SmartScreen beim ersten Start.
+  - [ ] **ich:** **Release-Workflow** (nach E7): GitHub-Actions-Workflow,
+    der bei einem Tag `v*` die Release-Assets baut und als **Entwurf**
+    eines GitHub-Release anlegt; Versionsprüfung Tag ↔ `Cargo.toml`
+    beider Crates; `SHA256SUMS` mit hochladen; Release-Notes englisch,
+    darunter deutsch, mit Hinweisen zu Gatekeeper und SmartScreen. Den Tag
+    setzt und das Release veröffentlicht nur der Besitzer.
   - [ ] **du:** E7 auf dem Windows-PC mit Tolino oder Kobo.
   - [ ] **ich (optional):** **E8** Linux als **AppImage**, gebaut auf einer
     alten glibc-Basis (ältestes noch unterstütztes Ubuntu LTS), damit es auf
