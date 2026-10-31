@@ -57,6 +57,18 @@
  * picks which: `all` (default), `errors` (only what went wrong or was left
  * undone) or `none`. The CLI names the outcome in `NICKELINKSYNC_…` lines.
  *
+ * Kobalt: while the reader Kobalt (github.com/nicoverbruggen/kobalt) is
+ * installed, both hooks only call the originals: Kobalt writes the reading
+ * positions into Nickel's database itself and may sync with KOSync itself.
+ * Checked in init() and whenever a book is opened or left, as src/kobalt.rs
+ * decides on the device: its library in Nickel's plugin folder (or moved
+ * aside by NickelHook for the first seconds after a start), its file
+ * `uninstall` and no `uninstall-now`. Once found, it stays found until
+ * Nickel restarts, the only time Kobalt installs or removes itself. One
+ * toast the first time, 20 s after the start or when a book is opened in
+ * Nickel's reader (with Kobalt as the default reader Nickel's own is not
+ * used); `ignore-kobalt` next to the CLI syncs anyway (tests).
+ *
  * Symbols and signatures: docs/nickel-5.18-symbols.md.
  *
  * Tolino only for now: init() leaves the plugin inactive on a Kobo (the
@@ -99,6 +111,15 @@ static const char kBackups[] = "/mnt/onboard/.adds/NickelInkSync/backups";
 // `ContentID<tab>where Nickel opened` per line. The CLI never pushes them
 // and takes the server's position on the next pull.
 static const char kNotInLine[] = "/mnt/onboard/.adds/NickelInkSync/not-in-line.tsv";
+// Kobalt (src/kobalt.rs): installed while its library is in place and
+// `uninstall` exists without `uninstall-now`. With kIgnoreKobalt the plugin
+// syncs anyway; kKobaltNoticed marks that the toast about it was shown.
+static const char kKobaltLibrary[] = "/usr/local/Kobo/imageformats/libkobalt.so";
+static const char kKobaltFailsafe[] = "/usr/local/Kobo/libkobalt.so.failsafe";
+static const char kKobaltKeep[] = "/mnt/onboard/.adds/kobalt/uninstall";
+static const char kKobaltRemove[] = "/mnt/onboard/.adds/kobalt/uninstall-now";
+static const char kIgnoreKobalt[] = "/mnt/onboard/.adds/NickelInkSync/ignore-kobalt";
+static const char kKobaltNoticed[] = "/mnt/onboard/.adds/NickelInkSync/kobalt-noticed";
 static const char kOnboard[] = "/mnt/onboard";
 static const char kSideloaded[] = "file:///mnt/onboard/";
 static const qint64 kLogMaxBytes = 128 * 1024;
@@ -129,6 +150,9 @@ static const int kCheckOpenTries = 12;
 static const int kToastMs = 5000;
 static const int kProblemToastMs = 8000;
 static const int kOpenToastDelayMs = 1000;
+// How long after init() the toast about Kobalt is shown: Nickel's home
+// screen is up by then.
+static const int kKobaltToastDelayMs = 20000;
 // Seconds per request for push, and when the plugin gives up on it.
 static const char kPushTimeout[] = "15";
 static const int kPushWaitMs = 60000;
@@ -180,6 +204,9 @@ static Notify g_notify = Notify::All;
 
 // Set at the end of a successful init(); every hook passes through until then.
 static bool g_active = false;
+// Kobalt was found installed: every hook passes through until Nickel
+// restarts.
+static bool g_kobalt = false;
 // ContentID of the book opened last (GUI thread only).
 static QString g_open_id;
 // The book that was not brought in line with the server when it was
@@ -307,6 +334,52 @@ static QString skip_reason(const QByteArray &reason)
 }
 
 static const QString kUnansweredReason = QStringLiteral("Braucht Bestätigung (confirm)");
+
+static bool exists(const char *path)
+{
+    return QFileInfo::exists(QString::fromLatin1(path));
+}
+
+// Kobalt is installed, as src/kobalt.rs decides on the device.
+static bool kobalt_installed()
+{
+    return (exists(kKobaltLibrary) || exists(kKobaltFailsafe)) && exists(kKobaltKeep) && !exists(kKobaltRemove);
+}
+
+// Whether Kobalt stops the plugin. Once it does, it does until Nickel
+// restarts: Kobalt installs and removes itself only when Nickel starts, so
+// a deleted `uninstall` leaves it running until then.
+static bool kobalt_blocks()
+{
+    if (g_kobalt) {
+        return true;
+    }
+    if (!kobalt_installed()) {
+        return false;
+    }
+    if (exists(kIgnoreKobalt)) {
+        log_line(QStringLiteral("Kobalt is installed, but %1 exists: syncing anyway").arg(QString::fromLatin1(kIgnoreKobalt)));
+        return false;
+    }
+    log_line(QStringLiteral("inactive: Kobalt is installed (%1); it manages the reading positions itself. "
+                            "Nothing is written or sent until Nickel restarts without it")
+                 .arg(QString::fromLatin1(exists(kKobaltLibrary) ? kKobaltLibrary : kKobaltFailsafe)));
+    g_kobalt = true;
+    return true;
+}
+
+// The toast about Kobalt after `delay_ms`, only the first time it is found
+// (kKobaltNoticed; init() removes the mark once Kobalt is gone).
+static void notice_kobalt(int delay_ms)
+{
+    QFile mark(QString::fromLatin1(kKobaltNoticed));
+    if (mark.exists() || !mark.open(QIODevice::WriteOnly)) {
+        return;
+    }
+    mark.close();
+    toast(true, QStringLiteral("NickelInkSync ist aus"), QStringLiteral("Kobalt ist installiert, siehe README"),
+          delay_ms);
+}
 
 static bool online()
 {
@@ -667,6 +740,11 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
         ReadingController__setVolume(self, volume, bookmark);
         return;
     }
+    if (kobalt_blocks()) {
+        ReadingController__setVolume(self, volume, bookmark);
+        notice_kobalt(kOpenToastDelayMs);
+        return;
+    }
     const QString id = Content__getId(volume, QString());
     g_open_id = id;
     g_not_synced.clear();
@@ -828,12 +906,16 @@ static void log_saved_row(const QString &id)
 extern "C" __attribute__((visibility("default")))
 void _nh_ReadingView__leavingReadingExperience(ReadingView *self)
 {
+    if (!g_active || kobalt_blocks()) {
+        ReadingView__leavingReadingExperience(self);
+        return;
+    }
     // Still on the page taken from the server? Asked before Nickel leaves.
-    const bool on_taken_page = g_active && !g_taken_page.isEmpty() && g_taken_id == g_open_id
+    const bool on_taken_page = !g_taken_page.isEmpty() && g_taken_id == g_open_id
                                && current_location(self) == g_taken_page;
     // First Nickel saves the position.
     ReadingView__leavingReadingExperience(self);
-    if (!g_active || !g_open_id.startsWith(QString::fromLatin1(kSideloaded))) {
+    if (!g_open_id.startsWith(QString::fromLatin1(kSideloaded))) {
         return;
     }
     const QString id = g_open_id;
@@ -872,6 +954,21 @@ static int nickelinksync_init()
         return 0;
     }
     g_notify = read_notify();
+    if (kobalt_blocks()) {
+        // Stays loaded, only to tell once that it is off. Not on opening a
+        // book alone: with Kobalt as the default reader Nickel's own reader,
+        // and so setVolume, is never called (device test). Nickel loads
+        // plugins with its application running; the toast waits until its
+        // main window is up.
+        g_active = true;
+        if (QCoreApplication::instance()) {
+            notice_kobalt(kKobaltToastDelayMs);
+        }
+        return 0;
+    }
+    if (!kobalt_installed()) {
+        QFile::remove(QString::fromLatin1(kKobaltNoticed));
+    }
     // The messages are German; the locale is logged to learn whether the
     // device language can be told from it.
     log_line(QStringLiteral("active, CLI and configuration in %1; notify = %2, toasts %3, locale %4 (system %5)")

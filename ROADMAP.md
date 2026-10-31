@@ -109,6 +109,12 @@ L = a week or more, including verification.
       dropped, after a restart it opened at R2-116 for R2-117; through the
       plugin, no restart, 14 pages dropped, opened at R3-66 for R3-67
       ([docs/nickel-5.18-symbols.md](docs/nickel-5.18-symbols.md))
+- [x] Kobalt guard: with [Kobalt](https://github.com/nicoverbruggen/kobalt)
+      installed (it writes positions itself and gets its own KOSync), the
+      plugin switches itself off (no write, no push, one message), the CLI
+      refuses `--live` and `--write`, and the desktop client blocks "Get";
+      sending over USB only warns. Same rule on Kobo and Tolino, in
+      `src/kobalt.rs`; override `.adds/NickelInkSync/ignore-kobalt` for tests
 
 ## Quick wins
 

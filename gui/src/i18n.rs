@@ -78,6 +78,7 @@ pub struct Texts {
   pub no_books: &'static str,
   pub read_only: &'static str,
   pub writes_tolino: &'static str,
+  pub kobalt: &'static str,
   pub map_button: &'static str,
   pub remap_button: &'static str,
   pub unmap_button: &'static str,
@@ -462,6 +463,9 @@ static DE: Texts = Texts {
   writes_tolino: "„Holen“ schreibt die Stelle vom Server in die Datenbank des Tolino; vorher \
                   legt die App eine Sicherung auf diesem Rechner an. Zuordnungen liegen auf \
                   diesem Rechner (mappings.json), gemeinsam mit der CLI.",
+  kobalt: "Kobalt ist auf dem Gerät installiert und verwaltet die Lesepositionen selbst: \
+           „Holen“ ist gesperrt. „Senden“ geht, aber Kobalts eigener KOSync sendet \
+           vielleicht dieselben Bücher.",
   map_button: "Zuordnen …",
   remap_button: "Ändern …",
   unmap_button: "Entfernen",
@@ -516,7 +520,7 @@ static DE: Texts = Texts {
   by: "von",
   add_from_library: "Aus Bibliothek hinzufügen …",
   add_from_library_hint: "Bücher aus der Bibliothek nach Books/ auf dem Gerät kopieren; nichts wird überschrieben.",
-  kobo_read_only: "Positionen schreibt die App nicht auf den Kobo; „Aus Bibliothek hinzufügen“ kopiert nur neue Bücher nach Books/. Zuordnungen liegen auf diesem Rechner (mappings.json), gemeinsam mit der CLI.",
+  kobo_read_only: "Positionen schreibt die App nicht auf dieses Gerät; „Aus Bibliothek hinzufügen“ kopiert nur neue Bücher nach Books/. Zuordnungen liegen auf diesem Rechner (mappings.json), gemeinsam mit der CLI.",
   copy_title: "Aus Bibliothek hinzufügen",
   copy_hint: "Kopiert nach Books/ auf dem Gerät. Eine Datei gleichen Namens oder dieselbe EPUB bleibt, wie sie ist.",
   copy_search: "Titel, Autor oder Datei suchen",
@@ -599,6 +603,9 @@ static EN: Texts = Texts {
   writes_tolino: "“Get” writes the server’s position into the Tolino’s database, after a \
                   backup of it on this computer. Mappings are kept on this computer \
                   (mappings.json), shared with the CLI.",
+  kobalt: "Kobalt is installed on the device and manages its reading positions itself: \
+           “Get” is blocked. “Send” works, but Kobalt’s own KOSync may send the same \
+           books.",
   map_button: "Map …",
   remap_button: "Change …",
   unmap_button: "Remove",
@@ -653,7 +660,7 @@ static EN: Texts = Texts {
   by: "by",
   add_from_library: "Add from library …",
   add_from_library_hint: "Copy books of the library to Books/ on the device; nothing is overwritten.",
-  kobo_read_only: "The app writes no positions to the Kobo; “Add from library” only copies new books to Books/. Mappings are kept on this computer (mappings.json), shared with the CLI.",
+  kobo_read_only: "The app writes no positions to this device; “Add from library” only copies new books to Books/. Mappings are kept on this computer (mappings.json), shared with the CLI.",
   copy_title: "Add from library",
   copy_hint: "Copies to Books/ on the device. A file of the same name, or the same EPUB, is left as it is.",
   copy_search: "Search title, author or file",

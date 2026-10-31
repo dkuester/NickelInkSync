@@ -61,10 +61,13 @@ pub struct Loaded {
   pub mappings: usize,
   pub rows: Vec<Row>,
   /// The server's positions can be written into it: a Tolino (on a Kobo
-  /// not yet, P2; a Kindle is only read).
+  /// not yet, P2; a Kindle is only read) without Kobalt installed.
   pub writable: bool,
   /// "Kobo" or "Tolino": books can be copied onto it; `None` for a Kindle.
   pub family: Option<&'static str>,
+  /// Kobalt is installed: nothing is written (`writable` is false), and
+  /// sending may meet Kobalt's own KOSync.
+  pub kobalt: bool,
 }
 
 pub(crate) fn options(root: &Path) -> Options {
@@ -175,8 +178,9 @@ fn load_nickel(
       .map(|l| (l.root.clone(), l.kind, l.books.len())),
     mappings: session.store.mappings.len(),
     rows,
-    writable: session.family == "Tolino",
+    writable: session.family == "Tolino" && !session.kobalt.blocks(),
     family: Some(session.family),
+    kobalt: session.kobalt.blocks(),
   })
 }
 
@@ -255,6 +259,7 @@ fn load_kindle(
     rows,
     writable: false,
     family: None,
+    kobalt: false,
   })
 }
 

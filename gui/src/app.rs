@@ -1032,10 +1032,14 @@ fn loaded_view(
   }
   ui.label(format!("{}: {}", t.mappings, loaded.mappings));
   ui.weak(match loaded.family {
-    Some("Tolino") => t.writes_tolino,
+    // A Tolino with Kobalt is not written either.
+    Some("Tolino") if loaded.writable => t.writes_tolino,
     Some(_) => t.kobo_read_only,
     None => t.read_only,
   });
+  if loaded.kobalt {
+    ui.colored_label(ui.visuals().warn_fg_color, t.kobalt);
+  }
   let mut action = None;
   if let Some(family) = loaded.family {
     if ui

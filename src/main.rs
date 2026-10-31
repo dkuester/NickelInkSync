@@ -7,6 +7,7 @@ use clap::{Args, Parser, Subcommand};
 use nickelinksync::db::Book;
 use nickelinksync::history;
 use nickelinksync::kindle_device::{self, KindleBook};
+use nickelinksync::kobalt;
 use nickelinksync::kosync::{self, Client, Progress, Update};
 use nickelinksync::library::{self, Library, LibraryBook};
 use nickelinksync::map::{self, candidates, DeviceChapters, OnDevice, Outcome};
@@ -187,7 +188,11 @@ fn main() -> ExitCode {
     Ok(false) => ExitCode::FAILURE,
     Err(e) => {
       if emit {
-        emit_line("ERROR", &["other", &e.to_string()]);
+        let kind = match e.downcast_ref::<kobalt::Active>() {
+          Some(_) => "kobalt",
+          None => "other",
+        };
+        emit_line("ERROR", &[kind, &e.to_string()]);
       }
       eprintln!("nickelinksync: {e}");
       ExitCode::FAILURE
@@ -241,6 +246,14 @@ fn open_session(options: &Options) -> Result<Session> {
   }
   if let Some(library) = &session.library {
     print_library(library);
+  }
+  if let Some(note) = session.kobalt.note() {
+    let level = if session.kobalt.blocks() {
+      "warning: "
+    } else {
+      ""
+    };
+    eprintln!("nickelinksync: {level}{note}");
   }
   if !session.store.mappings.is_empty() {
     println!(
@@ -515,6 +528,10 @@ fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool>
     return kindle_push(&options, force, dry_run);
   }
   let mut session = open_session(&options)?;
+  if session.kobalt.blocks() {
+    // Sending touches only the server; Kobalt's own KOSync may send too.
+    eprintln!("nickelinksync: warning: sending anyway; if Kobalt syncs with KOSync itself, it may send these books as well");
+  }
   let mut forced = Vec::new();
   let server = require_server(&options)?;
   let (device, device_id) = server.config.identity(&session.model);
@@ -678,6 +695,9 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
     );
   }
   let mut session = open_session(&options)?;
+  if write {
+    session.kobalt.check()?;
+  }
   let server = require_server(&options)?;
   println!("Server {} as {}", server.config.server, server.config.user);
   let confirm_setting = server.config.confirm;
