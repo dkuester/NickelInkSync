@@ -98,6 +98,17 @@ L = a week or more, including verification.
       copy of its books (MTP), store books with DRM skipped. Verified on the
       Kobo 6.0 (calibre kepubs) and the Paperwhite (Send-to-Kindle): KOReader
       opens the same page.
+- [x] Reliable take on opening, Tolino plugin (PRs #44, #48): since Kobo
+      6.0 and Tolino 5.18.279364 Nickel opens a book from its persistent
+      cache of rendered pages (`CachePersistence*` tables) and, with no
+      cached page at the written place, at the chapter's first cached page.
+      The CLI now drops that chapter's cached pages when it writes, over USB
+      (a restart is needed then) and live through the plugin, and folds in
+      the `-wal` files Tolino 5.18.279364 leaves on the USB partition.
+      Device test on the Tolino 5.18.279364 with Book R: over USB 4 pages
+      dropped, after a restart it opened at R2-116 for R2-117; through the
+      plugin, no restart, 14 pages dropped, opened at R3-66 for R3-67
+      ([docs/nickel-5.18-symbols.md](docs/nickel-5.18-symbols.md))
 
 ## Quick wins
 
@@ -175,19 +186,6 @@ fixtures only.
   `config.ini` (`all`, `errors`, `none`). Verified on the Tolino, also
   opening within the chapter last read. Still to do: English texts (the
   plugin logs `QLocale()`, `de_DE` so far).
-- **Reliable take on opening, Tolino plugin** (S): two of five device runs
-  opened at the chapter start, because Nickel's in-memory `Volume` cache
-  does not see the row the CLI writes. A draft (PR #26) drops that cache
-  and loads the book again before Nickel opens it; in a later device test
-  Nickel opened the pulled page in nine of nine runs. The plugin's check
-  after opening now waits until Nickel knows its place (it often does not
-  after 3 s; PR #44). **Paused (28.10.):** after the Tolino updated itself to
-  firmware 5.18.279364, Nickel opens at the chapter start even without
-  the plugin. Writing `tolino_bookmark` as well (PR #40) did not change
-  that on the device. Cause (proven 31.10., also on the Kobo 6.0): Nickel
-  opens from its cache of rendered pages and, with no cached page at the
-  written place, at the chapter's first cached page. The CLI now drops
-  that chapter's cached pages when it writes; device test pending.
 - **NickelHook plugin for the Kobo 6.0** (M–L): the Tolino plugin (Qt6)
   built and checked for Kobo 6.0 (symbols from its `libnickel.so`). The
   Qt5 plugin for 4.x is on hold: no 4.x device to test on.
