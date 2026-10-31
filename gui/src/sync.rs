@@ -112,6 +112,9 @@ pub struct Report {
   pub questions: Vec<Question>,
   /// The copy of the device database made before writing to it.
   pub backup: Option<PathBuf>,
+  /// Nickel's cached pages dropped so it opens at the written place; then
+  /// the device must be restarted, not only ejected.
+  pub pages_dropped: usize,
 }
 
 /// What [`Server::open`] gives, as the window needs it.
@@ -355,11 +358,18 @@ fn write(
     return Ok(());
   }
   let only: Vec<Write> = writes.iter().map(|(_, w, _)| w.clone()).collect();
-  let backup = match session.write(&only).map_err(|e| e.to_string())? {
-    Written::Mounted { backup, .. } => Some(backup),
-    Written::Live { backup, .. } => backup,
+  let (backup, pages_dropped) = match session.write(&only).map_err(|e| e.to_string())? {
+    Written::Mounted {
+      backup,
+      pages_dropped,
+    } => (Some(backup), pages_dropped),
+    Written::Live {
+      backup,
+      pages_dropped,
+    } => (backup, pages_dropped),
   };
   report.backup = backup;
+  report.pages_dropped += pages_dropped;
   let mut taken = Vec::new();
   for (title, _, entry) in writes {
     report.books.push((title, Outcome::Written));
@@ -665,10 +675,67 @@ mod tests {
     assert_eq!(entry.direction, history::Direction::Pull);
     assert_eq!(entry.by, "gui");
 
+    assert_eq!(report.pages_dropped, 0);
+    let text = crate::i18n::report(crate::i18n::Lang::En, &report);
+    assert!(text.contains("Eject the device before you open"), "{text}");
+
     // In line now: nothing more to write, and no new backup.
     let report = pull(&s.options, &[BOOK_A.to_string()]).unwrap();
     assert_eq!(report.books, [("Book A".to_string(), Outcome::InSync)]);
     assert_eq!(report.backup, None);
+  }
+
+  /// Nickel's cached pages of the chapter hide the written place: they are
+  /// dropped, and the report asks for a restart instead of only ejecting.
+  #[test]
+  fn a_pull_that_drops_cached_pages_asks_for_a_restart() {
+    let s = Setup::new("pull-pages");
+    let chapter = "OEBPS/xhtml/xhtml-0-89.xhtml";
+    let conn = rusqlite::Connection::open(s.root.join(".kobo/KoboReader.sqlite")).unwrap();
+    conn
+      .execute_batch(
+        "CREATE TABLE CachePersistenceRenderedPageData (id TEXT PRIMARY KEY,
+           pageStartLocation TEXT NOT NULL, pageEndLocation TEXT NOT NULL, contentId TEXT NOT NULL);
+         CREATE TABLE CachePersistenceRenderedPageChapterData (id INTEGER PRIMARY KEY AUTOINCREMENT,
+           cachePersistenceRenderedPageDataId TEXT NOT NULL, contentId TEXT NOT NULL);",
+      )
+      .unwrap();
+    for (id, start, end) in [
+      ("a", "/1/2/5/1:0", "/1/2/9/1:0"),
+      ("b", "/1/2/9/1:1", "/1/2/13/1:0"),
+    ] {
+      conn
+        .execute(
+          "INSERT INTO CachePersistenceRenderedPageData VALUES (?1, ?2, ?3, ?4)",
+          [
+            id,
+            &format!("{chapter}#point({start})"),
+            &format!("{chapter}#point({end})"),
+            BOOK_A,
+          ],
+        )
+        .unwrap();
+      conn
+        .execute(
+          "INSERT INTO CachePersistenceRenderedPageChapterData
+             (cachePersistenceRenderedPageDataId, contentId) VALUES (?1, ?2)",
+          [id, BOOK_A],
+        )
+        .unwrap();
+    }
+    drop(conn);
+    s.server.store(&book_hash(), AHEAD, 0.9, LAST_READ + 60);
+    let report = pull(&s.options, &[BOOK_A.to_string()]).unwrap();
+    assert_eq!(report.books, [("Book A".to_string(), Outcome::Written)]);
+    assert_eq!(report.pages_dropped, 2);
+    let text = crate::i18n::report(crate::i18n::Lang::En, &report);
+    assert!(
+      text.contains("restart it before you open the book"),
+      "{text}"
+    );
+    assert!(!text.contains("Eject the device before you open"), "{text}");
+    let text = crate::i18n::report(crate::i18n::Lang::De, &report);
+    assert!(text.contains("neu starten"), "{text}");
   }
 
   #[test]
