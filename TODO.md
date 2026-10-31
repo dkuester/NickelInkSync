@@ -32,7 +32,7 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0 bis E3c und O5 erledigt; als Nächstes E4). **Danach
+fertig, D2 läuft (E0 bis E4 und O5 erledigt; als Nächstes E5). **Danach
 der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
 
 ## Grundlagen
@@ -300,11 +300,22 @@ der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
     öffnen (2026-10-31): Holen schreibt die richtige Stelle, danach „gleich“
     und ausgegraute Knöpfe. Nickel öffnet nur am Kapitelanfang (R2-1 statt
     R2-19), das ist N5 (PR #40), nicht E3c.
-  - [ ] **ich:** **E4** Einstellungen; Schlüssel im Schlüsselbund bzw. in
+  - [x] **ich:** **E4** Einstellungen; Schlüssel im Schlüsselbund bzw. in
     der Anmeldeinformationsverwaltung (`keyring`, nur für macOS und
     Windows, nicht im Gerätebau). Die CLI sucht `password`/`key` in der
     Datei, dann im Schlüsselbund; die GUI bietet an, ein Passwort aus der
-    Datei dorthin zu verschieben.
+    Datei dorthin zu verschieben. Umgesetzt: Knopf „Einstellungen“
+    (Server, Benutzer, Passwort, Gerätename, `confirm`, `position`,
+    Bibliothek); `config.ini` wird zeilenweise geändert (Kommentare,
+    Reihenfolge und `notify`/`device_id` bleiben), vorher `config.ini.bak`,
+    Rechte 600. Ein eingegebenes Passwort wird nur als MD5-Schlüssel
+    gespeichert (Schlüsselbund, Dienst „NickelInkSync“, Konto
+    `<user>@<server>`; ohne Schlüsselbund als `key =` in der Datei);
+    ändern sich Server oder Benutzer, zieht der Schlüssel mit. `keyring`
+    3.6.3 nur für macOS und Windows. Tests mit einem Ordner statt des
+    Schlüsselbunds (`NICKELINKSYNC_KEYCHAIN_DIR`).
+  - [ ] **du:** E4: Einstellungen öffnen, „In den Schlüsselbund
+    verschieben“, danach `status` in der CLI.
   - [ ] **ich:** **E5** Bücher aus Calibre auf Tolino oder Kobo kopieren,
     beim Kobo auf Wunsch mit kepubify, Zuordnung entsteht dabei;
     Sicherungskopie der Gerätedatenbank zurückspielen (Bibliothek und
@@ -779,6 +790,9 @@ der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
   - [x] **ich:** CLI verwirft beim Schreiben die gespeicherten Seiten des
     Zielkapitels, wenn keine die Stelle enthält (USB und live); über USB
     meldet sie, dass das Gerät neu gestartet werden muss.
+  - [x] **ich:** Der Desktop-Client sagt es auch: Nach „Holen“ mit
+    verworfenen Seiten verlangt die Meldung, das Gerät auszuwerfen und neu
+    zu starten (deutsch und englisch), sonst nur auszuwerfen.
   - [x] **du:** Gerätetest (31.10.): über USB 4 Seiten verworfen, nach
     Neustart R2-116 für R2-117; über das Plugin ohne Neustart 14 Seiten
     verworfen, R3-66 für R3-67.
@@ -878,7 +892,10 @@ Auf dem Kobo ist das Plugin inaktiv.
   - [ ] **ich:** Symbole des Plugins und Kobalts Schreibweg gegen
     `libnickel.so` von 6.0 prüfen (Signaturen per Disassembly); den
     Schreibweg als Wegwerf-Plugin in der VM ausprobieren (Buch öffnet an
-    der geschriebenen Stelle, auch beim ersten Öffnen nach dem Start);
+    der geschriebenen Stelle, auch beim ersten Öffnen nach dem Start).
+    Nickel öffnet auch auf dem Kobo 6.0 aus seinem Cache gerenderter
+    Seiten (N5, 31.10.): prüfen, ob Kobalts Weg ihn umgeht oder die Seiten
+    des Kapitels weiter verworfen werden müssen (wie die CLI seit N5);
     Ergebnis in `docs/nickel-6.0-symbols.md`. Zusätzlich die Symbole für
     einen eigenen Dialog und den Buchmenü-Eintrag
     (`ActionProxyMixin::setupBookListMenu`).
@@ -920,8 +937,8 @@ Auf dem Kobo ist das Plugin inaktiv.
 - [ ] **C7 Tolino** (braucht C4 bis C6)
   - [ ] **ich:** Dasselbe Plugin auf dem Shine Color; Kobalts Schreibweg
     dort prüfen (Kobalt selbst schreibt auf dem Tolino nicht zurück). Wenn
-    er geht, lösen sich N5 (`Volume`-Cache) und PR #26/#40 damit ab; sonst
-    bleibt der heutige Weg B.
+    er geht, ersetzt er dort den heutigen Weg B (CLI schreibt, verwirft die
+    Seiten im Cache, N5); sonst bleibt Weg B.
   - [ ] **du:** Dieselben Tests wie C4 bis C6 am Tolino.
 - [ ] **(in D2, nach C3)** Knopf „Gerät vorbereiten“ in der GUI; beim
   Kopieren (E5) Index und Tabelle gleich mitschreiben.

@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
+use nickelinksync::config::{self, Config, Editable};
 use nickelinksync::history::Entry;
 use nickelinksync::library::Library;
 
@@ -40,6 +41,15 @@ pub enum Command {
   History,
   /// Every device's position of each book side by side, with the server's.
   Overview { devices: Vec<Found> },
+  /// The settings in `config.ini`.
+  ReadSettings,
+  /// Write the settings; a typed password goes in as its key.
+  SaveSettings {
+    edit: Editable,
+    password: Option<String>,
+  },
+  /// Move `password`/`key` from `config.ini` into the keychain.
+  MoveToKeychain,
   /// The library's candidates for one book.
   Suggest { root: PathBuf, id: String },
   /// Map one book to an EPUB, then read the device again.
@@ -72,6 +82,9 @@ pub enum Event {
   },
   History(Result<Vec<Entry>, String>),
   Overview(Overview),
+  Settings(Result<Editable, String>),
+  /// Settings saved (`false`) or the key moved (`true`), or why not.
+  SettingsSaved(Result<bool, String>),
   Progress {
     root: PathBuf,
     done: usize,
@@ -186,6 +199,22 @@ fn run(inbox: &Receiver<Command>, outbox: &Sender<Event>, repaint: &dyn Fn()) {
       }
       Command::History => send(Event::History(sync::history(200))),
       Command::Overview { devices } => send(Event::Overview(overview::build(&devices))),
+      Command::ReadSettings => send(Event::Settings(
+        config_path().and_then(|p| Editable::read(&p).map_err(|e| e.to_string())),
+      )),
+      Command::SaveSettings { edit, password } => {
+        let result = config_path().and_then(|p| {
+          edit
+            .save(&p, password.as_deref())
+            .map_err(|e| e.to_string())
+        });
+        send(Event::SettingsSaved(result.map(|()| false)));
+      }
+      Command::MoveToKeychain => {
+        let result =
+          config_path().and_then(|p| config::move_to_keychain(&p).map_err(|e| e.to_string()));
+        send(Event::SettingsSaved(result.map(|()| true)));
+      }
       Command::Suggest { root, id } => {
         let result = match &library {
           Some(library) => Ok(library.as_ref()),
@@ -212,4 +241,9 @@ fn run(inbox: &Receiver<Command>, outbox: &Sender<Event>, repaint: &dyn Fn()) {
       }
     }
   }
+}
+
+/// `config.ini`, where the CLI looks for it.
+fn config_path() -> Result<std::path::PathBuf, String> {
+  Config::default_path().ok_or_else(|| "no configuration folder (HOME is not set)".into())
 }

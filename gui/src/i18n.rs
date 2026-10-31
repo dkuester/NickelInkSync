@@ -129,6 +129,32 @@ pub struct Texts {
   pub time: &'static str,
   pub direction: &'static str,
   pub by: &'static str,
+  pub settings: &'static str,
+  pub settings_hint: &'static str,
+  pub user: &'static str,
+  pub password: &'static str,
+  pub password_in_keychain: &'static str,
+  pub password_in_file: &'static str,
+  pub password_file_warning: &'static str,
+  pub move_to_keychain: &'static str,
+  pub password_missing: &'static str,
+  pub no_keychain: &'static str,
+  pub device_name: &'static str,
+  pub device_name_hint: &'static str,
+  pub confirm_label: &'static str,
+  pub confirm_never: &'static str,
+  pub confirm_backwards: &'static str,
+  pub confirm_always: &'static str,
+  pub position_label: &'static str,
+  pub position_exact: &'static str,
+  pub position_sentence: &'static str,
+  pub position_paragraph: &'static str,
+  /// Only where there is a folder dialog.
+  #[cfg_attr(not(any(target_os = "macos", target_os = "windows")), allow(dead_code))]
+  pub choose: &'static str,
+  pub save: &'static str,
+  pub settings_saved: &'static str,
+  pub moved_to_keychain: &'static str,
 }
 
 pub fn texts(lang: Lang) -> &'static Texts {
@@ -293,14 +319,24 @@ pub fn report(lang: Lang, report: &crate::sync::Report) -> String {
     }
   }
   if let Some(backup) = &report.backup {
+    let n = report.pages_dropped;
     line.push_str(&match lang {
-      Lang::De => format!(
-        "\nSicherung der Gerätedatenbank: {}\nGerät auswerfen, bevor du das Buch öffnest.",
-        backup.display()
+      Lang::De => format!("\nSicherung der Gerätedatenbank: {}", backup.display()),
+      Lang::En => format!("\nBackup of the device database: {}", backup.display()),
+    });
+    // Nickel keeps the dropped pages in memory until it restarts.
+    line.push_str(&match (lang, n) {
+      (Lang::De, 0) => "\nGerät auswerfen, bevor du das Buch öffnest.".to_string(),
+      (Lang::En, 0) => "\nEject the device before you open the book.".to_string(),
+      (Lang::De, n) => format!(
+        "\n{n} zwischengespeicherte Seiten von Nickel verdeckten die Stelle und wurden entfernt. \
+         Gerät auswerfen und neu starten, bevor du das Buch öffnest: Nickel hält diese Seiten \
+         bis zum Neustart im Speicher."
       ),
-      Lang::En => format!(
-        "\nBackup of the device database: {}\nEject the device before you open the book.",
-        backup.display()
+      (Lang::En, n) => format!(
+        "\nDropped {n} of Nickel's cached pages that hid the place. Eject the device and \
+         restart it before you open the book: Nickel keeps those pages in memory until it \
+         restarts."
       ),
     });
   }
@@ -416,6 +452,30 @@ static DE: Texts = Texts {
   time: "Zeit",
   direction: "Richtung",
   by: "von",
+  settings: "Einstellungen",
+  settings_hint: "Gespeichert in config.ini, gemeinsam mit der CLI; vorher legt die App config.ini.bak an.",
+  user: "Benutzer",
+  password: "Passwort",
+  password_in_keychain: "im Schlüsselbund – leer lassen, um es zu behalten",
+  password_in_file: "steht in config.ini – leer lassen, um es zu behalten",
+  password_file_warning: "Das Passwort steht in config.ini.",
+  move_to_keychain: "In den Schlüsselbund verschieben",
+  password_missing: "Kein Passwort gespeichert.",
+  no_keychain: "Ohne Schlüsselbund auf diesem System steht nur der MD5-Schlüssel in config.ini (key =).",
+  device_name: "Gerätename",
+  device_name_hint: "leer: Modell des Geräts",
+  confirm_label: "Rückfrage",
+  confirm_never: "nie (die neuere Stelle gewinnt)",
+  confirm_backwards: "wenn es zurück ginge",
+  confirm_always: "immer, wenn die Stellen abweichen",
+  position_label: "Gesendete Stelle",
+  position_exact: "genau",
+  position_sentence: "Satzanfang",
+  position_paragraph: "Absatzanfang",
+  choose: "Wählen …",
+  save: "Speichern",
+  settings_saved: "Einstellungen gespeichert.",
+  moved_to_keychain: "Das Passwort liegt jetzt als Schlüssel im Schlüsselbund, nicht mehr in config.ini.",
 };
 
 static EN: Texts = Texts {
@@ -520,6 +580,30 @@ static EN: Texts = Texts {
   time: "Time",
   direction: "Direction",
   by: "by",
+  settings: "Settings",
+  settings_hint: "Saved in config.ini, shared with the CLI; the app keeps config.ini.bak first.",
+  user: "User",
+  password: "Password",
+  password_in_keychain: "in the keychain – leave empty to keep it",
+  password_in_file: "in config.ini – leave empty to keep it",
+  password_file_warning: "The password is in config.ini.",
+  move_to_keychain: "Move to the keychain",
+  password_missing: "No password stored.",
+  no_keychain: "Without a keychain on this system only the MD5 key goes into config.ini (key =).",
+  device_name: "Device name",
+  device_name_hint: "empty: the device’s model",
+  confirm_label: "Ask first",
+  confirm_never: "never (the newer position wins)",
+  confirm_backwards: "when it would go back",
+  confirm_always: "whenever the positions differ",
+  position_label: "Position sent",
+  position_exact: "exact",
+  position_sentence: "sentence start",
+  position_paragraph: "paragraph start",
+  choose: "Choose …",
+  save: "Save",
+  settings_saved: "Settings saved.",
+  moved_to_keychain: "The password is now in the keychain as its key, no longer in config.ini.",
 };
 
 #[cfg(test)]
