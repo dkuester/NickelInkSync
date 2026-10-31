@@ -263,10 +263,10 @@ Server-Position, auch wenn „zuletzt gelesen“ auf dem Tolino jetzt neuer
 aussieht.
 
 Jedes Ergebnis zeigt das Plugin als kurze Meldung unten auf dem Bildschirm
-(vorerst auf Deutsch), etwa „Fortschritt vom Server übernommen“ mit Prozent
-und dem Gerät, von dem die Position kam, oder „Fortschritt konnte nicht vom
-Server gelesen werden“ mit dem Grund (keine Verbindung, Zeitüberschreitung,
-Anmeldung abgelehnt). `notify` in `config.ini` legt fest, welche:
+(vorerst auf Deutsch), etwa „Fortschritt übernommen“ mit Prozent und dem
+Gerät, von dem die Position kam, oder „Laden fehlgeschlagen“ mit dem Grund
+(keine Verbindung, Zeitüberschreitung, Anmeldung abgelehnt). Die Texte sind
+kurz, weil der Tolino längere abschneidet. `notify` in `config.ini` legt fest, welche:
 
 | Wert | Zeigt |
 |---|---|

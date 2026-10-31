@@ -281,10 +281,10 @@ USB, takes the server's position again, even though the Tolino's
 "last read" now looks newer.
 
 Each outcome shows as a short message at the bottom of the screen (in
-German for now), for example "Fortschritt vom Server übernommen" with the
-percentage and the device that sent it, or "Fortschritt konnte nicht vom
-Server gelesen werden" with the reason (no connection, timeout, login
-refused). `notify` in `config.ini` picks which:
+German for now), for example "Fortschritt übernommen" with the percentage
+and the device that sent it, or "Laden fehlgeschlagen" with the reason (no
+connection, timeout, login refused). The texts are short because the
+Tolino cuts longer ones off. `notify` in `config.ini` picks which:
 
 | Value | Shows |
 |---|---|

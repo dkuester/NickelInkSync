@@ -301,8 +301,11 @@ queue is full (`ApplicationSettings::numMaxToasts()`), shows it through
 both lines, places it in `uiGeometry()` and starts a `QTimer` with
 `QueuedToast::getDuration()`: the `int` is how long the toast stays, in
 milliseconds. Nickel's own `RatingControls::showFeedbackToast` passes
-1500. The plugin uses 3000 for results and 5000 for problems. Optional:
-without it the plugin works as before, silently.
+1500. The plugin uses 5000 for results and 8000 for problems (3000 and
+5000 were too short to read in a device test). The Tolino cuts the
+primary line after about 24 characters and the secondary after about 45,
+so the texts are short. Optional: without it the plugin works as before,
+silently.
 
 The texts are German only for now: no way was found yet to tell the
 device language with certainty. The plugin logs `QLocale()` and
