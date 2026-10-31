@@ -182,6 +182,28 @@ fn compare_books(
   Ok(Some(found))
 }
 
+/// The server's position for each of `documents` (absent: nothing
+/// stored); `None` without a server in the configuration.
+pub fn remotes(
+  options: &Options,
+  documents: &[String],
+) -> Result<Option<HashMap<String, Remote>>, String> {
+  let Some(server) = server(options)? else {
+    return Ok(None);
+  };
+  let mut found = HashMap::new();
+  for document in documents {
+    if let Some(p) = server
+      .client
+      .progress(document)
+      .map_err(|e| e.to_string())?
+    {
+      found.insert(document.clone(), Remote::from(&p));
+    }
+  }
+  Ok(Some(found))
+}
+
 /// One push step's outcome: sent at once, a question, or a report.
 fn settle(
   client: &Client,
@@ -732,6 +754,39 @@ mod tests {
       before
     );
     let _ = fs::remove_dir_all(&root);
+  }
+
+  #[test]
+  fn the_overview_puts_one_book_on_two_devices_in_one_line() {
+    let s = Setup::new("overview");
+    let kobo = fake_device(
+      "gui-overview-kobo",
+      "kobo-clarabw-4.46-placeholder-books.sql",
+      KOBO_VERSION,
+    );
+    s.server.store(&book_hash(), AHEAD, 0.9, LAST_READ + 60);
+    let found = |root: &PathBuf| crate::devices::Found {
+      root: root.clone(),
+      kind: Kind::Nickel,
+      name: "eReader".into(),
+    };
+    let overview = crate::overview::build(&[found(&s.root), found(&kobo)]);
+    let names: Vec<&str> = overview.columns.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(names, ["Tolino Shine Color", "Kobo Clara BW"]);
+    let line = overview
+      .lines
+      .iter()
+      .find(|l| l.document == book_hash())
+      .unwrap();
+    assert_eq!(line.title, "Book A");
+    assert!(line.cells.iter().all(Option::is_some), "{line:?}");
+    // The tests' environment has no configuration: the server is not asked.
+    assert_eq!(overview.server, Ok(false));
+    assert_eq!(line.server, None);
+    // With one, it is.
+    let remotes = remotes(&s.options, &[book_hash()]).unwrap().unwrap();
+    assert_eq!(remotes[&book_hash()].xpointer, AHEAD);
+    let _ = fs::remove_dir_all(&kobo);
   }
 
   #[test]

@@ -149,7 +149,8 @@ fixtures only.
   E3b, the server's position for each book and sending per book or all,
   with the `confirm` questions in a dialog, and a history window; E3c,
   taking the server's position into a Tolino per book or all (after a
-  backup of the database, the same dialog for `confirm`).
+  backup of the database, the same dialog for `confirm`); the overview of
+  all connected devices side by side, one column per device (O5).
 
 - **Read-only device database layer** (S–M): reading the books and their
   positions is done (`status --device`); still to do: resolve

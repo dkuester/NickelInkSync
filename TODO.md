@@ -32,7 +32,7 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0 bis E3c erledigt; als Nächstes E4).
+fertig, D2 läuft (E0 bis E3c und O5 erledigt; als Nächstes E4).
 
 ## Grundlagen
 
@@ -287,8 +287,14 @@ fertig, D2 läuft (E0 bis E3c erledigt; als Nächstes E4).
     (`Session::against`, für `status`, `push`, `pull` und die GUI). Bei
     „gleich“ sind „Senden“ und „Holen“ ausgegraut; „Alle senden“ und „Alle
     holen“ lassen solche Bücher aus.
-  - [ ] **ich:** Geräteansicht nebeneinander (O5): aus E3c herausgenommen,
-    die Gestaltung ist noch offen (siehe Frage im PR).
+  - [x] **ich:** Geräteansicht nebeneinander (O5), wie entschieden mit
+    einer Spalte je Gerät: Knopf „Übersicht“ oben, ein Fenster mit einer
+    Zeile je Buch (KOSync-Prüfsumme, also auch kepub und Kindle-Kopie in
+    derselben Zeile), je angestecktem Gerät eine Spalte mit Prozent (Zeit
+    und XPointer beim Darüberfahren), dazu die Spalte „Server“. Nur Bücher,
+    die synchronisiert werden; „Neu laden“, nach Senden und Holen lädt es
+    von selbst neu.
+  - [ ] **du:** O5: Tolino und Kobo zusammen anstecken, „Übersicht“ öffnen.
   - [x] **du:** E3c: Book R vom Server auf den Tolino holen, auswerfen,
     öffnen (2026-10-31): Holen schreibt die richtige Stelle, danach „gleich“
     und ausgegraute Knöpfe. Nickel öffnet nur am Kapitelanfang (R2-1 statt
@@ -817,7 +823,8 @@ fertig, D2 läuft (E0 bis E3c erledigt; als Nächstes E4).
   Kapitelzeilen sind ToC-Einträge (`SCOPE.md`).
 - [ ] **O3 Einstellungsdialog** auf dem Gerät.
 - [ ] **O4 Sync-Status** im Buchmenü, plus „Jetzt synchronisieren“.
-- [ ] **O5 Geräteübersicht** in `status`: alle Positionen eines Buchs nebeneinander.
+- [~] **O5 Geräteübersicht**: alle Positionen eines Buchs nebeneinander; im
+  Desktop-Client erledigt („Übersicht“), in `status` noch offen.
 - [ ] **O6 Markierungen auf Kobo 5.x/6.x nachtesten** · nicht mehr
   blockiert: Der Clara BW ist seit 2026-10-28 auf 6.0. · **du:** Book P auf
   dem Kobo mit Firmware 6.0 markieren. Auf 4.46 zeigt Nickel Markierungen im kepub verschoben und im

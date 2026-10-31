@@ -6,6 +6,7 @@ mod app;
 mod devices;
 mod i18n;
 mod model;
+mod overview;
 mod settings;
 mod sync;
 mod worker;

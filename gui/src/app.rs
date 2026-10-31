@@ -17,6 +17,7 @@ use nickelinksync::sync::{format_timestamp, Outlook};
 use crate::devices::{Found, Kind};
 use crate::i18n::{self, Choice, Lang, Texts};
 use crate::model::{Group, Loaded, Mapped, Row, Suggestions};
+use crate::overview::Overview;
 use crate::settings::Settings;
 use crate::sync::{Compared, Question, ServerState};
 use crate::worker::{Command, Event, Worker};
@@ -106,6 +107,9 @@ pub struct App {
   /// The history window: open, and its entries once read.
   history_open: bool,
   history: Option<Result<Vec<Entry>, String>>,
+  /// The overview window: open, and its contents once read.
+  overview_open: bool,
+  overview: Option<Overview>,
 }
 
 impl App {
@@ -140,6 +144,8 @@ impl App {
       ask_dialog: None,
       unreferenced: None,
       history_open: false,
+      overview_open: false,
+      overview: None,
       history: None,
     }
   }
@@ -265,8 +271,12 @@ impl App {
           if self.history_open {
             self.worker.send(Command::History);
           }
+          if self.overview_open {
+            self.refresh_overview();
+          }
         }
         Event::History(entries) => self.history = Some(entries),
+        Event::Overview(overview) => self.overview = Some(overview),
         // For a device no longer shown.
         Event::Progress { .. }
         | Event::Loaded { .. }
@@ -342,6 +352,13 @@ impl App {
         if ui.button(t.history).clicked() {
           self.history_open = true;
           self.worker.send(Command::History);
+        }
+        if ui
+          .add_enabled(!self.devices.is_empty(), egui::Button::new(t.overview))
+          .clicked()
+        {
+          self.overview_open = true;
+          self.refresh_overview();
         }
       });
     });
@@ -608,6 +625,42 @@ impl App {
       Some(false) => self.unreferenced = None,
       None if modal.should_close() => self.unreferenced = None,
       None => {}
+    }
+  }
+
+  fn refresh_overview(&mut self) {
+    self.overview = None;
+    self.worker.send(Command::Overview {
+      devices: self.devices.clone(),
+    });
+  }
+
+  fn overview_window(&mut self, ctx: &egui::Context, t: &Texts) {
+    let mut open = self.overview_open;
+    let mut refresh = false;
+    egui::Window::new(t.overview)
+      .open(&mut open)
+      .default_size([820.0, 420.0])
+      .show(ctx, |ui| {
+        ui.horizontal(|ui| {
+          ui.weak(t.overview_hint);
+          if ui
+            .add_enabled(self.overview.is_some(), egui::Button::new(t.refresh))
+            .clicked()
+          {
+            refresh = true;
+          }
+        });
+        match &self.overview {
+          None => {
+            ui.spinner();
+          }
+          Some(overview) => overview_grid(ui, t, overview),
+        }
+      });
+    self.overview_open = open;
+    if refresh {
+      self.refresh_overview();
     }
   }
 
@@ -997,6 +1050,87 @@ fn loaded_view(
   action
 }
 
+/// One line per book, one column per device, then the server.
+fn overview_grid(ui: &mut egui::Ui, t: &Texts, overview: &Overview) {
+  match &overview.server {
+    Ok(true) => {}
+    Ok(false) => {
+      ui.colored_label(ui.visuals().warn_fg_color, t.server_not_configured);
+    }
+    Err(e) => {
+      ui.colored_label(
+        ui.visuals().error_fg_color,
+        format!("{}: {e}", t.server_failed),
+      );
+    }
+  }
+  for column in &overview.columns {
+    if let Some(e) = &column.error {
+      ui.colored_label(ui.visuals().error_fg_color, format!("{}: {e}", column.name));
+    }
+  }
+  if overview.lines.is_empty() {
+    ui.weak(t.no_books);
+    return;
+  }
+  egui::ScrollArea::both().show(ui, |ui| {
+    egui::Grid::new("overview")
+      .striped(true)
+      .num_columns(overview.columns.len() + 2)
+      .spacing([16.0, 4.0])
+      .show(ui, |ui| {
+        ui.strong(t.title);
+        for column in &overview.columns {
+          ui.strong(&column.name);
+        }
+        ui.strong(t.server);
+        ui.end_row();
+        for line in &overview.lines {
+          let title = match &line.author {
+            Some(author) => format!("{} — {author}", line.title),
+            None => line.title.clone(),
+          };
+          ui.label(title).on_hover_text(&line.document);
+          for cell in &line.cells {
+            match cell {
+              None => {
+                ui.weak("–");
+              }
+              Some(cell) => {
+                let text = match cell.percent {
+                  Some(p) => format!("{:.0} %", p * 100.0),
+                  None => t.never_opened.to_string(),
+                };
+                let hover = [cell.last_read.as_deref(), cell.xpointer.as_deref()]
+                  .into_iter()
+                  .flatten()
+                  .collect::<Vec<_>>()
+                  .join("\n");
+                let response = ui.label(text);
+                if !hover.is_empty() {
+                  response.on_hover_text(hover);
+                }
+              }
+            }
+          }
+          match &line.server {
+            Some(r) => {
+              ui.label(format!("{:.0} % · {}", r.percent * 100.0, r.device))
+                .on_hover_text(format!("{}\n{}", r.time, r.xpointer));
+            }
+            None if overview.server == Ok(true) => {
+              ui.weak(t.nothing_stored);
+            }
+            None => {
+              ui.weak("–");
+            }
+          }
+          ui.end_row();
+        }
+      });
+  });
+}
+
 /// The file name of a path, for a narrow column; the full path goes in
 /// the hover text.
 fn file_name(path: &str) -> &str {
@@ -1177,6 +1311,7 @@ impl eframe::App for App {
     self.ask_dialog(&ctx, t);
     self.unreferenced_dialog(&ctx, t);
     self.history_window(&ctx, t);
+    self.overview_window(&ctx, t);
   }
 }
 

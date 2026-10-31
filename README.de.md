@@ -167,7 +167,9 @@ Gerätedatenbank, vorher legt es eine Sicherung im Datenordner an, wie
 `pull --write`; eine Rückfrage kommt im selben Dialog (Gerät behalten oder
 Server übernehmen), danach liest es das Gerät neu ein. Wirf den Tolino
 aus, bevor du das Buch öffnest. „Verlauf“ zeigt, was CLI und Fenster
-gesendet und geschrieben haben (`history.jsonl` im Datenordner). Auf einen
+gesendet und geschrieben haben (`history.jsonl` im Datenordner).
+„Übersicht“ zeigt alle angesteckten Geräte nebeneinander: eine Zeile je
+Buch, je Gerät eine Spalte mit seiner Stelle, dazu die des Servers. Auf einen
 Kobo oder Kindle schreibt es nichts, nur `mappings.json` und den
 Verlauf. Beim Anstecken wird nichts
 synchronisiert. Deutsch oder Englisch nach Systemsprache, umschaltbar.
