@@ -120,7 +120,8 @@ L = a week or more, including verification.
       with all Kobo kepub highlights of Book P and Book Q and the Book R
       reading positions; `pull --write` writes a mapped kepub on the Kobo.
       A kepub now syncs only through a mapping, under its original EPUB's
-      checksum (device test on the Clara BW still open)
+      checksum, so the on-device plugin skips kepubs until mappings reach
+      the device (device test on the Clara BW still open)
 
 ## Quick wins
 
