@@ -58,6 +58,9 @@ pub struct Loaded {
   pub library: Option<(PathBuf, library::Kind, usize)>,
   pub mappings: usize,
   pub rows: Vec<Row>,
+  /// The server's positions can be written into it: a Tolino (on a Kobo
+  /// not yet, P2; a Kindle is only read).
+  pub writable: bool,
 }
 
 pub(crate) fn options(root: &Path) -> Options {
@@ -167,6 +170,7 @@ fn load_nickel(
       .map(|l| (l.root.clone(), l.kind, l.books.len())),
     mappings: session.store.mappings.len(),
     rows,
+    writable: session.family == "Tolino",
   })
 }
 
@@ -238,6 +242,7 @@ fn load_kindle(
     library: library.map(|l| (l.root, l.kind, l.books.len())),
     mappings: session.store.mappings.len(),
     rows,
+    writable: false,
   })
 }
 

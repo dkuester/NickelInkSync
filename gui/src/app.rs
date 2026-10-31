@@ -1,7 +1,7 @@
 //! The window: devices on the left, the chosen device's books in the
 //! middle, grouped by how they sync, with the server's position for each;
 //! dialogs to map a book to its original EPUB and to answer the `confirm`
-//! questions of a push; the sync history.
+//! questions of a push or pull; the sync history.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -39,6 +39,8 @@ enum Action {
   Unmap { key: String, title: String },
   /// Push the books with these ids.
   Push(Vec<String>),
+  /// Take the server's positions for the books with these ids (Tolino).
+  Pull(Vec<String>),
   /// Ask before pushing a book without a reference EPUB.
   PushUnreferenced { id: String, title: String },
 }
@@ -70,8 +72,8 @@ struct UnmapDialog {
   title: String,
 }
 
-/// The `confirm` questions of a push: send the device's position (`true`)
-/// or keep the server's.
+/// The `confirm` questions of a push or pull: send the device's position,
+/// or take the server's (`true`), or leave both as they are.
 struct AskDialog {
   questions: Vec<(Question, bool)>,
 }
@@ -96,8 +98,8 @@ pub struct App {
   notice: Option<Result<String, String>>,
   /// The server's positions for the shown device; `None` while asking.
   server: Option<ServerState>,
-  /// A push was sent and not answered yet.
-  pushing: bool,
+  /// A push or pull was sent and not answered yet.
+  busy: bool,
   ask_dialog: Option<AskDialog>,
   /// A book without a reference EPUB, to send only after a yes.
   unreferenced: Option<(String, String)>,
@@ -134,7 +136,7 @@ impl App {
       unmap_dialog: None,
       notice: None,
       server: None,
-      pushing: false,
+      busy: false,
       ask_dialog: None,
       unreferenced: None,
       history_open: false,
@@ -244,9 +246,9 @@ impl App {
           };
         }
         Event::Compared { root, state } if current(&root) => self.server = Some(state),
-        Event::Pushed { root, result } if current(&root) => {
+        Event::Synced { root, result } if current(&root) => {
           let lang = self.lang();
-          self.pushing = false;
+          self.busy = false;
           self.server = None;
           match result {
             Ok(mut report) => {
@@ -269,7 +271,7 @@ impl App {
         Event::Progress { .. }
         | Event::Loaded { .. }
         | Event::Compared { .. }
-        | Event::Pushed { .. } => {}
+        | Event::Synced { .. } => {}
         Event::Suggestions { id, result } => {
           if let Some(dialog) = self.map_dialog.as_mut().filter(|d| d.id == id) {
             dialog.chosen = match &result {
@@ -452,13 +454,14 @@ impl App {
         ui.colored_label(ui.visuals().error_fg_color, format!("{}: {e}", t.failed));
       }
       View::Loaded(loaded) => {
-        action = loaded_view(ui, t, lang, loaded, self.server.as_ref(), self.pushing)
+        action = loaded_view(ui, t, lang, loaded, self.server.as_ref(), self.busy)
       }
     }
     match action {
       Some(Action::Map { id, title }) => self.open_map_dialog(id, title),
       Some(Action::Unmap { key, title }) => self.unmap_dialog = Some(UnmapDialog { key, title }),
       Some(Action::Push(ids)) => self.push(ids),
+      Some(Action::Pull(ids)) => self.pull(ids),
       Some(Action::PushUnreferenced { id, title }) => self.unreferenced = Some((id, title)),
       None => {}
     }
@@ -468,11 +471,23 @@ impl App {
     let Some(selected) = &self.selected else {
       return;
     };
-    self.pushing = true;
+    self.busy = true;
     self.notice = None;
     self.worker.send(Command::Push {
       root: selected.root.clone(),
       kind: selected.kind,
+      ids,
+    });
+  }
+
+  fn pull(&mut self, ids: Vec<String>) {
+    let Some(selected) = &self.selected else {
+      return;
+    };
+    self.busy = true;
+    self.notice = None;
+    self.worker.send(Command::Pull {
+      root: selected.root.clone(),
       ids,
     });
   }
@@ -510,15 +525,22 @@ impl App {
               q.remote.time
             ))
             .on_hover_text(&q.remote.xpointer);
-            ui.weak(if q.backwards {
-              t.device_behind
-            } else {
-              t.positions_differ
+            let pulls = q.pulls();
+            ui.weak(match (q.backwards, pulls) {
+              (false, _) => t.positions_differ,
+              (true, false) => t.device_behind,
+              (true, true) => t.server_behind,
             });
+            // Unchanged comes first and is chosen until changed.
+            let (keep, change) = if pulls {
+              (t.keep_device, t.take_server)
+            } else {
+              (t.keep_server, t.send_device)
+            };
             ui.horizontal(|ui| {
               ui.push_id(i, |ui| {
-                ui.radio_value(send, false, t.keep_server);
-                ui.radio_value(send, true, t.send_device);
+                ui.radio_value(send, false, keep);
+                ui.radio_value(send, true, change);
               });
             });
           }
@@ -545,7 +567,7 @@ impl App {
           .map(|(q, _)| q)
           .collect();
         if let (Some(selected), false) = (&self.selected, questions.is_empty()) {
-          self.pushing = true;
+          self.busy = true;
           self.worker.send(Command::Answer {
             root: selected.root.clone(),
             kind: selected.kind,
@@ -831,7 +853,7 @@ fn loaded_view(
   lang: Lang,
   loaded: &Loaded,
   server: Option<&ServerState>,
-  pushing: bool,
+  busy: bool,
 ) -> Option<Action> {
   ui.heading(&loaded.device);
   match &loaded.library {
@@ -852,7 +874,11 @@ fn loaded_view(
     }
   }
   ui.label(format!("{}: {}", t.mappings, loaded.mappings));
-  ui.weak(t.read_only);
+  ui.weak(if loaded.writable {
+    t.writes_tolino
+  } else {
+    t.read_only
+  });
   let mut action = None;
   let compared = match server {
     Some(ServerState::Compared(compared)) => Some(compared),
@@ -880,14 +906,21 @@ fn loaded_view(
         .filter(|r| matches!(r.group, Group::Mapped { .. } | Group::Same { .. }))
         .map(|r| r.id.clone())
         .collect();
-      let enabled = !pushing && !ids.is_empty();
+      let enabled = !busy && !ids.is_empty();
       if ui
         .add_enabled(enabled, egui::Button::new(t.send_all))
         .clicked()
       {
-        action = Some(Action::Push(ids));
+        action = Some(Action::Push(ids.clone()));
       }
-      if pushing {
+      if loaded.writable
+        && ui
+          .add_enabled(enabled, egui::Button::new(t.pull_all))
+          .clicked()
+      {
+        action = Some(Action::Pull(ids));
+      }
+      if busy {
         ui.spinner();
       }
     }
@@ -933,7 +966,7 @@ fn loaded_view(
       false,
     ),
   ];
-  let can_send = compared.is_some() && !pushing;
+  let can_send = compared.is_some() && !busy;
   egui::ScrollArea::both().show(ui, |ui| {
     for (i, (name, hint, rows, shown_empty)) in sections.iter().enumerate() {
       let warning = !shown_empty;
@@ -953,7 +986,7 @@ fn loaded_view(
             ui.weak(t.none);
             return;
           }
-          if let Some(a) = book_table(ui, t, i, rows, compared, can_send) {
+          if let Some(a) = book_table(ui, t, i, rows, compared, can_send, loaded.writable) {
             action = Some(a);
           }
         });
@@ -999,6 +1032,7 @@ fn book_table(
   rows: &[&Row],
   compared: Option<&HashMap<String, Compared>>,
   can_send: bool,
+  writable: bool,
 ) -> Option<Action> {
   let mut action = None;
   egui::Grid::new(("books", id))
@@ -1065,6 +1099,14 @@ fn book_table(
                 },
                 _ => Action::Push(vec![row.id.clone()]),
               });
+            }
+          }
+          // Like "Get all", not for a book without a reference EPUB.
+          let pullable = matches!(row.group, Group::Mapped { .. } | Group::Same { .. });
+          if writable && pullable && compared.is_some() {
+            let pull = ui.add_enabled(can_send, egui::Button::new(t.pull_button).small());
+            if pull.clicked() {
+              action = Some(Action::Pull(vec![row.id.clone()]));
             }
           }
         });

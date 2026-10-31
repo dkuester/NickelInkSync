@@ -734,7 +734,15 @@ impl Session {
       let backup = self.device.write_live(writes, &dir, &stamp[..8])?;
       Written::Live { backup }
     } else {
-      let backup = dir.join(format!("KoboReader-{stamp}.sqlite"));
+      // A second write in the same second (two clicks in the desktop
+      // client) gets a backup of its own.
+      let backup = (1..)
+        .map(|n| match n {
+          1 => dir.join(format!("KoboReader-{stamp}.sqlite")),
+          n => dir.join(format!("KoboReader-{stamp}-{n}.sqlite")),
+        })
+        .find(|p| !p.exists())
+        .expect("a free name");
       self.device.write_positions(writes, &backup)?;
       Written::Mounted { backup }
     };
