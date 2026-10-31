@@ -51,8 +51,11 @@ Plugin, siehe unten).
 `~/.local/share/nickelinksync/backups/KoboReader-<UTC-Zeit>.sqlite` (oder
 `backups` im Datenordner, siehe unten, oder `$NICKELINKSYNC_BACKUP_DIR`)
 und setzt dann die Position aller Bücher in einer Transaktion. Es schreibt
-nicht ohne `.kobo/version` (kein eingehängtes Gerät) und nicht, solange
-SQLite-Journaldateien neben der Datenbank liegen. Wirf das Gerät aus, bevor
+nicht ohne `.kobo/version` (kein eingehängtes Gerät) und nicht, solange ein
+SQLite-Rollback-Journal (`-journal`) neben der Datenbank liegt. Die Dateien
+`-wal` und `-shm`, die der Tolino 5.18.279364 auf der USB-Partition liegen
+lässt, arbeitet es in die Datenbank ein (die Sicherung enthält ihren Inhalt
+dann mit). Wirf das Gerät aus, bevor
 du das Buch öffnest. Auf dem Kobo 6.0 und dem Tolino 5.18.279364 öffnet
 Nickel ein Buch aus seinem Zwischenspeicher fertig gezeichneter Seiten und,
 wenn keine gespeicherte Seite die geschriebene Stelle enthält, auf der

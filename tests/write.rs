@@ -810,3 +810,67 @@ fn pull_write_keeps_a_cached_page_that_holds_the_place() {
     (vec!["a".to_string(), "b".to_string()], 2)
   );
 }
+
+/// What Tolino 5.18.279364 leaves on the USB partition: `-wal` and `-shm`
+/// next to the database, with a change still in the WAL, and no one holding
+/// the database. The write backs up the database with that change, folds
+/// the WAL in and leaves one file.
+#[test]
+fn pull_write_folds_in_a_wal_nickel_left_behind() {
+  let s = Setup::tolino("write-left-wal");
+  {
+    let conn = Connection::open(s.db()).unwrap();
+    let _: String = conn
+      .query_row("PRAGMA journal_mode = WAL", [], |r| r.get(0))
+      .unwrap();
+    conn.pragma_update(None, "wal_autocheckpoint", 0).unwrap();
+    conn
+      .set_db_config(
+        rusqlite::config::DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE,
+        true,
+      )
+      .unwrap();
+    conn
+      .execute(
+        "UPDATE content SET Title = 'Changed in the WAL' WHERE ContentID = ?1",
+        [BOOK],
+      )
+      .unwrap();
+  }
+  assert!(
+    s.journals().iter().any(|j| j.ends_with("-wal")),
+    "{:?}",
+    s.journals()
+  );
+  s.server
+    .store(&hash("book-a.epub"), AHEAD, 0.9, LAST_READ + 60);
+  let (output, out) = s.run(&["pull", "--book", "book-a.epub", "--write"]);
+  assert!(output.status.success(), "{out}");
+  assert!(out.contains("Wrote 1 position(s) to the device."), "{out}");
+  assert!(s.journals().is_empty(), "{:?}", s.journals());
+  let conn = Connection::open(s.db()).unwrap();
+  let (title, position): (String, String) = conn
+    .query_row(
+      "SELECT Title, ChapterIDBookmarked FROM content WHERE ContentID = ?1",
+      [BOOK],
+      |r| Ok((r.get(0)?, r.get(1)?)),
+    )
+    .unwrap();
+  assert_eq!(
+    (title.as_str(), position.as_str()),
+    ("Changed in the WAL", AHEAD_ON_DEVICE)
+  );
+  // The backup holds the WAL's change and the old position.
+  let backups = s.backups();
+  assert_eq!(backups.len(), 1, "{backups:?}");
+  let (title, position): (String, String) = Connection::open(&backups[0])
+    .unwrap()
+    .query_row(
+      "SELECT Title, ChapterIDBookmarked FROM content WHERE ContentID = ?1",
+      [BOOK],
+      |r| Ok((r.get(0)?, r.get(1)?)),
+    )
+    .unwrap();
+  assert_eq!(title, "Changed in the WAL");
+  assert_ne!(position, AHEAD_ON_DEVICE);
+}

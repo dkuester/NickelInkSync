@@ -48,8 +48,10 @@ synced. The device is only read, never written, except by `pull --write`
 `~/.local/share/nickelinksync/backups/KoboReader-<UTC time>.sqlite` (or
 `backups` in the data directory, see below, or `$NICKELINKSYNC_BACKUP_DIR`),
 then sets the position of all books in one transaction. It refuses to
-write without `.kobo/version` (not a mounted device) or while SQLite
-journal files lie next to the database. Eject the device before you open
+write without `.kobo/version` (not a mounted device) or while a SQLite
+rollback journal (`-journal`) lies next to the database. The `-wal` and
+`-shm` files that Tolino 5.18.279364 leaves on the USB partition are folded
+into the database (the backup then holds their content too). Eject the device before you open
 the book. On Kobo 6.0 and Tolino 5.18.279364 Nickel opens a book from its
 cache of rendered pages and, when no cached page holds the written place,
 at the first cached page of that chapter. So the write also drops the

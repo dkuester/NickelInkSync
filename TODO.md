@@ -771,8 +771,12 @@ fertig, D2 läuft (E0 bis E3c erledigt; als Nächstes E4).
   - [x] **ich:** CLI verwirft beim Schreiben die gespeicherten Seiten des
     Zielkapitels, wenn keine die Stelle enthält (USB und live); über USB
     meldet sie, dass das Gerät neu gestartet werden muss.
-  - [ ] **du:** Gerätetest: über USB mit Neustart, und über das Plugin
-    beim Öffnen (ob dort ohne Neustart reicht).
+  - [x] **du:** Gerätetest (31.10.): über USB 4 Seiten verworfen, nach
+    Neustart R2-116 für R2-117; über das Plugin ohne Neustart 14 Seiten
+    verworfen, R3-66 für R3-67.
+  - [x] **ich:** Über USB blieb seit 5.18.279364 immer eine `-wal`-Datei
+    liegen und blockierte das Schreiben; die CLI arbeitet sie jetzt nach
+    einer Sicherung ein.
   - [ ] **ich (falls das Plugin ohne Neustart nicht reicht):** die Seiten
     über Nickel selbst verwerfen (`PersistedCacheManager`); als letzter
     Ausweg `deleteAllRelatedToBookInfo`. Früherer Plan, falls auch das

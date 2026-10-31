@@ -474,8 +474,16 @@ Ruled out on the way: `tolino_bookmark` (both rows held the place, PR
 The fix (`drop_stale_pages` in `src/db.rs`): when the CLI writes a
 position and no cached page of the book holds it, it drops the cached
 pages of that chapter in the same transaction, over USB and live. Over USB
-the device then needs a restart. Whether the live write (the plugin, while
-Nickel runs) is enough without one is still to be tested on the device.
+the device then needs a restart. Device test of this code (31.10.): over
+USB 4 pages were dropped and after a restart Book R opened at R2-116 for
+R2-117; through the plugin (live, no restart) 14 pages were dropped and
+Book R opened at R3-66 for R3-67. Nickel knew its place only after 8 s
+there, the last retry of the check after opening.
+
+Since 5.18.279364 Nickel also leaves `KoboReader.sqlite-wal` and `-shm` on
+the USB partition (4 MB, also after restarts; their content was already in
+the database). The USB write now folds them in after a backup made through
+SQLite; a rollback journal (`-journal`) still blocks it.
 
 ## The push path
 

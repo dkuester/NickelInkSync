@@ -93,10 +93,17 @@ impl Device {
 
   /// Writes new positions for books, all in one transaction, after copying
   /// the database to `backup` (a file that must not exist yet). Only on a
-  /// mounted device (a readable `.kobo/version`), and only while SQLite has
-  /// no journal next to the database: a journal means someone else is
+  /// mounted device (a readable `.kobo/version`), and never with a rollback
+  /// journal (`-journal`) next to the database: that means someone else is
   /// writing, or a write was cut off and SQLite has to roll it back first.
   /// Afterwards no journal may be left over.
+  ///
+  /// Since Tolino 5.18.279364, Nickel leaves its `-wal` and `-shm` files on
+  /// the partition it hands over by USB (seen on 31.10.: 4 MB, also after
+  /// restarts). Nickel no longer has the database open then, so SQLite reads
+  /// the WAL as part of the database: the backup is made through SQLite and
+  /// holds it, the write checkpoints it into the database file, and the then
+  /// empty files are removed.
   ///
   /// Nickel keeps the database in WAL mode, and that stays as it is. The
   /// connection takes an exclusive lock first, so SQLite needs no `-shm`
@@ -118,16 +125,26 @@ impl Device {
       )));
     }
     let db_path = self.db_path();
-    if let Some(journal) = journal_files(&db_path).into_iter().next() {
+    let journals = journal_files(&db_path);
+    if let Some(journal) = journals
+      .iter()
+      .find(|j| j.to_string_lossy().ends_with("-journal"))
+    {
       return Err(Error::Refused(format!(
         "{} exists; eject the device properly and mount it again",
         journal.display()
       )));
     }
-    copy_backup(&db_path, backup)?;
+    let left_wal = !journals.is_empty();
+    if !left_wal {
+      copy_backup(&db_path, backup)?;
+    }
     let mut conn = Connection::open_with_flags(&db_path, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
     // Before the first access, so WAL never sets up shared memory.
     conn.pragma_update(None, "locking_mode", "EXCLUSIVE")?;
+    if left_wal {
+      backup_through_sqlite(&conn, backup)?;
+    }
     let dropped = update_rows(&mut conn, writes)?;
     let wal: String = conn.query_row("PRAGMA journal_mode", [], |row| row.get(0))?;
     if wal.eq_ignore_ascii_case("wal") {
@@ -144,6 +161,9 @@ impl Device {
       }
     }
     conn.close().map_err(|(_, e)| e)?;
+    if left_wal {
+      remove_empty_wal(&db_path)?;
+    }
     if let Some(journal) = journal_files(&db_path).into_iter().next() {
       return Err(Error::Io(
         journal,
@@ -349,6 +369,57 @@ fn journal_files(db: &Path) -> Vec<PathBuf> {
     })
     .filter(|p| p.exists())
     .collect()
+}
+
+/// Backs up the database as `conn` sees it, with what its WAL holds, through
+/// SQLite's backup API, and checks the copy.
+fn backup_through_sqlite(conn: &Connection, backup: &Path) -> Result<(), Error> {
+  if backup.exists() {
+    return Err(Error::Refused(format!(
+      "{} already exists",
+      backup.display()
+    )));
+  }
+  if let Some(dir) = backup.parent() {
+    std::fs::create_dir_all(dir).map_err(|e| Error::Io(dir.to_path_buf(), e))?;
+  }
+  conn.backup(rusqlite::MAIN_DB, backup, None)?;
+  // Read-write, so closing the last connection removes the `-wal` and
+  // `-shm` SQLite makes for a copy in WAL mode: the backup is one file.
+  let copy = Connection::open_with_flags(backup, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
+  let check: String = copy.query_row("PRAGMA quick_check", [], |row| row.get(0))?;
+  copy.close().map_err(|(_, e)| e)?;
+  if check != "ok" {
+    return Err(Error::Refused(format!(
+      "the backup {} fails SQLite's check: {check}",
+      backup.display()
+    )));
+  }
+  Ok(())
+}
+
+/// After a checkpoint with no connection left: removes a `-wal` that is
+/// empty and the `-shm` next to it. A `-wal` that still holds frames stays.
+fn remove_empty_wal(db: &Path) -> Result<(), Error> {
+  let file = |suffix: &str| {
+    let mut name = db.as_os_str().to_owned();
+    name.push(suffix);
+    PathBuf::from(name)
+  };
+  let (wal, shm) = (file("-wal"), file("-shm"));
+  if wal.exists() {
+    let len = std::fs::metadata(&wal)
+      .map_err(|e| Error::Io(wal.clone(), e))?
+      .len();
+    if len != 0 {
+      return Ok(());
+    }
+    std::fs::remove_file(&wal).map_err(|e| Error::Io(wal.clone(), e))?;
+  }
+  if shm.exists() {
+    std::fs::remove_file(&shm).map_err(|e| Error::Io(shm.clone(), e))?;
+  }
+  Ok(())
 }
 
 /// Copies `db` to `backup` and checks the copy byte for byte.
