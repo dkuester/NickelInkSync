@@ -53,13 +53,18 @@ fetch kepubify-darwin-64bit "$kepubify_x86_64"
 lipo -create -output "$work/kepubify" "$work/kepubify-darwin-arm64" "$work/kepubify-darwin-64bit"
 chmod 755 "$work/kepubify"
 
-# The icon, from the SVG.
+# The icon, from the SVGs: up to 32 pixels (Finder lists, Spotlight) the
+# simpler icon-small.svg, where icon.svg's three devices would blur.
 iconset=$work/AppIcon.iconset
 mkdir -p "$iconset"
+render() { # pixels file
+  svg=packaging/icon.svg
+  if [ "$1" -le 32 ]; then svg=packaging/icon-small.svg; fi
+  rsvg-convert -w "$1" -h "$1" "$svg" -o "$2"
+}
 for size in 16 32 128 256 512; do
-  rsvg-convert -w "$size" -h "$size" packaging/icon.svg -o "$iconset/icon_${size}x${size}.png"
-  double=$((size * 2))
-  rsvg-convert -w "$double" -h "$double" packaging/icon.svg -o "$iconset/icon_${size}x${size}@2x.png"
+  render "$size" "$iconset/icon_${size}x${size}.png"
+  render $((size * 2)) "$iconset/icon_${size}x${size}@2x.png"
 done
 iconutil -c icns -o "$work/AppIcon.icns" "$iconset"
 

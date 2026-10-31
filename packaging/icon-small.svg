@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- NickelInkSync app icon for small sizes (32 pixels and below), where
+       icon.svg's three devices blur: one e-reader between two sync arrows. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1f5f73"/>
+      <stop offset="1" stop-color="#123a47"/>
+    </linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#bg)"/>
+  <!-- the reader -->
+  <rect x="332" y="232" width="360" height="520" rx="44" fill="#f4f1ea" stroke="#0d2a33" stroke-width="10"/>
+  <rect x="368" y="276" width="288" height="400" rx="10" fill="#e3ded2"/>
+  <g stroke="#7a7466" stroke-width="16" stroke-linecap="round">
+    <line x1="400" y1="320" x2="624" y2="320"/>
+    <line x1="400" y1="368" x2="624" y2="368"/>
+    <line x1="400" y1="416" x2="600" y2="416"/>
+    <line x1="400" y1="464" x2="624" y2="464"/>
+    <line x1="400" y1="512" x2="560" y2="512"/>
+  </g>
+  <!-- the place: a bookmark ribbon -->
+  <path d="M584 276 v120 l28 -24 l28 24 v-120 z" fill="#e8a33a"/>
+  <circle cx="512" cy="714" r="14" fill="#9b9586"/>
+  <!-- sync arrows -->
+  <g fill="none" stroke="#e8a33a" stroke-width="44" stroke-linecap="round">
+    <path d="M232 560 A290 290 0 0 1 300 300"/>
+    <path d="M792 464 A290 290 0 0 1 724 724"/>
+  </g>
+  <path d="M248 244 L352 300 L262 360 Z" fill="#e8a33a"/>
+  <path d="M776 780 L672 724 L762 664 Z" fill="#e8a33a"/>
+</svg>
