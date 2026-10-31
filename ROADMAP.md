@@ -112,10 +112,12 @@ Order: everything the Tolino Shine Color (5.18) can test on its own comes
 first (reverse translation for plain EPUB, USB write-back, Qt6 symbols and
 plugin). **Now, before anything else: the desktop client with a graphical UI**
 (the manual book mapping in the CLI is done, see "Recently completed").
-Maintenance and bug fixes may be slotted in at any time. The Kobo
-(kepub reverse translation, write-back, plugin) follows in a pass of its
-own. The reference Clara BW updated itself to firmware **6.0.279225** on
-2026-10-28, so that pass targets Kobo 6.0 (Qt6, like the Tolino); there is
+Maintenance and bug fixes may be slotted in at any time. After the
+desktop client comes the **on-device client** for the Kobo and the Tolino
+(kepub reverse translation, write-back, mappings on the device, plugin,
+dialog), planned in eight stages (C0–C7 in [TODO.md](TODO.md)). The
+reference Clara BW updated itself to firmware **6.0.279225** on
+2026-10-28, so the Kobo targets Kobo 6.0 (Qt6, like the Tolino); there is
 no 4.x device left, and 4.x-only behaviour is checked against the 4.46
 fixtures only.
 
@@ -156,8 +158,9 @@ fixtures only.
   cross-check on the Kobo: Tolino chapter rows are ToC entries, so their
   `VolumeIndex` is a ToC index, not a spine index. Fixtures: the Clara BW
   and Shine Color databases in `tests/fixtures/db/`.
-- **Position translation, back to the Kobo** (S–M): KOReader XPointer →
-  Kobo span (kepub), for `pull` on the Kobo, checked on 6.0; the 4.x Adobe
+- **Position translation, back to the Kobo** (S–M, stage C1 of the
+  on-device client): KOReader XPointer → Kobo span with offset (kepub),
+  for `pull` on the Kobo, checked on 6.0; the 4.x Adobe
   point only against the fixtures. Position format and chapter rows on
   6.0 still to be checked. Back to
   the Tolino is done (see "Recently completed").
@@ -169,17 +172,26 @@ fixtures only.
   `config.ini` (`all`, `errors`, `none`). Verified on the Tolino, also
   opening within the chapter last read. Still to do: English texts (the
   plugin logs `QLocale()`, `de_DE` so far).
-- **NickelHook plugin for the Kobo 6.0** (M–L): the Tolino plugin (Qt6)
-  built and checked for Kobo 6.0 (symbols from its `libnickel.so`). The
-  Qt5 plugin for 4.x is on hold: no 4.x device to test on.
-- **Book mappings on the device** (M): the plugin syncs every book under
-  its own checksum, so a mapped book (kepub, an EPUB changed by Calibre)
-  pushed from the device is useless to KOReader, which knows the
-  original EPUB. The desktop translates through the original EPUB, which
-  is not on the device: either a small translation table made with the
-  mapping (original checksum, chapter paths, text offsets) or the
-  original copied to the device, read by `--live`. After the desktop
-  client, before the Kobo plugin.
+- **On-device client for the Kobo 6.0 and the Tolino** (L): one plugin
+  for both devices, after the desktop client. Opening a book takes a
+  newer server position, written through Nickel itself as Kobalt (MIT)
+  does (`VolumeManager::updateBookmark`/`updateFields` in Nickel's
+  transaction, then `Repository::refreshCache<Volume>`); leaving it sends
+  the position. Each book keeps the position last agreed with the server
+  (a base): a side unchanged since then gives way, so Nickel's
+  `DateLastRead` on opening no longer counts as reading; when both
+  changed, a dialog shows both positions to choose from. A book read
+  without Wi-Fi, or whose push failed, is kept on a pending list and sent
+  once Wi-Fi is back (today the plugin keeps nothing and does not push a
+  book opened offline). Mapped books (kepub preferred, plain EPUB
+  supported) sync under the original's checksum through a library index
+  and per-book translation tables that the desktop puts on the device;
+  original EPUBs never go onto the device, and without the index nothing
+  is sent. The same mappings in the CLI, the GUI and on the device. An own
+  Qt dialog (pending books, "sync now", mapping a book on the device),
+  opened from a NickelMenu entry (on 6.0 only NickelMenu's experimental
+  Qt6 fork) and the book menu. Replaces the earlier items for the Kobo
+  plugin (N2) and book mappings on the device (N6).
 - **Store and cloud books without DRM** (S–M): downloaded Tolino store
   books without encryption sit in `.kobo/kepub/<ContentID>` and store
   positions like sideloaded EPUBs, but only sideloaded books sync so far.
@@ -193,7 +205,7 @@ fixtures only.
 - **Settings dialog on the device *(optional)*** (M): server, user and
   device name in Nickel instead of editing `config.ini`.
 - **Sync status in the book menu *(optional)*** (M): "last synced from
-  <device>, <time>", plus a manual "sync now" action.
+  <device>, <time>"; "sync now" comes with the on-device client.
 - **Multi-device conflict view on the desktop *(optional)*** (S): `status`
   lists every device's position for a book side by side.
 

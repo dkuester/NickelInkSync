@@ -32,7 +32,8 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0 bis E3b erledigt; als Nächstes E3c).
+fertig, D2 läuft (E0 bis E3b erledigt; als Nächstes E3c). **Danach
+der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
 
 ## Grundlagen
 
@@ -362,7 +363,7 @@ fertig, D2 läuft (E0 bis E3b erledigt; als Nächstes E3c).
     KOReaders Server-Position in Book R (Anfang R2-63) in
     `OEBPS/text/chapter2.xhtml#point(/1/4/128/1:0)`, wie erwartet. Ob
     Nickel dort öffnet, prüft P2.
-  - [ ] **ich (Kobo-Durchgang):** Rückwärts für den Kobo: XPointer →
+  - [ ] **ich (C1):** Rückwärts für den Kobo: XPointer →
     Kobo-Span (kepub), am Kobo 6.0 prüfen. Adobe-Point für 4.x (Text um
     Kommentare zusammengefasst) nur noch gegen die 4.46-Fixtures, kein
     4.x-Gerät mehr.
@@ -452,7 +453,7 @@ fertig, D2 läuft (E0 bis E3b erledigt; als Nächstes E3c).
     Nach dem Auswerfen öffnet Nickel die Seite mit dieser Stelle (oben
     R2-133) und speichert beim Schließen den eigenen Seitenanfang
     (`#point(/1/4/268/1:46)`, 57 %). **Nickel übernimmt die Position.**
-  - [ ] **ich (Kobo-Durchgang):** dasselbe für den Kobo (braucht K4
+  - [ ] **ich (C1):** dasselbe für den Kobo (braucht K4
     rückwärts für kepub).
 
 - [x] **P3 Rückfrage bei abweichender Position (einstellbar)** · PR #18
@@ -507,7 +508,8 @@ fertig, D2 läuft (E0 bis E3b erledigt; als Nächstes E3c).
   - [ ] **du:** Firmware-Update 4.46 für den Clara BW besorgen (wegen `libnickel.so`).
   - [ ] **ich:** Symbole für „Buch geöffnet“, „Buch geschlossen“ und „an
     Position springen“ suchen.
-- [ ] **N2 Plugin für den Kobo 6.0** (statt Qt5 für 4.x)
+- [ ] **N2 Plugin für den Kobo 6.0** (statt Qt5 für 4.x) · geht in **C4**
+  (Abschnitt Kobo-Client) auf
   - [ ] **ich:** Symbole aus `libnickel.so` von Kobo 6.0 prüfen (Vorbild
     N3, Tolino 5.18) und das Tolino-Plugin (Qt6) für den Kobo bauen;
     Paket `Kobo.tgz`.
@@ -689,7 +691,8 @@ fertig, D2 läuft (E0 bis E3b erledigt; als Nächstes E3c).
   - [ ] **ich (nach dem Test):** Gerätesprache: Das Log zeigt `QLocale()`
     beim Start; folgt sie Nickels Spracheinstellung, kommen die Meldungen
     auch auf Englisch.
-- [ ] **N6 Zuordnungen auf dem Gerät** (nach D2, vor dem Kobo-Plugin N2) ·
+- [ ] **N6 Zuordnungen auf dem Gerät** · geht in **C3** (Abschnitt
+  Kobo-Client) auf; Weg (a) gewählt, nie Original-EPUBs aufs Gerät ·
   Lücke, die du am 2026-10-29 bemerkt hast: Am Rechner sendet `push` ein
   zugeordnetes Buch (kepub, von Calibre verändertes EPUB) unter der
   Prüfsumme der Original-EPUB, mit der Stelle in sie übersetzt; KOReader
@@ -712,6 +715,104 @@ fertig, D2 läuft (E0 bis E3b erledigt; als Nächstes E3c).
     Calibre-EPUB auf dem Tolino lesen, Buch verlassen, in KOReader mit der
     Original-EPUB öffnen.
 
+## Kobo-Client
+
+Client auf dem Gerät (ein Plugin für Kobo 6.0 und Tolino 5.18), geplant
+am 2026-10-31 (deine Antworten auf meine Rückfragen). **Beginnt nach D2.**
+Fasst N2 und N6, die Kobo-Teile von K4 und P2 sowie O3/O4 (Rückfrage,
+„Jetzt synchronisieren“) zusammen. Eine Etappe = eine eigene Session, ein
+Branch von `origin/main`, ein PR. Jede Etappe endet mit dem PR, diesem
+Abschnitt nachgezogen und einer Übergabenotiz; die nächste Session beginnt
+mit diesem Abschnitt und der letzten Notiz. **C0, C1 und C2 können
+gleichzeitig laufen** (andere Dateien, keine Abhängigkeit); ab C3 der Reihe
+nach, mit einem Gerätetest dazwischen.
+
+Festgelegt (2026-10-31):
+
+- **Zuordnungen auf dem Gerät:** Der Rechner legt einen Bibliotheksindex
+  (Titel, Autor, Prüfsumme der Originale) und je zugeordnetem Buch eine
+  Übersetzungstabelle nach `.adds/NickelInkSync/`. **Nie** Original-EPUBs
+  aufs Gerät. Ohne Index zeigt das Plugin eine Meldung und sendet nichts;
+  gesendet wird nur ein Buch, dessen Prüfsumme im Index als Original steht
+  oder das zugeordnet ist (auch auf dem Tolino). Holen bleibt erlaubt.
+- **Dieselben Zuordnungen** in CLI, GUI und Gerät, abgeglichen beim Anschließen.
+- **Basis-Stand je Buch** (zuletzt mit dem Server abgeglichen),
+  Drei-Wege-Vergleich: Gerät unverändert → Server gewinnt (löst
+  `DateLastRead` beim Öffnen); Server unverändert → Gerät gewinnt; beide
+  geändert → Konflikt. `not-in-line.tsv` geht darin auf.
+- **Konflikt:** Das Plugin fragt beim Öffnen per Dialog und zeigt beide
+  Stände (Prozent, Kapitel, Zeit, Gerät): Server übernehmen, Gerät
+  behalten, später.
+- **Offline:** Ein ohne WLAN geöffnetes Buch, dessen Position sich bewegt
+  hat, wird vorgemerkt, ebenso ein gescheiterter Push. Die Vormerkliste wird
+  bei jedem WLAN nachgeholt (Öffnen, Schließen eines beliebigen Buchs,
+  „Jetzt synchronisieren“). Die Wartezeit auf WLAN beim Öffnen wird kürzer.
+- **Oberfläche:** eigener Qt-Dialog im Plugin; Einstieg über eine
+  NickelMenu-Datei in `.adds/nm/` (falls NickelMenu installiert ist, auf
+  6.0 nur der Qt6-Fork von nicoverbruggen) und über das Buchmenü.
+- **Position schreiben wie Kobalt** (MIT): über Nickel
+  (`DatabaseAdapter::beginTransaction`, `VolumeManager::getById`,
+  `updateBookmark`, `updateFields`, `endTransaction`,
+  `Repository::refreshCache<Volume>`), nicht mit der CLI in die Datenbank.
+- **kepub bevorzugt, EPUB ebenfalls**; ein kepub braucht immer eine Zuordnung.
+
+Heutiger Stand, am Code geprüft (2026-10-31): Das Plugin merkt sich keinen
+gescheiterten Push (ohne WLAN nur ein Toast); ein ohne WLAN geöffnetes Buch
+wird beim Schließen gar nicht gesendet; der Zustand liegt nur im Speicher.
+Auf dem Kobo ist das Plugin inaktiv.
+
+- [ ] **C0 Erkundung in der Kobo-VM** (6.0.279225)
+  - [ ] **ich:** Symbole des Plugins und Kobalts Schreibweg gegen
+    `libnickel.so` von 6.0 prüfen (Signaturen per Disassembly); den
+    Schreibweg als Wegwerf-Plugin in der VM ausprobieren (Buch öffnet an
+    der geschriebenen Stelle, auch beim ersten Öffnen nach dem Start);
+    Ergebnis in `docs/nickel-6.0-symbols.md`. Zusätzlich die Symbole für
+    einen eigenen Dialog und den Buchmenü-Eintrag
+    (`ActionProxyMixin::setupBookListMenu`).
+- [ ] **C1 kepub zurück** (K4-Rest): XPointer → `#kobo.N.M:offset`
+  (UTF-16-Einheiten), Fixtures Book P/Q/R; `pull --write` am Kobo per USB.
+  - [ ] **ich:** Übersetzung, Tests, P2 für den Kobo.
+  - [ ] **du:** Book R vom Server per USB auf den Kobo schreiben, auswerfen,
+    öffnen.
+- [ ] **C2 Basis-Stand und Vormerkliste** (nur Bibliothek und CLI)
+  - [ ] **ich:** `.adds/NickelInkSync/state.json` (je Buch Basis-Stand,
+    vorgemerkt); Drei-Wege-Regel in `sync.rs` mit `confirm`; `not-in-line.tsv`
+    einmal übernehmen, dann entfällt sie; `sync --pending` sendet bzw. holt
+    alle vorgemerkten Bücher; Maschinenzeilen für das Plugin. Tests mit dem
+    Mock-Server, auch für den Wechsel vom heutigen Plugin.
+- [ ] **C3 Zuordnungen auf dem Gerät** (ersetzt N6; braucht C1)
+  - [ ] **ich:** Am Rechner `device prepare`: Index und Übersetzungstabellen
+    aufs Gerät, Zuordnungen in beide Richtungen abgleichen (eine am Gerät
+    angelegte Zuordnung findet ihr Original über die Prüfsumme); `--live`
+    liest sie; Push ohne Index oder ohne Eintrag verweigert, mit eigener
+    Maschinenzeile für die Meldung.
+  - [ ] **du:** Calibre-kepub auf dem Kobo lesen, `push --live` per Plugin
+    oder CLI, in KOReader mit der Original-EPUB öffnen.
+- [ ] **C4 Plugin auf dem Kobo** (ersetzt N2; braucht C0, C2, C3)
+  - [ ] **ich:** Plugin auf dem Kobo aktiv; Öffnen und Schließen über
+    Nickels Schreibweg; offline vormerken, bei WLAN nachholen; kürzere
+    Wartezeit; Meldung ohne Index. Paket `Kobo.tgz` für beide Geräte.
+  - [ ] **du:** Am Clara BW: Buch mit WLAN öffnen (Stand vom Server),
+    dann WLAN aus, lesen, schließen (vorgemerkt), WLAN an, ein anderes Buch
+    öffnen (nachgeholt); in KOReader prüfen.
+- [ ] **C5 Dialog bei Konflikten** (braucht C4)
+  - [ ] **ich:** Qt-Dialog beim Öffnen mit beiden Ständen und drei Knöpfen.
+  - [ ] **du:** Konflikt am Kobo nachstellen (KOReader und Kobo offline
+    an verschiedenen Stellen), alle drei Knöpfe.
+- [ ] **C6 Oberfläche** (braucht C5)
+  - [ ] **ich:** Vormerkliste, „Jetzt synchronisieren“, Zuordnen am Gerät
+    aus dem Index (Vorschläge nach Titel und Autor); Einstieg über
+    NickelMenu-Datei und Buchmenü.
+  - [ ] **du:** Am Kobo: vorgemerkte Bücher senden, ein kepub zuordnen.
+- [ ] **C7 Tolino** (braucht C4 bis C6)
+  - [ ] **ich:** Dasselbe Plugin auf dem Shine Color; Kobalts Schreibweg
+    dort prüfen (Kobalt selbst schreibt auf dem Tolino nicht zurück). Wenn
+    er geht, lösen sich N5 (`Volume`-Cache) und PR #26/#40 damit ab; sonst
+    bleibt der heutige Weg B.
+  - [ ] **du:** Dieselben Tests wie C4 bis C6 am Tolino.
+- [ ] **(in D2, nach C3)** Knopf „Gerät vorbereiten“ in der GUI; beim
+  Kopieren (E5) Index und Tabelle gleich mitschreiben.
+
 ## Optional (später)
 
 - [x] **O1 Manuelle Zuordnung** von Büchern (kepub ↔ EPUB), Testfall Heat 2.
@@ -723,8 +824,8 @@ fertig, D2 läuft (E0 bis E3b erledigt; als Nächstes E3c).
 - [x] **O2 Normales EPUB auf Kobo 4.x** · **du:** ein normales EPUB auf den Clara
   geladen und geöffnet. Ergebnis: wie auf dem Tolino `#point(...)`,
   Kapitelzeilen sind ToC-Einträge (`SCOPE.md`).
-- [ ] **O3 Einstellungsdialog** auf dem Gerät.
-- [ ] **O4 Sync-Status** im Buchmenü, plus „Jetzt synchronisieren“.
+- [ ] **O3 Einstellungsdialog** auf dem Gerät (der Dialog aus C6 ist der Rahmen dafür).
+- [ ] **O4 Sync-Status** im Buchmenü; „Jetzt synchronisieren“ kommt mit C6.
 - [ ] **O5 Geräteübersicht** in `status`: alle Positionen eines Buchs nebeneinander.
 - [ ] **O6 Markierungen auf Kobo 5.x/6.x nachtesten** · nicht mehr
   blockiert: Der Clara BW ist seit 2026-10-28 auf 6.0. · **du:** Book P auf
