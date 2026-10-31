@@ -508,6 +508,34 @@ impl Session {
     Ok((translated, note))
   }
 
+  /// `local` to compare with the server's position: if the device holds
+  /// exactly what pulling `remote` writes, it is the server's position.
+  /// The way back to an XPointer is not exact (it moves to the paragraph
+  /// start, or the chapter), so after a pull the device would otherwise
+  /// never be in sync.
+  pub fn against(
+    &self,
+    book: &Book,
+    identity: &Identity,
+    local: Local,
+    remote: Option<&Progress>,
+  ) -> Local {
+    let (Some(remote), Some(stored)) = (remote, book.position.as_deref()) else {
+      return local;
+    };
+    if local.xpointer == remote.progress {
+      return local;
+    }
+    match self.translate(book, identity, &remote.progress, remote.percentage) {
+      Ok((translated, _)) if translated.position.to_string() == stored => Local {
+        xpointer: remote.progress.clone(),
+        percentage: remote.percentage,
+        ..local
+      },
+      _ => local,
+    }
+  }
+
   /// The device position for KOSync (in the original EPUB, for a mapped
   /// book), and what was not exact about it; or why there is none.
   pub fn local(
@@ -612,14 +640,12 @@ impl Session {
       Some(_) => true,
       None => false,
     };
-    push_ready(
-      local,
-      note,
-      client.progress(document),
-      confirm,
-      force,
-      forced,
-    )
+    let remote = client.progress(document);
+    let local = match &remote {
+      Ok(remote) => self.against(book, identity, local, remote.as_ref()),
+      Err(_) => local,
+    };
+    push_ready(local, note, remote, confirm, force, forced)
   }
 
   /// What `pull` would do with `book`; asks the server. `force` takes the
@@ -659,7 +685,10 @@ impl Session {
       Err(e) => return PullOutcome::Failed(e),
     };
     // Without a device position there is nothing on the device to keep.
-    let local = self.local(book, identity).ok().map(|(local, _)| local);
+    let local = self
+      .local(book, identity)
+      .ok()
+      .map(|(local, _)| self.against(book, identity, local, Some(&remote)));
     // After a failed take Nickel's DateLastRead says nothing about reading.
     let left_by_nickel = self.not_in_line.get(&book.content_id);
     let (decision, plugin) = match (&local, left_by_nickel) {
@@ -734,7 +763,15 @@ impl Session {
       let backup = self.device.write_live(writes, &dir, &stamp[..8])?;
       Written::Live { backup }
     } else {
-      let backup = dir.join(format!("KoboReader-{stamp}.sqlite"));
+      // A second write in the same second (two clicks in the desktop
+      // client) gets a backup of its own.
+      let backup = (1..)
+        .map(|n| match n {
+          1 => dir.join(format!("KoboReader-{stamp}.sqlite")),
+          n => dir.join(format!("KoboReader-{stamp}-{n}.sqlite")),
+        })
+        .find(|p| !p.exists())
+        .expect("a free name");
       self.device.write_positions(writes, &backup)?;
       Written::Mounted { backup }
     };

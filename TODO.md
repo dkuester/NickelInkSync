@@ -32,7 +32,7 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0 bis E3b erledigt; als Nächstes E3c).
+fertig, D2 läuft (E0 bis E3c erledigt; als Nächstes E4).
 
 ## Grundlagen
 
@@ -268,14 +268,31 @@ fertig, D2 läuft (E0 bis E3b erledigt; als Nächstes E3c).
     Server erneut. Knopf „Verlauf“ oben rechts (letzte 200 Einträge, von
     CLI und GUI). Ohne Server in `config.ini` ein Hinweis statt der
     Knöpfe.
-  - [ ] **du:** E3b: Book R am Tolino senden, einmal mit Rückfrage
-    (KOReader weiter vorn), Verlauf ansehen; Kindle-Kopie senden.
-  - [ ] **ich:** **E3c** Holen und Rückschreiben am Tolino in der GUI
+  - [x] **du:** E3b: Book R am Tolino senden, einmal mit Rückfrage
+    (KOReader weiter vorn), Verlauf ansehen (2026-10-31, PR #41).
+  - [ ] **du:** E3b: Kindle-Kopie senden (später, getrennt).
+  - [x] **ich:** **E3c** Holen und Rückschreiben am Tolino in der GUI
     (`pull_step`, `take`, `write` mit Sicherungskopie, gleicher Dialog),
-    Kobo nur „zum Server“, bis P2 für den Kobo fertig ist;
-    Geräteansicht nebeneinander (O5).
-  - [ ] **du:** E3c: Book R vom Server auf den Tolino holen, auswerfen,
-    öffnen.
+    Kobo nur „zum Server“, bis P2 für den Kobo fertig ist. Umgesetzt:
+    „Holen“ je Buch und „Alle holen“ oben, nur am Tolino und nur für
+    zugeordnete Bücher und solche mit eigener Prüfsumme; Rückfragen im
+    Dialog mit „Gerät behalten“ (vorgewählt) oder „Server übernehmen“;
+    danach liest die App das Gerät neu ein; die Meldung nennt die
+    Sicherung und erinnert ans Auswerfen. Verlauf mit `by: "gui"`. Zwei
+    Schreibvorgänge in derselben Sekunde bekommen getrennte Sicherungen
+    (`…-2.sqlite`), statt dass der zweite scheitert. Nach dem Holen einer
+    Stelle mitten im Absatz galt das Buch als „Server neuer“, weil der
+    Rückweg zum XPointer an den Absatzanfang rückt; jetzt gilt es als
+    gleich, wenn auf dem Gerät genau das steht, was Holen schreiben würde
+    (`Session::against`, für `status`, `push`, `pull` und die GUI). Bei
+    „gleich“ sind „Senden“ und „Holen“ ausgegraut; „Alle senden“ und „Alle
+    holen“ lassen solche Bücher aus.
+  - [ ] **ich:** Geräteansicht nebeneinander (O5): aus E3c herausgenommen,
+    die Gestaltung ist noch offen (siehe Frage im PR).
+  - [x] **du:** E3c: Book R vom Server auf den Tolino holen, auswerfen,
+    öffnen (2026-10-31): Holen schreibt die richtige Stelle, danach „gleich“
+    und ausgegraute Knöpfe. Nickel öffnet nur am Kapitelanfang (R2-1 statt
+    R2-19), das ist N5 (PR #40), nicht E3c.
   - [ ] **ich:** **E4** Einstellungen; Schlüssel im Schlüsselbund bzw. in
     der Anmeldeinformationsverwaltung (`keyring`, nur für macOS und
     Windows, nicht im Gerätebau). Die CLI sucht `password`/`key` in der

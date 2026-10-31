@@ -147,7 +147,9 @@ fixtures only.
   remove), on the mapping code moved from the CLI into the library; E3a,
   the sync history (`history.jsonl`, written by the CLI and the window);
   E3b, the server's position for each book and sending per book or all,
-  with the `confirm` questions in a dialog, and a history window.
+  with the `confirm` questions in a dialog, and a history window; E3c,
+  taking the server's position into a Tolino per book or all (after a
+  backup of the database, the same dialog for `confirm`).
 
 - **Read-only device database layer** (S–M): reading the books and their
   positions is done (`status --device`); still to do: resolve

@@ -77,6 +77,7 @@ pub struct Texts {
   pub never_opened: &'static str,
   pub no_books: &'static str,
   pub read_only: &'static str,
+  pub writes_tolino: &'static str,
   pub map_button: &'static str,
   pub remap_button: &'static str,
   pub unmap_button: &'static str,
@@ -100,6 +101,8 @@ pub struct Texts {
   pub server: &'static str,
   pub send_button: &'static str,
   pub send_all: &'static str,
+  pub pull_button: &'static str,
+  pub pull_all: &'static str,
   pub nothing_stored: &'static str,
   pub outlook_same: &'static str,
   pub outlook_device: &'static str,
@@ -111,6 +114,9 @@ pub struct Texts {
   pub positions_differ: &'static str,
   pub send_device: &'static str,
   pub keep_server: &'static str,
+  pub server_behind: &'static str,
+  pub keep_device: &'static str,
+  pub take_server: &'static str,
   pub apply: &'static str,
   pub history: &'static str,
   pub history_empty: &'static str,
@@ -207,35 +213,51 @@ pub fn unreferenced_question(lang: Lang, title: &str) -> String {
   }
 }
 
-/// What a push did, in one line: "2 gesendet, 1 aktuell, …", and the
-/// titles of books that failed or were left out.
+/// What a push or pull did, in one line: "2 gesendet, 1 aktuell, …", the
+/// titles of books that failed or were left out, and where the backup of
+/// the device database is.
 pub fn report(lang: Lang, report: &crate::sync::Report) -> String {
-  use crate::sync::Pushed;
-  let count = |f: fn(&Pushed) -> bool| report.books.iter().filter(|(_, s)| f(s)).count();
-  let parts: [(usize, &str, &str); 6] = [
-    (count(|s| *s == Pushed::Sent), "gesendet", "sent"),
+  use crate::sync::Outcome;
+  let count = |f: fn(&Outcome) -> bool| report.books.iter().filter(|(_, s)| f(s)).count();
+  let parts: [(usize, &str, &str); 9] = [
+    (count(|s| *s == Outcome::Sent), "gesendet", "sent"),
     (
-      count(|s| *s == Pushed::InSync),
+      count(|s| *s == Outcome::Written),
+      "aufs Gerät geschrieben",
+      "written to the device",
+    ),
+    (
+      count(|s| *s == Outcome::InSync),
       "schon aktuell",
       "already in sync",
     ),
     (
-      count(|s| *s == Pushed::ServerNewer),
+      count(|s| *s == Outcome::ServerNewer),
       "Server neuer, nicht gesendet",
       "server newer, not sent",
     ),
     (
-      count(|s| *s == Pushed::NotInLine),
+      count(|s| *s == Outcome::DeviceNewer),
+      "Gerät neuer, nicht geholt",
+      "device newer, not taken",
+    ),
+    (
+      count(|s| *s == Outcome::NothingStored),
+      "nichts auf dem Server",
+      "nothing on the server",
+    ),
+    (
+      count(|s| *s == Outcome::NotInLine),
       "vom Plugin gesperrt (nicht in Einklang)",
       "held by the plugin (not in line)",
     ),
     (
-      count(|s| matches!(s, Pushed::Skipped(_))),
+      count(|s| matches!(s, Outcome::Skipped(_))),
       "übersprungen",
       "skipped",
     ),
     (
-      count(|s| matches!(s, Pushed::Failed(_))),
+      count(|s| matches!(s, Outcome::Failed(_))),
       "fehlgeschlagen",
       "failed",
     ),
@@ -257,15 +279,27 @@ pub fn report(lang: Lang, report: &crate::sync::Report) -> String {
   }
   if text.is_empty() {
     text.push(match lang {
-      Lang::De => "nichts zu senden".into(),
-      Lang::En => "nothing to send".into(),
+      Lang::De => "nichts zu tun".into(),
+      Lang::En => "nothing to do".into(),
     });
   }
   let mut line = text.join(", ");
   for (title, sent) in &report.books {
-    if let Pushed::Failed(e) | Pushed::Skipped(e) = sent {
+    if let Outcome::Failed(e) | Outcome::Skipped(e) = sent {
       line.push_str(&format!("\n{title}: {e}"));
     }
+  }
+  if let Some(backup) = &report.backup {
+    line.push_str(&match lang {
+      Lang::De => format!(
+        "\nSicherung der Gerätedatenbank: {}\nGerät auswerfen, bevor du das Buch öffnest.",
+        backup.display()
+      ),
+      Lang::En => format!(
+        "\nBackup of the device database: {}\nEject the device before you open the book.",
+        backup.display()
+      ),
+    });
   }
   line
 }
@@ -324,6 +358,9 @@ static DE: Texts = Texts {
   no_books: "Keine Bücher auf dem Gerät.",
   read_only: "Die App schreibt nichts aufs Gerät. Zuordnungen liegen auf diesem Rechner \
               (mappings.json), gemeinsam mit der CLI.",
+  writes_tolino: "„Holen“ schreibt die Stelle vom Server in die Datenbank des Tolino; vorher \
+                  legt die App eine Sicherung auf diesem Rechner an. Zuordnungen liegen auf \
+                  diesem Rechner (mappings.json), gemeinsam mit der CLI.",
   map_button: "Zuordnen …",
   remap_button: "Ändern …",
   unmap_button: "Entfernen",
@@ -348,6 +385,8 @@ static DE: Texts = Texts {
   server: "Server",
   send_button: "Senden",
   send_all: "Alle senden",
+  pull_button: "Holen",
+  pull_all: "Alle holen",
   nothing_stored: "nichts gespeichert",
   outlook_same: "gleich",
   outlook_device: "Gerät neuer",
@@ -359,6 +398,9 @@ static DE: Texts = Texts {
   positions_differ: "Die Stellen weichen voneinander ab.",
   send_device: "Gerät senden",
   keep_server: "Server behalten",
+  server_behind: "Die Stelle auf dem Server liegt vor der auf dem Gerät.",
+  keep_device: "Gerät behalten",
+  take_server: "Server übernehmen",
   apply: "Übernehmen",
   history: "Verlauf",
   history_empty: "Noch nichts synchronisiert.",
@@ -417,6 +459,9 @@ static EN: Texts = Texts {
   no_books: "No books on the device.",
   read_only: "The app writes nothing to the device. Mappings are kept on this computer \
               (mappings.json), shared with the CLI.",
+  writes_tolino: "“Get” writes the server’s position into the Tolino’s database, after a \
+                  backup of it on this computer. Mappings are kept on this computer \
+                  (mappings.json), shared with the CLI.",
   map_button: "Map …",
   remap_button: "Change …",
   unmap_button: "Remove",
@@ -441,6 +486,8 @@ static EN: Texts = Texts {
   server: "Server",
   send_button: "Send",
   send_all: "Send all",
+  pull_button: "Get",
+  pull_all: "Get all",
   nothing_stored: "nothing stored",
   outlook_same: "same",
   outlook_device: "device newer",
@@ -452,6 +499,9 @@ static EN: Texts = Texts {
   positions_differ: "The positions differ.",
   send_device: "Send the device’s",
   keep_server: "Keep the server’s",
+  server_behind: "The position on the server lies before the one on the device.",
+  keep_device: "Keep the device’s",
+  take_server: "Take the server’s",
   apply: "Apply",
   history: "History",
   history_empty: "Nothing synced yet.",

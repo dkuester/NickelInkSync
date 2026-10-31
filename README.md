@@ -152,9 +152,14 @@ mapped from there: the library's suggestions with their scores, or an
 EPUB chosen by hand; a mapping can be changed or removed. With a server
 in `config.ini` it shows the server's position next to the device's and
 sends positions per book or all at once; a `confirm` question comes as a
-dialog (keep the server's, or send the device's). "History" lists what
-the CLI and the window sent (`history.jsonl` in the data directory). It
-writes nothing to the device, only `mappings.json` and the history.
+dialog (keep the server's, or send the device's). On a Tolino "Get" and
+"Get all" write the server's position into the device database, after a
+backup of it in the data directory, as `pull --write` does; a `confirm`
+question comes as the same dialog (keep the device's, or take the
+server's), and the device is read again afterwards. Eject the Tolino
+before you open the book. "History" lists what the CLI and the window
+sent and wrote (`history.jsonl` in the data directory). To a Kobo or a
+Kindle it writes nothing, only `mappings.json` and the history.
 Nothing is synced when a device is connected. German or English after the
 system language, switchable. It shares `config.ini` and `mappings.json`
 with the CLI; its own settings (language, Kindle folder) are in

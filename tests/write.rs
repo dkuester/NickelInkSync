@@ -161,6 +161,27 @@ fn pull_write_sets_the_position_after_a_backup() {
   assert_eq!(s.backups().len(), 1);
 }
 
+/// After a pull of a place inside a paragraph the device is in sync,
+/// although its way back to an XPointer moves to the paragraph start.
+#[test]
+fn after_a_pull_inside_a_paragraph_both_sides_agree() {
+  let s = Setup::tolino("write-inside");
+  let inside = "/body[1]/DocFragment[90]/body[1]/p[1]/text()[1].20";
+  s.server
+    .store(&hash("book-a.epub"), inside, 0.9, LAST_READ + 60);
+  let (output, out) = s.run(&["pull", "--book", "book-a.epub", "--write"]);
+  assert!(output.status.success(), "{out}");
+  assert!(out.contains("Wrote 1 position(s) to the device."), "{out}");
+  let (_, out) = s.run(&["status", "--book", "book-a.epub"]);
+  assert!(out.contains("  sync      in sync"), "{out}");
+  let (_, out) = s.run(&["push", "--book", "book-a.epub"]);
+  assert!(out.contains("  in sync   "), "{out}");
+  assert!(s.server.puts().is_empty());
+  let (_, out) = s.run(&["pull", "--book", "book-a.epub", "--write"]);
+  assert!(out.contains("Nothing to write to the device."), "{out}");
+  assert_eq!(s.backups().len(), 1);
+}
+
 /// Nickel keeps the database in WAL mode: the change must end up in the
 /// database file itself, with no `-wal` or `-shm` left, still in WAL mode.
 #[test]
