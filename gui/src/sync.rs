@@ -154,7 +154,10 @@ fn compare_books(
           continue;
         };
         let remote = ask(document)?;
-        let local = session.local(book, &identity).ok().map(|(l, _)| l);
+        let local = session
+          .local(book, &identity)
+          .ok()
+          .map(|(l, _)| session.against(book, &identity, l, remote.as_ref()));
         found.insert(
           book.content_id.clone(),
           compared(local.as_ref(), remote.as_ref(), confirm),
@@ -684,6 +687,23 @@ mod tests {
     let report = pull(&s.options, &[BOOK_A.to_string()]).unwrap();
     assert_eq!(report.books, [("Book A".to_string(), Outcome::InSync)]);
     assert_eq!(report.backup, None);
+  }
+
+  #[test]
+  fn after_a_pull_inside_a_paragraph_the_server_column_says_same() {
+    let _writing = WRITING.lock().unwrap_or_else(|e| e.into_inner());
+    let s = Setup::new("pull-inside");
+    let inside = "/body[1]/DocFragment[90]/body[1]/p[1]/text()[1].20";
+    s.server.store(&book_hash(), inside, 0.9, LAST_READ + 60);
+    let report = pull(&s.options, &[BOOK_A.to_string()]).unwrap();
+    assert_eq!(report.books, [("Book A".to_string(), Outcome::Written)]);
+    let ServerState::Compared(after) = compare(&s.options, Kind::Nickel) else {
+      panic!("not compared")
+    };
+    assert_eq!(after[BOOK_A].outlook, Some(Outlook::InSync));
+    let report = push(&s.options, Kind::Nickel, &[BOOK_A.to_string()]).unwrap();
+    assert_eq!(report.books, [("Book A".to_string(), Outcome::InSync)]);
+    assert!(s.server.puts().is_empty());
   }
 
   #[test]

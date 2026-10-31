@@ -280,7 +280,11 @@ fertig, D2 läuft (E0 bis E3c erledigt; als Nächstes E4).
     danach liest die App das Gerät neu ein; die Meldung nennt die
     Sicherung und erinnert ans Auswerfen. Verlauf mit `by: "gui"`. Zwei
     Schreibvorgänge in derselben Sekunde bekommen getrennte Sicherungen
-    (`…-2.sqlite`), statt dass der zweite scheitert.
+    (`…-2.sqlite`), statt dass der zweite scheitert. Nach dem Holen einer
+    Stelle mitten im Absatz galt das Buch als „Server neuer“, weil der
+    Rückweg zum XPointer an den Absatzanfang rückt; jetzt gilt es als
+    gleich, wenn auf dem Gerät genau das steht, was Holen schreiben würde
+    (`Session::against`, für `status`, `push`, `pull` und die GUI).
   - [ ] **ich:** Geräteansicht nebeneinander (O5): aus E3c herausgenommen,
     die Gestaltung ist noch offen (siehe Frage im PR).
   - [ ] **du:** E3c: Book R vom Server auf den Tolino holen, auswerfen,
