@@ -685,7 +685,7 @@ fertig, D2 läuft (E0, E1, E2 und E3a erledigt; als Nächstes E3b).
     mit ausgeschaltetem Plugin (`config.ini.off`) am Anfang von Kapitel 1,
     genau an der Stelle aus der Tabelle `tolino_bookmark`, die weder CLI
     noch Plugin schreiben.
-  - [x] **ich:** `tolino_bookmark` wird jetzt mitgeschrieben (PR #TBD), per
+  - [x] **ich:** `tolino_bookmark` wird jetzt mitgeschrieben (PR #40), per
     USB und beim Öffnen durch das Plugin, in derselben Transaktion wie die
     Buchzeile: Stelle, Seite und Seitenzahl, `progress`, `modified`;
     Felder wie bei Kobalt (MIT, Commit 8b144d2). Ein Buch ohne Zeile
