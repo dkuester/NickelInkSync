@@ -380,7 +380,8 @@ was the plugin's check: 3 s after opening,
 of the nine takes (on 25.10. never), and the check took that for another
 chapter, so the book was not pushed on leaving. The same showed in the
 emulated Nickel VM (PR #27). The check now asks again every second
-for up to 8 s more (PR #44); still unknown, it behaves as before. In the
+for up to 8 s more (PR #44), since 31.10. up to 12 s more (15 s in all);
+still unknown, it behaves as before. In the
 draft #26, with the cache reloaded, an unknown place counts as taken. The
 test switch was removed again.
 
@@ -478,7 +479,9 @@ the device then needs a restart. Device test of this code (31.10.): over
 USB 4 pages were dropped and after a restart Book R opened at R2-116 for
 R2-117; through the plugin (live, no restart) 14 pages were dropped and
 Book R opened at R3-66 for R3-67. Nickel knew its place only after 8 s
-there, the last retry of the check after opening.
+there (the check's log: "after opening (8000 ms)"), with the check's limit
+then at 11 s. Rendering the chapter fresh takes longer in a bigger book,
+so the check now waits up to 15 s, still asking every second.
 
 Since 5.18.279364 Nickel also leaves `KoboReader.sqlite-wal` and `-shm` on
 the USB partition (4 MB, also after restarts; their content was already in
