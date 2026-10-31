@@ -117,10 +117,13 @@ static const size_t kVolumeBytes = 64;
 static const size_t kBookmarkBytes = 64;
 // When to check that Nickel opened the pulled chapter. Nickel may not know
 // its place yet after 3 s (an empty location, in 8 of 9 runs of a device
-// test), so the check asks again every second, kCheckOpenTries times.
+// test), so the check asks again every second, kCheckOpenTries times, up to
+// 15 s in all. Since stale cached pages are dropped (PR #48) Nickel renders
+// the chapter fresh and knew its place only after 8 s in a device test
+// (31.10.), close to the old limit of 11 s; a bigger book takes longer.
 static const int kCheckOpenMs = 3000;
 static const int kCheckOpenRetryMs = 1000;
-static const int kCheckOpenTries = 8;
+static const int kCheckOpenTries = 12;
 // Toasts: how long they stay (Nickel's own use 1500 ms), and how long after
 // setVolume the one about opening is queued, once the reading view is up.
 static const int kToastMs = 5000;

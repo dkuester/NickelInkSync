@@ -794,6 +794,12 @@ fertig, D2 läuft (E0 bis E4 und O5 erledigt; als Nächstes E5).
   - [x] **du:** Gerätetest (31.10.): über USB 4 Seiten verworfen, nach
     Neustart R2-116 für R2-117; über das Plugin ohne Neustart 14 Seiten
     verworfen, R3-66 für R3-67.
+  - [x] **ich:** Prüfung nach dem Öffnen wartet jetzt bis zu 15 s statt
+    11 s (12 statt 8 Nachfragen, weiter jede Sekunde): Im Gerätetest vom
+    31.10. kannte Nickel seine Stelle nach dem frischen Rendern erst nach
+    8 s, ein größeres Buch bräuchte länger.
+  - [ ] **du:** Gerätetest der längeren Prüfung: Toast, Stelle und im Log
+    die Zeile „after opening (… ms)“.
   - [x] **ich:** Über USB blieb seit 5.18.279364 immer eine `-wal`-Datei
     liegen und blockierte das Schreiben; die CLI arbeitet sie jetzt nach
     einer Sicherung ein.
