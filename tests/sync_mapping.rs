@@ -1,7 +1,8 @@
 //! `status`, `push` and `pull` through a book mapping, against the local
 //! mock server: a kepub synced under the original EPUB's checksum, a
 //! differently converted EPUB on the Tolino, books a library does not know,
-//! broken mappings, and no position written back into a kepub.
+//! broken mappings, positions written back into a kepub, and an unmapped
+//! kepub that is never synced.
 
 mod common;
 
@@ -284,21 +285,70 @@ fn a_differently_converted_epub_on_the_tolino() {
 }
 
 #[test]
-fn no_position_is_written_into_a_kepub() {
+fn pull_write_puts_a_span_into_a_mapped_kepub() {
   let s = Setup::new(
     "map-kepub-pull",
     "kobo-clarabw-4.46-placeholder-books.sql",
     KOBO_6_VERSION,
   );
-  s.map("book-a.kepub.epub", &fixtures().join("epub/book-a.epub"));
-  s.server.store(&epub_hash(), AHEAD, 0.8, 1_900_000_000);
-  let before = s.stored("file:///mnt/onboard/Books/book-a.kepub.epub");
+  let kepub = "file:///mnt/onboard/Books/book-a.kepub.epub";
+  // The kepub's row now holds Book R as kepub, mapped to Book R as EPUB.
+  fs::copy(
+    fixtures().join("epub/book-r.kepub.epub"),
+    s.root.join("Books/book-a.kepub.epub"),
+  )
+  .unwrap();
+  let original = fixtures().join("epub/book-r.epub");
+  s.map("book-a.kepub.epub", &original);
+  // KOReader in R2-63 at "schließen", after an umlaut, so characters, not
+  // bytes.
+  let r_hash = partial_md5(&original).unwrap();
+  s.server.store(
+    &r_hash,
+    "/body[1]/DocFragment[3]/body[1]/p[63]/text()[1].13",
+    0.8,
+    1_900_000_000,
+  );
   let (output, out) = s.run(&["pull", "--book", "book-a.kepub", "--write", "--force"]);
   assert!(output.status.success(), "{out}");
-  assert!(
-    out.contains("not translated: positions back into a kepub are not translated yet"),
-    "{out}"
+  // p[63] is span kobo.64.1 in the kepub (the heading is kobo.1.1).
+  assert_eq!(s.stored(kepub), "OEBPS/text/chapter2.xhtml#kobo.64.1:13");
+  let percent: i64 = Connection::open(s.root.join(".kobo/KoboReader.sqlite"))
+    .unwrap()
+    .query_row(
+      "SELECT ___PercentRead FROM content WHERE ContentID = ?1",
+      [kepub],
+      |r| r.get(0),
+    )
+    .unwrap();
+  assert_eq!(percent, 80);
+  // After the pull both sides agree.
+  let (_, out) = s.run(&["status", "--book", "book-a.kepub"]);
+  assert!(out.contains("in sync"), "{out}");
+}
+
+#[test]
+fn an_unmapped_kepub_is_never_synced() {
+  let s = Setup::new(
+    "kepub-unmapped",
+    "kobo-clarabw-4.46-placeholder-books.sql",
+    KOBO_6_VERSION,
   );
+  let kepub_hash = partial_md5(&s.root.join("Books/book-a.kepub.epub")).unwrap();
+  s.server.store(&kepub_hash, AHEAD, 0.8, 1_900_000_000);
+  let before = s.stored("file:///mnt/onboard/Books/book-a.kepub.epub");
+  for args in [
+    &["push", "--book", "book-a.kepub", "--force"][..],
+    &["pull", "--book", "book-a.kepub", "--write", "--force"],
+  ] {
+    let (output, out) = s.run(args);
+    assert!(output.status.success(), "{out}");
+    assert!(
+      out.contains("not mapped: a kepub syncs only under its original EPUB"),
+      "{out}"
+    );
+  }
+  assert!(s.server.puts().is_empty());
   assert_eq!(
     s.stored("file:///mnt/onboard/Books/book-a.kepub.epub"),
     before

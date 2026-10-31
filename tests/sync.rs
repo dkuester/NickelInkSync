@@ -85,8 +85,13 @@ fn push_sends_each_book_once() {
     )),
     "{out}"
   );
-  // All three placeholder books translate.
-  assert_eq!(s.server.puts().len(), 3);
+  // The two plain EPUBs translate; the `.kepub.epub` is not mapped, so it
+  // never reaches the server under its own checksum.
+  assert_eq!(s.server.puts().len(), 2);
+  assert!(
+    out.contains("not mapped: a kepub syncs only under its original EPUB"),
+    "{out}"
+  );
   let put = s
     .server
     .puts()
@@ -103,7 +108,7 @@ fn push_sends_each_book_once() {
 
   // Each position sent is in the history.
   let history = nickelinksync::history::read(&s.root.join("no-data/history.jsonl"), 10).unwrap();
-  assert_eq!(history.len(), 3);
+  assert_eq!(history.len(), 2);
   let sent = history.iter().find(|e| e.document == book_hash()).unwrap();
   assert_eq!(sent.direction, nickelinksync::history::Direction::Push);
   assert_eq!(sent.position, XPOINTER);
@@ -113,10 +118,10 @@ fn push_sends_each_book_once() {
 
   // Nothing changed since: nothing is sent again.
   let out = stdout(&s.run(&["push"]));
-  assert_eq!(s.server.puts().len(), 3, "{out}");
+  assert_eq!(s.server.puts().len(), 2, "{out}");
   assert!(out.contains("  in sync   "), "{out}");
   let history = nickelinksync::history::read(&s.root.join("no-data/history.jsonl"), 10).unwrap();
-  assert_eq!(history.len(), 3);
+  assert_eq!(history.len(), 2);
 }
 
 #[test]

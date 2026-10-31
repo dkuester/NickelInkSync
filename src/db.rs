@@ -701,4 +701,45 @@ mod tests {
       "file:/Volumes/My%20Kobo/a%3Fb%23c.sqlite"
     );
   }
+
+  /// A kepub's cached pages start and end at spans, in the form of
+  /// `ChapterIDBookmarked`: a span with an offset compares inside them.
+  #[test]
+  fn kepub_spans_against_cached_pages() {
+    let conn = Connection::open_in_memory().unwrap();
+    conn
+      .execute_batch(
+        "CREATE TABLE CachePersistenceRenderedPageData (id TEXT, pageStartLocation TEXT,
+           pageEndLocation TEXT, contentId TEXT);
+         CREATE TABLE CachePersistenceRenderedPageChapterData
+           (cachePersistenceRenderedPageDataId TEXT);
+         INSERT INTO CachePersistenceRenderedPageData VALUES
+           ('a', 'c2.xhtml#kobo.1.1', 'c2.xhtml#kobo.3.1:120', 'book'),
+           ('b', 'c2.xhtml#kobo.3.1:121', 'c2.xhtml#kobo.6.1:15', 'book'),
+           ('c', 'c3.xhtml#kobo.1.1', 'c3.xhtml#kobo.4.1:7', 'book');",
+      )
+      .unwrap();
+    // In page b: nothing goes.
+    assert_eq!(
+      drop_stale_pages(&conn, "book", "c2.xhtml#kobo.6.1:3").unwrap(),
+      0
+    );
+    assert_eq!(
+      drop_stale_pages(&conn, "book", "c2.xhtml#kobo.3.1").unwrap(),
+      0
+    );
+    // Behind both pages of c2: they go, c3 stays.
+    assert_eq!(
+      drop_stale_pages(&conn, "book", "c2.xhtml#kobo.64.1:13").unwrap(),
+      2
+    );
+    let left: Vec<String> = conn
+      .prepare("SELECT id FROM CachePersistenceRenderedPageData")
+      .unwrap()
+      .query_map([], |r| r.get(0))
+      .unwrap()
+      .collect::<Result<_, _>>()
+      .unwrap();
+    assert_eq!(left, ["c"]);
+  }
 }

@@ -9,7 +9,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use nickelinksync::epub::Epub;
-use nickelinksync::position::{from_xpointer, to_xpointer, Anchor, PointFlavor, Position};
+use nickelinksync::position::{
+  from_xpointer, from_xpointer_kepub, to_xpointer, Anchor, PointFlavor, Position,
+};
 use rusqlite::Connection;
 
 fn fixtures() -> PathBuf {
@@ -355,4 +357,109 @@ fn xpointer_fallbacks() {
   }
   // Back to Kobo 4.x is not done yet.
   assert!(from_xpointer(&mut book, "/body[1]/DocFragment[3]", PointFlavor::JoinText).is_err());
+}
+
+/// Kobo kepub highlights there and back (as firmware 6.x stores a reading
+/// position, span plus offset), and KOReader's highlights of the same words
+/// in the kepub back to exactly the Kobo's spans.
+#[test]
+fn kobo_kepub_highlights_round_trip() {
+  let db = load("kobo-clarabw-4.46-probe-books.sql");
+  let flavor = PointFlavor::AllNodes;
+  for (file, sdr) in [
+    ("book-p.kepub.epub", "book-p.kepub.sdr"),
+    ("book-q.kepub.epub", "book-q.kepub.sdr"),
+  ] {
+    let mut book = epub(file);
+    let highlights = device_highlights(&db, file);
+    assert_eq!(highlights.len(), 8, "{file}");
+    for (word, position) in highlights {
+      let there = to_xpointer(&mut book, &position, flavor).unwrap();
+      let back = from_xpointer_kepub(&mut book, &there.xpointer, flavor).unwrap();
+      assert!(back.exact, "{file} {word}");
+      assert_eq!(back.position, position, "{file} {word}: {}", there.xpointer);
+
+      let koreader = from_xpointer_kepub(&mut book, &koreader_pos0(sdr, &word), flavor).unwrap();
+      assert_eq!(koreader.position, position, "{file} {word} from KOReader");
+    }
+  }
+}
+
+#[test]
+fn kobo_6_kepub_reading_positions_round_trip() {
+  let flavor = PointFlavor::AllNodes;
+  let mut book = epub("book-r.kepub.epub");
+  for stored in [
+    "OEBPS/text/chapter2.xhtml#kobo.17.1:204",
+    "OEBPS/text/chapter2.xhtml#kobo.118.1",
+    "OEBPS/text/chapter2.xhtml#kobo.1.1",
+  ] {
+    let there = to_xpointer(&mut book, &Position::parse(stored), flavor).unwrap();
+    let back = from_xpointer_kepub(&mut book, &there.xpointer, flavor).unwrap();
+    assert!(back.exact, "{stored}");
+    assert_eq!(back.position.to_string(), stored, "{}", there.xpointer);
+  }
+  // Book A: KOReader's own position at the heading of xhtml-0-81.xhtml.
+  let mut book = epub("book-a.kepub.epub");
+  let back = from_xpointer_kepub(
+    &mut book,
+    &lua_values("book-a.kepub.sdr", "last_xpointer")[0],
+    flavor,
+  )
+  .unwrap();
+  assert!(back.exact);
+  assert_eq!(
+    back.position.to_string(),
+    "OEBPS/xhtml/xhtml-0-81.xhtml#kobo.1.1"
+  );
+}
+
+#[test]
+fn kepub_xpointer_fallbacks() {
+  let flavor = PointFlavor::AllNodes;
+  let mut book = epub("book-r.kepub.epub");
+  // Chapter only, or a path the chapter does not have: its first span.
+  for xpointer in [
+    "/body[1]/DocFragment[3]",
+    "/body[1]/DocFragment[3]/body[1]/div[1]/div[1]/p[999]/span[1]/text()[1].0",
+  ] {
+    let back = from_xpointer_kepub(&mut book, xpointer, flavor).unwrap();
+    assert!(!back.exact, "{xpointer}");
+    assert_eq!(
+      back.position.to_string(),
+      "OEBPS/text/chapter2.xhtml#kobo.1.1"
+    );
+  }
+  // The line break between two paragraphs, outside any span: the next span.
+  let back = from_xpointer_kepub(
+    &mut book,
+    "/body[1]/DocFragment[3]/body[1]/div[1]/div[1]/text()[2].0",
+    flavor,
+  )
+  .unwrap();
+  assert!(back.exact);
+  assert_eq!(
+    back.position.to_string(),
+    "OEBPS/text/chapter2.xhtml#kobo.2.1"
+  );
+  // An EPUB path (no kepub wrappers) is not one in the kepub.
+  assert!(
+    !from_xpointer_kepub(
+      &mut book,
+      "/body[1]/DocFragment[3]/body[1]/p[63]/text()[1].0",
+      flavor
+    )
+    .unwrap()
+    .exact
+  );
+  for xpointer in ["/body[1]/DocFragment[99]/body[1]", "epubcfi(/6/4!/4/2)"] {
+    assert!(
+      from_xpointer_kepub(&mut book, xpointer, flavor).is_err(),
+      "{xpointer}"
+    );
+  }
+  // Firmware 4.x is not done.
+  assert!(
+    from_xpointer_kepub(&mut book, "/body[1]/DocFragment[3]", PointFlavor::JoinText).is_err()
+  );
 }

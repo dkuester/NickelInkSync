@@ -104,6 +104,7 @@ book under which checksum it syncs (shown as `sync as`):
 | mapped, EPUB unchanged | under the original EPUB's checksum, the position translated (below) |
 | mapped, EPUB missing or changed | not at all, until it is mapped again |
 | the same file as in the library, or the original EPUB of a mapping | under its own checksum |
+| a kepub (`.kepub.epub`) that is not mapped | not at all ("not mapped"), library or not: KOReader knows the book only by its original EPUB, so a kepub is never synced under its own checksum |
 | none of these, with a library configured | not at all ("not mapped"; `map suggest` helps) |
 | no library configured | under its own checksum, as before |
 
@@ -116,7 +117,9 @@ found by the 32 characters after it), *chapter start only* (the place in
 the chapter was not found), *from the percentage only* (the chapter is not
 in the other file, for example calibre's `titlepage.xhtml`). `pull
 --write` moves the server position back into a mapped EPUB on the Tolino
-the same way; into a kepub it writes nothing yet.
+the same way, and into a mapped kepub on a Kobo with firmware 6.x as the
+span Nickel stores (`#kobo.N.M:offset`); a kepub on Kobo firmware 4.x is
+not written.
 
 **Kindle.** `status` and `push` also read a Kindle's books, for every KFX
 that is mapped to its EPUB (`map add`): the last page read (`lpr` in the
@@ -170,7 +173,7 @@ EPUB chosen by hand; a mapping can be changed or removed. With a server
 in `config.ini` it shows the server's position next to the device's and
 sends positions per book or all at once; a `confirm` question comes as a
 dialog (keep the server's, or send the device's). On a Tolino or Kobo
-(not into kepubs yet, and not with Kobalt installed) "Get" and "Get all"
+(a kepub only once it is mapped, and not with Kobalt installed) "Get" and "Get all"
 write the server's position into the device database, after a
 backup of it in the data directory, as `pull --write` does; a `confirm`
 question comes as the same dialog (keep the device's, or take the
@@ -357,8 +360,8 @@ Tolino starts).
 - Sideloaded kepub and EPUB books without DRM
 - For now, put the **same file** on every device. The sync server tells
   books apart by a hash of the file, so a kepub on one device and the original
-  EPUB on another count as two different books. The manual mapping between
-  them is being built (see [Book mapping](#book-mapping-in-progress)).
+  EPUB on another count as two different books. A kepub syncs only once it
+  is mapped to its original EPUB (see [Book mapping](#book-mapping-in-progress)).
 
 ## History
 

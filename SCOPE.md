@@ -119,8 +119,9 @@ Kobo 6.0's `#kobo.17.1:204` in the Book R kepub lands on
 position in the EPUB; a calibre-like conversion of Book R (cover page,
 split chapter, changed text) moves both ways (`tests/transfer.rs`,
 `tests/sync_mapping.rs`). `pull --write` translates back into a mapped
-EPUB on the Tolino; a kepub is never written (Nickel expects a span
-there, and the translation back to a span is not done).
+EPUB on the Tolino and into a mapped kepub on a Kobo 6.x (as a span with
+offset, `position::from_xpointer_kepub`). A kepub syncs only through a
+mapping, never under its own checksum.
 
 **Place to send** (`position`, `transfer::step_back`): a device stores
 its page start, often mid-sentence; KOReader opens the page holding that
@@ -322,8 +323,15 @@ path that ends on an element, or does not resolve, gives the first
 non-whitespace text (of the element, or of the chapter). All 16 Tolino
 highlights in Book P and Book Q come back unchanged, KOReader's highlights
 of the same words give exactly the Tolino's points, and so do the Book R
-reading positions. Not done yet: back to the Kobo (kepub span, and the
-4.x point that joins text around comments).
+reading positions. Back into a kepub (`position::from_xpointer_kepub`): the text node
+the XPointer names, its `koboSpan` ancestor, and the UTF-16 units of the
+span's text before the place, stored as `#kobo.N.M:offset` as Kobo 6.0
+does. A place outside every span (whitespace between paragraphs) moves to
+the next span. All 16 Kobo kepub highlights in Book P and Book Q come back
+unchanged, KOReader's highlights of the same words give exactly the
+Kobo's spans, and so do the Book R reading positions. Not done yet: the
+4.x point that joins text around comments, and the 4.x kepub span (no 4.x
+device left to check either).
 
 CDATA behaves like a comment in the Adobe point (skipped on Kobo 4.46, a
 node on Tolino 5.18), is a `text()` node of its own in KOReader's XPointer,
