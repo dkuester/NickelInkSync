@@ -51,9 +51,19 @@ Plugin, siehe unten).
 `~/.local/share/nickelinksync/backups/KoboReader-<UTC-Zeit>.sqlite` (oder
 `backups` im Datenordner, siehe unten, oder `$NICKELINKSYNC_BACKUP_DIR`)
 und setzt dann die Position aller Bücher in einer Transaktion. Es schreibt
-nicht ohne `.kobo/version` (kein eingehängtes Gerät) und nicht, solange
-SQLite-Journaldateien neben der Datenbank liegen. Wirf das Gerät aus, bevor
-du das Buch öffnest. Rückgängig machen: die Sicherung bei eingehängtem Gerät
+nicht ohne `.kobo/version` (kein eingehängtes Gerät) und nicht, solange ein
+SQLite-Rollback-Journal (`-journal`) neben der Datenbank liegt. Die Dateien
+`-wal` und `-shm`, die der Tolino 5.18.279364 auf der USB-Partition liegen
+lässt, arbeitet es in die Datenbank ein (die Sicherung enthält ihren Inhalt
+dann mit). Wirf das Gerät aus, bevor
+du das Buch öffnest. Auf dem Kobo 6.0 und dem Tolino 5.18.279364 öffnet
+Nickel ein Buch aus seinem Zwischenspeicher fertig gezeichneter Seiten und,
+wenn keine gespeicherte Seite die geschriebene Stelle enthält, auf der
+ersten gespeicherten Seite dieses Kapitels. Deshalb verwirft das Schreiben
+auch die gespeicherten Seiten dieses Kapitels (nur dieses Kapitels und nur,
+wenn keine die Stelle enthält); es meldet das, und dann musst du das Gerät
+neu starten, nicht nur auswerfen, weil Nickel diese Seiten im Speicher
+hält. Rückgängig machen: die Sicherung bei eingehängtem Gerät
 zurück nach `.kobo/KoboReader.sqlite` kopieren.
 
 ### Buchzuordnung (im Aufbau)
@@ -167,7 +177,9 @@ Gerätedatenbank, vorher legt es eine Sicherung im Datenordner an, wie
 `pull --write`; eine Rückfrage kommt im selben Dialog (Gerät behalten oder
 Server übernehmen), danach liest es das Gerät neu ein. Wirf den Tolino
 aus, bevor du das Buch öffnest. „Verlauf“ zeigt, was CLI und Fenster
-gesendet und geschrieben haben (`history.jsonl` im Datenordner). Auf einen
+gesendet und geschrieben haben (`history.jsonl` im Datenordner).
+„Übersicht“ zeigt alle angesteckten Geräte nebeneinander: eine Zeile je
+Buch, je Gerät eine Spalte mit seiner Stelle, dazu die des Servers. Auf einen
 Kobo oder Kindle schreibt es nichts, nur `mappings.json` und den
 Verlauf. Beim Anstecken wird nichts
 synchronisiert. Deutsch oder Englisch nach Systemsprache, umschaltbar.

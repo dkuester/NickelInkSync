@@ -151,7 +151,8 @@ fixtures only.
   E3b, the server's position for each book and sending per book or all,
   with the `confirm` questions in a dialog, and a history window; E3c,
   taking the server's position into a Tolino per book or all (after a
-  backup of the database, the same dialog for `confirm`).
+  backup of the database, the same dialog for `confirm`); the overview of
+  all connected devices side by side, one column per device (O5).
 
 - **Read-only device database layer** (S–M): reading the books and their
   positions is done (`status --device`); still to do: resolve
@@ -203,8 +204,10 @@ fixtures only.
   after 3 s; PR #44). **Paused (28.10.):** after the Tolino updated itself to
   firmware 5.18.279364, Nickel opens at the chapter start even without
   the plugin. Writing `tolino_bookmark` as well (PR #40) did not change
-  that on the device. Lead, not proven: Nickel's cache of rendered pages;
-  every failing point lay where no page of the book was cached.
+  that on the device. Cause (proven 31.10., also on the Kobo 6.0): Nickel
+  opens from its cache of rendered pages and, with no cached page at the
+  written place, at the chapter's first cached page. The CLI now drops
+  that chapter's cached pages when it writes; device test pending.
 - **Store and cloud books without DRM** (S–M): downloaded Tolino store
   books without encryption sit in `.kobo/kepub/<ContentID>` and store
   positions like sideloaded EPUBs, but only sideloaded books sync so far.

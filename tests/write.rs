@@ -682,3 +682,195 @@ fn pull_after_reading_on_from_where_nickel_left_the_book() {
   let (_, out) = s.run(&["pull", "--content-id", BOOK, "--write", "--emit"]);
   assert!(out.contains("NICKELINKSYNC_UNANSWERED\t1"), "{out}");
 }
+
+/// Nickel's cache of rendered pages (Kobo 6.0, Tolino 5.18.279364), as far
+/// as the write reads it, with pages of book-a.epub: `(id, start, end)`.
+fn add_page_cache(conn: &Connection, pages: &[(&str, &str, &str)]) {
+  conn
+    .execute_batch(
+      "CREATE TABLE CachePersistenceRenderedPageData (id TEXT PRIMARY KEY,
+         pageStartLocation TEXT NOT NULL, pageEndLocation TEXT NOT NULL, contentId TEXT NOT NULL);
+       CREATE TABLE CachePersistenceRenderedPageChapterData (id INTEGER PRIMARY KEY AUTOINCREMENT,
+         cachePersistenceRenderedPageDataId TEXT NOT NULL, contentId TEXT NOT NULL);",
+    )
+    .unwrap();
+  for (id, start, end) in pages {
+    conn
+      .execute(
+        "INSERT INTO CachePersistenceRenderedPageData VALUES (?1, ?2, ?3, ?4)",
+        [*id, *start, *end, BOOK],
+      )
+      .unwrap();
+    conn
+      .execute(
+        "INSERT INTO CachePersistenceRenderedPageChapterData
+           (cachePersistenceRenderedPageDataId, contentId) VALUES (?1, ?2)",
+        [*id, BOOK],
+      )
+      .unwrap();
+  }
+}
+
+fn cached_pages(conn: &Connection) -> (Vec<String>, i64) {
+  let mut stmt = conn
+    .prepare("SELECT id FROM CachePersistenceRenderedPageData ORDER BY id")
+    .unwrap();
+  let ids = stmt
+    .query_map([], |r| r.get(0))
+    .unwrap()
+    .map(Result::unwrap)
+    .collect();
+  let chapter_rows = conn
+    .query_row(
+      "SELECT count(*) FROM CachePersistenceRenderedPageChapterData",
+      [],
+      |r| r.get(0),
+    )
+    .unwrap();
+  (ids, chapter_rows)
+}
+
+const CHAPTER_89: &str = "OEBPS/xhtml/xhtml-0-89.xhtml";
+const CHAPTER_90: &str = "OEBPS/xhtml/xhtml-0-90.xhtml";
+
+/// No cached page holds the place: the pages of its chapter go, so Nickel
+/// renders the place instead of opening at the chapter's first cached page;
+/// other chapters keep theirs, and the output asks for a restart.
+#[test]
+fn pull_write_drops_the_cached_pages_of_the_chapter() {
+  let s = Setup::tolino("write-page-cache");
+  add_page_cache(
+    &Connection::open(s.db()).unwrap(),
+    &[
+      (
+        "a",
+        &format!("{CHAPTER_89}#point(/1/2/5/1:0)"),
+        &format!("{CHAPTER_89}#point(/1/2/9/1:0)"),
+      ),
+      (
+        "b",
+        &format!("{CHAPTER_89}#point(/1/2/9/1:1)"),
+        &format!("{CHAPTER_89}#point(/1/2/13/1:0)"),
+      ),
+      (
+        "c",
+        &format!("{CHAPTER_90}#point(/1/2/1/1:0)"),
+        &format!("{CHAPTER_90}#point(/1/2/5/1:0)"),
+      ),
+    ],
+  );
+  s.server
+    .store(&hash("book-a.epub"), AHEAD, 0.9, LAST_READ + 60);
+  let (output, out) = s.run(&["pull", "--book", "book-a.epub", "--write"]);
+  assert!(output.status.success(), "{out}");
+  assert!(
+    out.contains("Dropped 2 of Nickel's cached pages that hid the place."),
+    "{out}"
+  );
+  assert!(out.contains("restart it before you open the book"), "{out}");
+  assert_eq!(
+    cached_pages(&Connection::open(s.db()).unwrap()),
+    (vec!["c".to_string()], 1)
+  );
+  assert_eq!(s.row(BOOK).0, AHEAD_ON_DEVICE);
+  assert!(s.journals().is_empty(), "{:?}", s.journals());
+}
+
+/// A cached page holds the place (`/1/2/1/1:0` lies in it): Nickel finds it
+/// by the place, so nothing is dropped.
+#[test]
+fn pull_write_keeps_a_cached_page_that_holds_the_place() {
+  let s = Setup::tolino("write-page-cache-kept");
+  add_page_cache(
+    &Connection::open(s.db()).unwrap(),
+    &[
+      (
+        "a",
+        &format!("{CHAPTER_89}#point(/1/2/1/1:0)"),
+        &format!("{CHAPTER_89}#point(/1/2/5/1:0)"),
+      ),
+      (
+        "b",
+        &format!("{CHAPTER_89}#point(/1/2/5/1:1)"),
+        &format!("{CHAPTER_89}#point(/1/2/9/1:0)"),
+      ),
+    ],
+  );
+  s.server
+    .store(&hash("book-a.epub"), AHEAD, 0.9, LAST_READ + 60);
+  let (output, out) = s.run(&["pull", "--book", "book-a.epub", "--write"]);
+  assert!(output.status.success(), "{out}");
+  assert!(!out.contains("Dropped"), "{out}");
+  assert!(
+    out.contains("Eject the device before you open the book."),
+    "{out}"
+  );
+  assert_eq!(
+    cached_pages(&Connection::open(s.db()).unwrap()),
+    (vec!["a".to_string(), "b".to_string()], 2)
+  );
+}
+
+/// What Tolino 5.18.279364 leaves on the USB partition: `-wal` and `-shm`
+/// next to the database, with a change still in the WAL, and no one holding
+/// the database. The write backs up the database with that change, folds
+/// the WAL in and leaves one file.
+#[test]
+fn pull_write_folds_in_a_wal_nickel_left_behind() {
+  let s = Setup::tolino("write-left-wal");
+  {
+    let conn = Connection::open(s.db()).unwrap();
+    let _: String = conn
+      .query_row("PRAGMA journal_mode = WAL", [], |r| r.get(0))
+      .unwrap();
+    conn.pragma_update(None, "wal_autocheckpoint", 0).unwrap();
+    conn
+      .set_db_config(
+        rusqlite::config::DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE,
+        true,
+      )
+      .unwrap();
+    conn
+      .execute(
+        "UPDATE content SET Title = 'Changed in the WAL' WHERE ContentID = ?1",
+        [BOOK],
+      )
+      .unwrap();
+  }
+  assert!(
+    s.journals().iter().any(|j| j.ends_with("-wal")),
+    "{:?}",
+    s.journals()
+  );
+  s.server
+    .store(&hash("book-a.epub"), AHEAD, 0.9, LAST_READ + 60);
+  let (output, out) = s.run(&["pull", "--book", "book-a.epub", "--write"]);
+  assert!(output.status.success(), "{out}");
+  assert!(out.contains("Wrote 1 position(s) to the device."), "{out}");
+  assert!(s.journals().is_empty(), "{:?}", s.journals());
+  let conn = Connection::open(s.db()).unwrap();
+  let (title, position): (String, String) = conn
+    .query_row(
+      "SELECT Title, ChapterIDBookmarked FROM content WHERE ContentID = ?1",
+      [BOOK],
+      |r| Ok((r.get(0)?, r.get(1)?)),
+    )
+    .unwrap();
+  assert_eq!(
+    (title.as_str(), position.as_str()),
+    ("Changed in the WAL", AHEAD_ON_DEVICE)
+  );
+  // The backup holds the WAL's change and the old position.
+  let backups = s.backups();
+  assert_eq!(backups.len(), 1, "{backups:?}");
+  let (title, position): (String, String) = Connection::open(&backups[0])
+    .unwrap()
+    .query_row(
+      "SELECT Title, ChapterIDBookmarked FROM content WHERE ContentID = ?1",
+      [BOOK],
+      |r| Ok((r.get(0)?, r.get(1)?)),
+    )
+    .unwrap();
+  assert_eq!(title, "Changed in the WAL");
+  assert_ne!(position, AHEAD_ON_DEVICE);
+}

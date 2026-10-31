@@ -32,7 +32,7 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0 bis E3c erledigt; als Nächstes E4). **Danach
+fertig, D2 läuft (E0 bis E3c und O5 erledigt; als Nächstes E4). **Danach
 der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
 
 ## Grundlagen
@@ -288,8 +288,14 @@ der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
     (`Session::against`, für `status`, `push`, `pull` und die GUI). Bei
     „gleich“ sind „Senden“ und „Holen“ ausgegraut; „Alle senden“ und „Alle
     holen“ lassen solche Bücher aus.
-  - [ ] **ich:** Geräteansicht nebeneinander (O5): aus E3c herausgenommen,
-    die Gestaltung ist noch offen (siehe Frage im PR).
+  - [x] **ich:** Geräteansicht nebeneinander (O5), wie entschieden mit
+    einer Spalte je Gerät: Knopf „Übersicht“ oben, ein Fenster mit einer
+    Zeile je Buch (KOSync-Prüfsumme, also auch kepub und Kindle-Kopie in
+    derselben Zeile), je angestecktem Gerät eine Spalte mit Prozent (Zeit
+    und XPointer beim Darüberfahren), dazu die Spalte „Server“. Nur Bücher,
+    die synchronisiert werden; „Neu laden“, nach Senden und Holen lädt es
+    von selbst neu.
+  - [ ] **du:** O5: Tolino und Kobo zusammen anstecken, „Übersicht“ öffnen.
   - [x] **du:** E3c: Book R vom Server auf den Tolino holen, auswerfen,
     öffnen (2026-10-31): Holen schreibt die richtige Stelle, danach „gleich“
     und ausgegraute Knöpfe. Nickel öffnet nur am Kapitelanfang (R2-1 statt
@@ -765,9 +771,24 @@ der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
     die gezogene Stelle, Nickel öffnete trotzdem am Kapitelanfang. Damit
     ist `tolino_bookmark` nicht die Ursache; beide Stellen lagen wieder
     außerhalb der gespeicherten Seiten.
-  - [ ] **ich:** Seiten-Cache als Ursache
-    prüfen (Cache-Zeilen des Buchs löschen, dann öffnen), `libnickel` von
-    5.18.279364 beschaffen und die Symbole neu prüfen. Position über Nickel selbst
+  - [x] **du + ich:** Ursache bewiesen (31.10., Syslog über NickelMenu):
+    Nickel öffnet aus seinem Seiten-Cache und nimmt die erste gespeicherte
+    Seite des Kapitels, wenn keine die Stelle enthält. Nur die Seiten des
+    Zielkapitels löschen und neu starten: Book R öffnete bei R2-149, die
+    Seiten von Kapitel 3 blieben. Auf dem Kobo 6.0 genauso.
+  - [x] **ich:** CLI verwirft beim Schreiben die gespeicherten Seiten des
+    Zielkapitels, wenn keine die Stelle enthält (USB und live); über USB
+    meldet sie, dass das Gerät neu gestartet werden muss.
+  - [x] **du:** Gerätetest (31.10.): über USB 4 Seiten verworfen, nach
+    Neustart R2-116 für R2-117; über das Plugin ohne Neustart 14 Seiten
+    verworfen, R3-66 für R3-67.
+  - [x] **ich:** Über USB blieb seit 5.18.279364 immer eine `-wal`-Datei
+    liegen und blockierte das Schreiben; die CLI arbeitet sie jetzt nach
+    einer Sicherung ein.
+  - [ ] **ich (falls das Plugin ohne Neustart nicht reicht):** die Seiten
+    über Nickel selbst verwerfen (`PersistedCacheManager`); als letzter
+    Ausweg `deleteAllRelatedToBookInfo`. Früherer Plan, falls auch das
+    nicht hilft: Position über Nickel selbst
     schreiben, Vorbild Kobalt (MIT, nur das Konzept):
     `VolumeManager::updateBookmark`, `updateFields` in einer
     `DatabaseAdapter`-Transaktion; die CLI entscheidet dann nur noch
@@ -918,7 +939,8 @@ Auf dem Kobo ist das Plugin inaktiv.
   Kapitelzeilen sind ToC-Einträge (`SCOPE.md`).
 - [ ] **O3 Einstellungsdialog** auf dem Gerät (der Dialog aus C6 ist der Rahmen dafür).
 - [ ] **O4 Sync-Status** im Buchmenü; „Jetzt synchronisieren“ kommt mit C6.
-- [ ] **O5 Geräteübersicht** in `status`: alle Positionen eines Buchs nebeneinander.
+- [~] **O5 Geräteübersicht**: alle Positionen eines Buchs nebeneinander; im
+  Desktop-Client erledigt („Übersicht“), in `status` noch offen.
 - [ ] **O6 Markierungen auf Kobo 5.x/6.x nachtesten** · nicht mehr
   blockiert: Der Clara BW ist seit 2026-10-28 auf 6.0. · **du:** Book P auf
   dem Kobo mit Firmware 6.0 markieren. Auf 4.46 zeigt Nickel Markierungen im kepub verschoben und im

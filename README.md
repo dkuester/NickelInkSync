@@ -48,9 +48,16 @@ synced. The device is only read, never written, except by `pull --write`
 `~/.local/share/nickelinksync/backups/KoboReader-<UTC time>.sqlite` (or
 `backups` in the data directory, see below, or `$NICKELINKSYNC_BACKUP_DIR`),
 then sets the position of all books in one transaction. It refuses to
-write without `.kobo/version` (not a mounted device) or while SQLite
-journal files lie next to the database. Eject the device before you open
-the book. To undo, copy the backup back to `.kobo/KoboReader.sqlite` while
+write without `.kobo/version` (not a mounted device) or while a SQLite
+rollback journal (`-journal`) lies next to the database. The `-wal` and
+`-shm` files that Tolino 5.18.279364 leaves on the USB partition are folded
+into the database (the backup then holds their content too). Eject the device before you open
+the book. On Kobo 6.0 and Tolino 5.18.279364 Nickel opens a book from its
+cache of rendered pages and, when no cached page holds the written place,
+at the first cached page of that chapter. So the write also drops the
+cached pages of that chapter (only of that chapter, and only when none
+holds the place); it then says so, and the device has to be restarted, not
+only ejected, because Nickel keeps those pages in memory. To undo, copy the backup back to `.kobo/KoboReader.sqlite` while
 the device is mounted.
 
 ### Book mapping (in progress)
@@ -158,7 +165,9 @@ backup of it in the data directory, as `pull --write` does; a `confirm`
 question comes as the same dialog (keep the device's, or take the
 server's), and the device is read again afterwards. Eject the Tolino
 before you open the book. "History" lists what the CLI and the window
-sent and wrote (`history.jsonl` in the data directory). To a Kobo or a
+sent and wrote (`history.jsonl` in the data directory). "Overview"
+shows all connected devices side by side: one line per book, one column
+per device with its position, and the server's. To a Kobo or a
 Kindle it writes nothing, only `mappings.json` and the history.
 Nothing is synced when a device is connected. German or English after the
 system language, switchable. It shares `config.ini` and `mappings.json`
