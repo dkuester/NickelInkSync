@@ -32,7 +32,7 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0 bis E6a und O5 erledigt; als Nächstes E6b). **Danach
+fertig, D2 läuft (E0 bis E6b und O5 erledigt; als Nächstes E7). **Danach
 der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
 
 ## Release 0.1.0
@@ -379,9 +379,14 @@ Entscheidungen des Besitzers (2026-10-31):
     gewählt (zwei E-Reader und ein Smartphone im Sync-Kreis), bis 32 Pixel
     das erste Icon mit einem E-Reader; Gatekeeper hat nichts verhindert;
     das Icon stimmt auch bei laufender App.
-  - [ ] **ich:** **E6b** Hinweis auf neue Releases (höchstens einmal am Tag
+  - [x] **ich:** **E6b** Hinweis auf neue Releases (höchstens einmal am Tag
     über die GitHub-API, abschaltbar) und Fenster „Über“ mit Version und
-    Lizenzen (NickelInkSync, kepubify).
+    Lizenzen (NickelInkSync, kepubify). Umgesetzt: `/releases/latest`
+    (ohne Entwürfe und Vorabversionen), 10 s Zeitlimit, ohne Release (404)
+    kein Hinweis; Zeitpunkt und gefundene Version in `gui.json`, der
+    Hinweis bleibt, bis diese Version installiert ist; oben ein Link
+    „Neue Version … verfügbar“. Schalter in „Über“.
+  - [ ] **du:** E6b: „Über“ öffnen, Lizenzen ansehen, Schalter aus und an.
   - [ ] **ich:** **E7** Windows: Pfade für Konfiguration und Daten
     (`%APPDATA%`, heute nur `HOME`/XDG), Wechsellaufwerke erkennen,
     Anmeldeinformationsverwaltung, ZIP aus der CI (Windows-Runner); ohne

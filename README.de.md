@@ -213,6 +213,9 @@ dieselbe EPUB schon auf dem Gerät liegt; auf dem Kobo auf Wunsch als
 kepub über [kepubify](https://github.com/pgaskin/kepubify) (gesucht im
 `PATH`, in den Homebrew-Ordnern, in `~/go/bin` oder über
 `$NICKELINKSYNC_KEPUBIFY`), gleich der EPUB zugeordnet.
+„Über“ zeigt die Version und die Lizenzen (auch die von kepubify); einmal
+am Tag fragt das Fenster bei GitHub nach einer neueren Version und nennt sie
+oben mit Link (heruntergeladen wird nichts; in „Über“ abschaltbar).
 „Einstellungen“ bearbeitet `config.ini` (Server, Benutzer, Gerätename,
 `confirm`, `position`, Bibliothek) zeilenweise, Kommentare bleiben, vorher
 legt es `config.ini.bak` an; ein dort eingegebenes Passwort landet nur als
