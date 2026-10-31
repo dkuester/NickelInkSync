@@ -175,6 +175,84 @@ impl Device {
 }
 
 impl Device {
+  /// Puts the database back to the copy at `source` (a backup of this
+  /// device's database), after a backup of the database as it is now to
+  /// `backup`. Like [`Device::write_positions`] only on a mounted device and
+  /// never with a rollback journal; `source` must pass SQLite's check and
+  /// have the same `DbVersion`, so a backup from before a firmware update
+  /// never goes back. Goes through SQLite's backup API, so a `-wal` Nickel
+  /// left behind is folded into `backup` and cannot mix with the restored
+  /// pages.
+  pub fn restore(&self, source: &Path, backup: &Path) -> Result<(), Error> {
+    if self.live {
+      return Err(Error::Refused(
+        "the database is in use by Nickel; restore only to a device mounted over USB".into(),
+      ));
+    }
+    if self.firmware.is_none() {
+      return Err(Error::Refused(format!(
+        "{} has no readable .kobo/version, so it does not look like a mounted device",
+        self.root.display()
+      )));
+    }
+    let db_path = self.db_path();
+    if let Some(journal) = journal_files(&db_path)
+      .iter()
+      .find(|j| j.to_string_lossy().ends_with("-journal"))
+    {
+      return Err(Error::Refused(format!(
+        "{} exists; eject the device properly and mount it again",
+        journal.display()
+      )));
+    }
+    let copy = Connection::open_with_flags(source, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    let check: String = copy.query_row("PRAGMA quick_check", [], |row| row.get(0))?;
+    if check != "ok" {
+      return Err(Error::Refused(format!(
+        "{} fails SQLite's check: {check}",
+        source.display()
+      )));
+    }
+    let theirs = DeviceDb::from_connection(copy).version()?;
+    let ours = self.db.version()?;
+    if theirs != ours {
+      return Err(Error::Refused(format!(
+        "{} has database version {theirs}, the device {ours} (a firmware update since): not restored",
+        source.display()
+      )));
+    }
+    let mut conn = Connection::open_with_flags(&db_path, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
+    conn.pragma_update(None, "locking_mode", "EXCLUSIVE")?;
+    backup_through_sqlite(&conn, backup)?;
+    conn.restore(
+      rusqlite::MAIN_DB,
+      source,
+      None::<fn(rusqlite::backup::Progress)>,
+    )?;
+    let mode: String = conn.query_row("PRAGMA journal_mode", [], |row| row.get(0))?;
+    if mode.eq_ignore_ascii_case("wal") {
+      let (busy, _, _): (i64, i64, i64) =
+        conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |row| {
+          Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })?;
+      if busy != 0 {
+        return Err(Error::Io(
+          db_path.clone(),
+          io::Error::other("checkpoint did not finish; do not eject yet, run again"),
+        ));
+      }
+    }
+    conn.close().map_err(|(_, e)| e)?;
+    remove_empty_wal(&db_path)?;
+    if let Some(journal) = journal_files(&db_path).into_iter().next() {
+      return Err(Error::Io(
+        journal,
+        io::Error::other("left over after restoring; do not eject yet, run again"),
+      ));
+    }
+    Ok(())
+  }
+
   /// Writes new positions while Nickel runs and holds the database (the
   /// plugin, just before Nickel opens the book): Nickel reads the book row
   /// again when it opens a book, so a consistent row is what makes it open
@@ -622,5 +700,46 @@ mod tests {
       file_uri(Path::new("/Volumes/My Kobo/a?b#c.sqlite")),
       "file:/Volumes/My%20Kobo/a%3Fb%23c.sqlite"
     );
+  }
+
+  /// A kepub's cached pages start and end at spans, in the form of
+  /// `ChapterIDBookmarked`: a span with an offset compares inside them.
+  #[test]
+  fn kepub_spans_against_cached_pages() {
+    let conn = Connection::open_in_memory().unwrap();
+    conn
+      .execute_batch(
+        "CREATE TABLE CachePersistenceRenderedPageData (id TEXT, pageStartLocation TEXT,
+           pageEndLocation TEXT, contentId TEXT);
+         CREATE TABLE CachePersistenceRenderedPageChapterData
+           (cachePersistenceRenderedPageDataId TEXT);
+         INSERT INTO CachePersistenceRenderedPageData VALUES
+           ('a', 'c2.xhtml#kobo.1.1', 'c2.xhtml#kobo.3.1:120', 'book'),
+           ('b', 'c2.xhtml#kobo.3.1:121', 'c2.xhtml#kobo.6.1:15', 'book'),
+           ('c', 'c3.xhtml#kobo.1.1', 'c3.xhtml#kobo.4.1:7', 'book');",
+      )
+      .unwrap();
+    // In page b: nothing goes.
+    assert_eq!(
+      drop_stale_pages(&conn, "book", "c2.xhtml#kobo.6.1:3").unwrap(),
+      0
+    );
+    assert_eq!(
+      drop_stale_pages(&conn, "book", "c2.xhtml#kobo.3.1").unwrap(),
+      0
+    );
+    // Behind both pages of c2: they go, c3 stays.
+    assert_eq!(
+      drop_stale_pages(&conn, "book", "c2.xhtml#kobo.64.1:13").unwrap(),
+      2
+    );
+    let left: Vec<String> = conn
+      .prepare("SELECT id FROM CachePersistenceRenderedPageData")
+      .unwrap()
+      .query_map([], |r| r.get(0))
+      .unwrap()
+      .collect::<Result<_, _>>()
+      .unwrap();
+    assert_eq!(left, ["c"]);
   }
 }

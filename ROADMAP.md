@@ -126,6 +126,14 @@ drafts the release; only the owner tags and publishes.
       refuses `--live` and `--write`, and the desktop client blocks "Get";
       sending over USB only warns. Same rule on Kobo and Tolino, in
       `src/kobalt.rs`; override `.adds/NickelInkSync/ignore-kobalt` for tests
+- [x] Position translation back into a kepub (Kobo 6.x): KOReader XPointer
+      → `#kobo.N.M:offset` (`position::from_xpointer_kepub`), round trip
+      with all Kobo kepub highlights of Book P and Book Q and the Book R
+      reading positions; `pull --write` writes a mapped kepub on the Kobo.
+      A kepub now syncs only through a mapping, under its original EPUB's
+      checksum, so the on-device plugin skips kepubs until mappings reach
+      the device. Checked on the Clara BW (6.0) on 2026-10-31: kepub and
+      EPUB open at KOReader's place after a restart, and back
 
 ## Quick wins
 
@@ -185,9 +193,11 @@ fixtures only.
   and the key in the system keychain on macOS and Windows, which the CLI
   reads too; E5a, copying books of the library to a Kobo or Tolino
   without overwriting anything, on a Kobo optionally as kepubs (kepubify)
-  mapped to their EPUB; E6a, the macOS package (universal app in a `.dmg`
-  with kepubify, the CLI as a ZIP, built by `packaging/macos/package.sh`
-  and the CI job `package-macos`).
+  mapped to their EPUB; E5b, putting a backup of the device database back
+  (`restore` in the CLI and a dialog), only onto the device it came from
+  and the same database version; E6a, the macOS package (universal app in
+  a `.dmg` with kepubify, the CLI as a ZIP, built by
+  `packaging/macos/package.sh` and the CI job `package-macos`).
 
 - **Read-only device database layer** (S–M): reading the books and their
   positions is done (`status --device`); still to do: resolve
@@ -197,14 +207,13 @@ fixtures only.
   `VolumeIndex` is a ToC index, not a spine index. Fixtures: the Clara BW
   and Shine Color databases in `tests/fixtures/db/`.
 - **Position translation, back to the Kobo** (S–M, stage C1 of the
-  on-device client): KOReader XPointer → Kobo span with offset (kepub),
-  for `pull` on the Kobo, checked on 6.0; the 4.x Adobe
-  point only against the fixtures. Position format and chapter rows on
-  6.0 still to be checked. Back to
-  the Tolino is done (see "Recently completed").
+  on-device client): KOReader XPointer → Kobo span with offset (kepub) is
+  done and checked on 6.0 (see "Recently completed"); the
+  4.x Adobe point only against the fixtures. Back to the Tolino is done.
 - **USB write-back on the Kobo** (S–M): `pull --write` works on the
-  Tolino (see "Recently completed"); the Kobo needs the reverse
-  translation for kepub first.
+  Tolino and for EPUBs on the Kobo 6.0; into a mapped kepub it writes the
+  span with offset (see "Recently completed"), checked on the Clara BW. The desktop client's "Get" and "Get all" take mapped
+  kepubs too.
 - **Messages in the Tolino plugin** (S): each outcome of opening and
   leaving a book as one of Nickel's toasts, chosen by `notify` in
   `config.ini` (`all`, `errors`, `none`). Verified on the Tolino, also

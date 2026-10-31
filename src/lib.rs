@@ -25,6 +25,7 @@ pub mod map;
 pub mod mapping;
 pub mod not_in_line;
 pub mod position;
+pub mod restore;
 pub mod session;
 pub mod suggest;
 pub mod sync;
