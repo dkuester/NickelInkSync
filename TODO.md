@@ -706,6 +706,13 @@ fertig, D2 läuft (E0 bis E3c erledigt; als Nächstes E4).
   - [ ] **ich (nach dem Test):** Gerätesprache: Das Log zeigt `QLocale()`
     beim Start; folgt sie Nickels Spracheinstellung, kommen die Meldungen
     auch auf Englisch.
+  - [x] **ich:** Aus den Gerätetests (25.–28.10.) übernommen: kürzere
+    Toast-Texte (der Tolino schneidet nach etwa 24/45 Zeichen ab), längere
+    Anzeige (5 s, Probleme 8 s), strengere Nähe-Prüfung nach dem Öffnen
+    (12 statt 40 Knoten), die Prüfung fragt bei noch leerer Stelle bis zu
+    8 s nach, und das Log zeigt die Buchzeile beim Öffnen und was Nickel
+    bis zum Verlassen daran ändert. Das Neuladen von Nickels Buch-Cache
+    bleibt in PR #26.
 - [ ] **N6 Zuordnungen auf dem Gerät** (nach D2, vor dem Kobo-Plugin N2) ·
   Lücke, die du am 2026-10-29 bemerkt hast: Am Rechner sendet `push` ein
   zugeordnetes Buch (kepub, von Calibre verändertes EPUB) unter der
