@@ -139,6 +139,13 @@ pub struct Texts {
   pub copy_as_kepub: &'static str,
   pub copy_as_kepub_hint: &'static str,
   pub no_kepubify: &'static str,
+  pub restore_open: &'static str,
+  pub restore_hint: &'static str,
+  pub restore_title: &'static str,
+  pub restore_warning: &'static str,
+  pub no_backups: &'static str,
+  pub backup_device_unknown: &'static str,
+  pub restore_button: &'static str,
   pub settings: &'static str,
   pub settings_hint: &'static str,
   pub user: &'static str,
@@ -353,6 +360,22 @@ pub fn report(lang: Lang, report: &crate::sync::Report) -> String {
   line
 }
 
+/// After a backup was put back.
+pub fn restored(lang: Lang, before: &std::path::Path) -> String {
+  match lang {
+    Lang::De => format!(
+      "Sicherung zurückgespielt. Der Stand davor liegt in {}.\nGerät auswerfen und neu \
+       starten, bevor du ein Buch öffnest.",
+      before.display()
+    ),
+    Lang::En => format!(
+      "Backup restored. The state before is in {}.\nEject the device and restart it before \
+       you open a book.",
+      before.display()
+    ),
+  }
+}
+
 /// The copy button: "3 kopieren".
 pub fn copy_button(lang: Lang, n: usize) -> String {
   match lang {
@@ -528,6 +551,13 @@ static DE: Texts = Texts {
   copy_as_kepub: "Als kepub (kepubify) und der EPUB zuordnen",
   copy_as_kepub_hint: "Der Kobo liest kepubs mit seiner schnelleren Engine; die Zuordnung zur EPUB entsteht gleich mit, so synchronisiert das Buch mit KOReader.",
   no_kepubify: "kepubify nicht gefunden (PATH, /opt/homebrew/bin, /usr/local/bin, ~/go/bin oder NICKELINKSYNC_KEPUBIFY): Kopie nur als EPUB.",
+  restore_open: "Sicherung zurückspielen …",
+  restore_hint: "Eine Sicherung der Gerätedatenbank zurückspielen, die vor einem Schreiben angelegt wurde.",
+  restore_title: "Sicherung zurückspielen",
+  restore_warning: "Alles, was seit der Sicherung in der Gerätedatenbank geändert wurde (Lesepositionen, neue Bücher, Sammlungen), geht verloren. Der jetzige Stand wird vorher gesichert.",
+  no_backups: "Keine Sicherungen dieses Geräts.",
+  backup_device_unknown: "Gerät unbekannt, ältere Sicherung",
+  restore_button: "Zurückspielen",
   settings: "Einstellungen",
   settings_hint: "Gespeichert in config.ini, gemeinsam mit der CLI; vorher legt die App config.ini.bak an.",
   user: "Benutzer",
@@ -669,6 +699,13 @@ static EN: Texts = Texts {
   copy_as_kepub: "As kepub (kepubify), mapped to the EPUB",
   copy_as_kepub_hint: "The Kobo reads kepubs with its faster engine; the mapping to the EPUB is made at once, so the book syncs with KOReader.",
   no_kepubify: "kepubify not found (PATH, /opt/homebrew/bin, /usr/local/bin, ~/go/bin or NICKELINKSYNC_KEPUBIFY): copies as EPUB only.",
+  restore_open: "Restore a backup …",
+  restore_hint: "Put back a backup of the device database made before a write.",
+  restore_title: "Restore a backup",
+  restore_warning: "Everything changed in the device database since the backup (reading positions, new books, collections) is lost. The state as it is now is backed up first.",
+  no_backups: "No backups of this device.",
+  backup_device_unknown: "device unknown, older backup",
+  restore_button: "Restore",
   settings: "Settings",
   settings_hint: "Saved in config.ini, shared with the CLI; the app keeps config.ini.bak first.",
   user: "User",

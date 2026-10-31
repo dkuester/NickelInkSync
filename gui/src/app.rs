@@ -20,6 +20,7 @@ use crate::devices::{Found, Kind};
 use crate::i18n::{self, Choice, Lang, Texts};
 use crate::model::{Group, Loaded, Mapped, Row, Suggestions};
 use crate::overview::Overview;
+use crate::restore_dialog::{self, RestoreDialog};
 use crate::settings::Settings;
 use crate::settings_dialog::{self, Request, SettingsDialog};
 use crate::sync::{Compared, Question, ServerState};
@@ -47,6 +48,8 @@ enum Action {
   Pull(Vec<String>),
   /// Choose books of the library to copy onto the device.
   AddFromLibrary { kobo: bool },
+  /// Choose a backup of the device database to put back.
+  Restore,
   /// Ask before pushing a book without a reference EPUB.
   PushUnreferenced { id: String, title: String },
 }
@@ -117,6 +120,7 @@ pub struct App {
   overview: Option<Overview>,
   settings_dialog: Option<SettingsDialog>,
   copy_dialog: Option<CopyDialog>,
+  restore_dialog: Option<RestoreDialog>,
 }
 
 impl App {
@@ -155,6 +159,7 @@ impl App {
       overview: None,
       settings_dialog: None,
       copy_dialog: None,
+      restore_dialog: None,
       history: None,
     }
   }
@@ -296,6 +301,28 @@ impl App {
           self.copy_dialog = None;
           if current(&root) {
             self.notice = Some(result.map(|books| i18n::copied(lang, &books)));
+          }
+        }
+        Event::Backups(result) => {
+          if let Some(dialog) = &mut self.restore_dialog {
+            dialog.backups = Some(result);
+          }
+        }
+        Event::Restored { root, result } => {
+          let lang = self.lang();
+          match result {
+            Ok(before) => {
+              self.restore_dialog = None;
+              if current(&root) {
+                self.notice = Some(Ok(i18n::restored(lang, &before)));
+              }
+            }
+            Err(e) => {
+              if let Some(dialog) = &mut self.restore_dialog {
+                dialog.busy = false;
+                dialog.error = Some(e);
+              }
+            }
           }
         }
         Event::Settings(result) => {
@@ -538,6 +565,14 @@ impl App {
       Some(Action::Unmap { key, title }) => self.unmap_dialog = Some(UnmapDialog { key, title }),
       Some(Action::Push(ids)) => self.push(ids),
       Some(Action::Pull(ids)) => self.pull(ids),
+      Some(Action::Restore) => {
+        if let Some(selected) = &self.selected {
+          self.restore_dialog = Some(RestoreDialog::new());
+          self.worker.send(Command::Backups {
+            root: selected.root.clone(),
+          });
+        }
+      }
       Some(Action::AddFromLibrary { kobo }) => {
         self.copy_dialog = Some(CopyDialog::new(kobo, copy::kepubify().is_some()));
         self.worker.send(Command::LibraryBooks);
@@ -708,6 +743,26 @@ impl App {
         }
       }
       Some(copy_dialog::Request::Close) => self.copy_dialog = None,
+      None => {}
+    }
+  }
+
+  fn restore_dialog(&mut self, ctx: &egui::Context, t: &Texts) {
+    let Some(dialog) = &mut self.restore_dialog else {
+      return;
+    };
+    match restore_dialog::show(ctx, t, dialog) {
+      Some(restore_dialog::Request::Restore(backup)) => {
+        if let Some(selected) = &self.selected {
+          dialog.busy = true;
+          dialog.error = None;
+          self.worker.send(Command::Restore {
+            root: selected.root.clone(),
+            backup,
+          });
+        }
+      }
+      Some(restore_dialog::Request::Close) => self.restore_dialog = None,
       None => {}
     }
   }
@@ -1042,15 +1097,26 @@ fn loaded_view(
   }
   let mut action = None;
   if let Some(family) = loaded.family {
-    if ui
-      .button(t.add_from_library)
-      .on_hover_text(t.add_from_library_hint)
-      .clicked()
-    {
-      action = Some(Action::AddFromLibrary {
-        kobo: family == "Kobo",
-      });
-    }
+    ui.horizontal(|ui| {
+      if ui
+        .button(t.add_from_library)
+        .on_hover_text(t.add_from_library_hint)
+        .clicked()
+      {
+        action = Some(Action::AddFromLibrary {
+          kobo: family == "Kobo",
+        });
+      }
+      // Kobalt manages the positions; nothing goes back then either.
+      if !loaded.kobalt
+        && ui
+          .button(t.restore_open)
+          .on_hover_text(t.restore_hint)
+          .clicked()
+      {
+        action = Some(Action::Restore);
+      }
+    });
   }
   let compared = match server {
     Some(ServerState::Compared(compared)) => Some(compared),
@@ -1444,6 +1510,7 @@ impl eframe::App for App {
     self.overview_window(&ctx, t);
     self.settings_dialog(&ctx, t);
     self.copy_dialog(&ctx, t);
+    self.restore_dialog(&ctx, t);
   }
 }
 

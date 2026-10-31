@@ -174,7 +174,9 @@ fixtures only.
   and the key in the system keychain on macOS and Windows, which the CLI
   reads too; E5a, copying books of the library to a Kobo or Tolino
   without overwriting anything, on a Kobo optionally as kepubs (kepubify)
-  mapped to their EPUB.
+  mapped to their EPUB; E5b, putting a backup of the device database back
+  (`restore` in the CLI and a dialog), only onto the device it came from
+  and the same database version.
 
 - **Read-only device database layer** (S–M): reading the books and their
   positions is done (`status --device`); still to do: resolve
