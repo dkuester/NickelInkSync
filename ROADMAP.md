@@ -171,6 +171,17 @@ fixtures only.
   `config.ini` (`all`, `errors`, `none`). Verified on the Tolino, also
   opening within the chapter last read. Still to do: English texts (the
   plugin logs `QLocale()`, `de_DE` so far).
+- **Reliable take on opening, Tolino plugin** (S): two of five device runs
+  opened at the chapter start, because Nickel's in-memory `Volume` cache
+  does not see the row the CLI writes. A draft (PR #26) drops that cache
+  and loads the book again before Nickel opens it; in a later device test
+  Nickel opened the pulled page in nine of nine runs. The plugin's check
+  after opening now waits until Nickel knows its place (it often does not
+  after 3 s; PR #44). **Paused (28.10.):** after the Tolino updated itself to
+  firmware 5.18.279364, Nickel opens at the chapter start even without
+  the plugin. Writing `tolino_bookmark` as well (PR #40) did not change
+  that on the device. Lead, not proven: Nickel's cache of rendered pages;
+  every failing point lay where no page of the book was cached.
 - **NickelHook plugin for the Kobo 6.0** (M–L): the Tolino plugin (Qt6)
   built and checked for Kobo 6.0 (symbols from its `libnickel.so`). The
   Qt5 plugin for 4.x is on hold: no 4.x device to test on.
