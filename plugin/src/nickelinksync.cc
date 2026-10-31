@@ -330,6 +330,11 @@ static QString skip_reason(const QByteArray &reason)
     if (reason == "not-translated") {
         return QStringLiteral("Position passt nicht zum Buch");
     }
+    // On the device there are no mappings, so only a kepub is "not mapped":
+    // it syncs only through its original EPUB, from the computer.
+    if (reason == "not-mapped") {
+        return QStringLiteral("kepub ohne Zuordnung");
+    }
     return QStringLiteral("Buch oder Position nicht lesbar");
 }
 

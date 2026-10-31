@@ -878,3 +878,26 @@ fn pull_write_folds_in_a_wal_nickel_left_behind() {
   assert_eq!(title, "Changed in the WAL");
   assert_ne!(position, AHEAD_ON_DEVICE);
 }
+
+/// On the device there are no mappings: a kepub is never synced, and the
+/// plugin learns why ("not-mapped", its message "kepub ohne Zuordnung").
+#[test]
+fn live_kepub_is_neither_sent_nor_taken() {
+  let s = Setup::tolino("live-kepub");
+  let kepub = "file:///mnt/onboard/Books/book-a.kepub.epub";
+  let _nickel = nickel_running(&s, "OEBPS/xhtml/xhtml-0-81.xhtml#point(/1/2/1/1:0)");
+  let (_, out) = emitted(&s, &["push", "--live", "--content-id", kepub, "--emit"]);
+  assert!(
+    out.contains("\nNICKELINKSYNC_NOT_SENT\tnot-mapped\t"),
+    "{out}"
+  );
+  let (_, out) = emitted(
+    &s,
+    &["pull", "--live", "--content-id", kepub, "--write", "--emit"],
+  );
+  assert!(
+    out.contains("\nNICKELINKSYNC_NOT_TAKEN\tnot-mapped\t"),
+    "{out}"
+  );
+  assert!(s.server.puts().is_empty());
+}

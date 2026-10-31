@@ -104,7 +104,7 @@ book under which checksum it syncs (shown as `sync as`):
 | mapped, EPUB unchanged | under the original EPUB's checksum, the position translated (below) |
 | mapped, EPUB missing or changed | not at all, until it is mapped again |
 | the same file as in the library, or the original EPUB of a mapping | under its own checksum |
-| a kepub (`.kepub.epub`) that is not mapped | not at all ("not mapped"), library or not: KOReader knows the book only by its original EPUB, so a kepub is never synced under its own checksum |
+| a kepub (`.kepub.epub` or MimeType `application/x-kobo-epub+zip`) that is not mapped | not at all ("not mapped"), library or not: KOReader knows the book only by its original EPUB, so a kepub is never synced under its own checksum |
 | none of these, with a library configured | not at all ("not mapped"; `map suggest` helps) |
 | no library configured | under its own checksum, as before |
 
@@ -293,8 +293,10 @@ position from the server and the book opens there, when you leave the
 book it sends yours. It
 calls the same `nickelinksync` program on the device and follows the same
 `confirm` rule; it cannot ask yet, so a position that needs an answer is
-left alone and noted in the log. On a Kobo the plugin stays inactive for
-now.
+left alone and noted in the log. It does not know the mappings (they are
+on the computer), so it never syncs a kepub; the message then says "kepub
+ohne Zuordnung" (kepub without a mapping). On a Kobo the plugin stays
+inactive for now.
 
 1. Get `NickelInkSync-tolino` from the latest CI run (or `just package`,
    see [Build](#build)). It holds `Kobo.tgz` and a `.adds/NickelInkSync/`
