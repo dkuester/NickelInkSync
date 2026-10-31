@@ -434,9 +434,14 @@ der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
     `.kepub.epub` auf dem Tolino ebenso). Folge: Das Plugin auf dem Gerät
     kennt keine Zuordnungen und überspringt kepubs, bis die Zuordnungen
     aufs Gerät kommen.
-  - [ ] **du:** Am Kobo Clara BW (6.0) prüfen: `pull --write` in ein
-    zugeordnetes kepub (Book R), Kobo neu starten, öffnet Nickel an der
-    Stelle?
+  - [x] **du:** Am Kobo geprüft (2026-10-31, Clara BW 6.0.279225): KOReader bei
+    R3-130 auf den Server, `pull --write` schrieb ins kepub
+    `chapter3.xhtml#kobo.131.1` und in die EPUB
+    `chapter3.xhtml#point(/1/4/262/1:0)`, ließ 11 zwischengespeicherte
+    Seiten fallen; nach dem Neustart öffnen kepub und EPUB an der
+    richtigen Stelle. Im kepub weiter bis R3-140, `push` sendet unter der
+    EPUB-Prüfsumme `p[139]`, KOReader öffnet dort. Mit installiertem
+    Kobalt schreibt `pull --write` nichts, wie vorgesehen.
   - [ ] **ich (Kobo-Durchgang):** Positionsformat und Kapitelzeilen auf
     Kobo 6.0 prüfen (kepub-Span, Adobe-Point: zählt 6.0 Kommentare als
     Knoten wie der Tolino?); die CLI nimmt ab Firmware 5 das
@@ -966,12 +971,11 @@ Auf dem Kobo ist das Plugin inaktiv.
     Ergebnis in `docs/nickel-6.0-symbols.md`. Zusätzlich die Symbole für
     einen eigenen Dialog und den Buchmenü-Eintrag
     (`ActionProxyMixin::setupBookListMenu`).
-- [ ] **C1 kepub zurück** (K4-Rest): XPointer → `#kobo.N.M:offset`
+- [x] **C1 kepub zurück** (K4-Rest): XPointer → `#kobo.N.M:offset`
   (UTF-16-Einheiten), Fixtures Book P/Q/R; `pull --write` am Kobo per USB.
   - [x] **ich:** Übersetzung, Tests (PR #55; siehe K4).
-  - [ ] **ich:** P2 für den Kobo.
-  - [ ] **du:** Book R vom Server per USB auf den Kobo schreiben, auswerfen,
-    öffnen.
+  - [x] **du:** Book R vom Server per USB auf den Kobo schreiben, auswerfen,
+    öffnen: geprüft 2026-10-31, öffnet an der Stelle (siehe K4).
 - [ ] **C2 Basis-Stand und Vormerkliste** (nur Bibliothek und CLI)
   - [ ] **ich:** `.adds/NickelInkSync/state.json` (je Buch Basis-Stand,
     vorgemerkt); Drei-Wege-Regel in `sync.rs` mit `confirm`; `not-in-line.tsv`

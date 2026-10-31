@@ -121,7 +121,8 @@ L = a week or more, including verification.
       reading positions; `pull --write` writes a mapped kepub on the Kobo.
       A kepub now syncs only through a mapping, under its original EPUB's
       checksum, so the on-device plugin skips kepubs until mappings reach
-      the device (device test on the Clara BW still open)
+      the device. Checked on the Clara BW (6.0) on 2026-10-31: kepub and
+      EPUB open at KOReader's place after a restart, and back
 
 ## Quick wins
 
@@ -192,12 +193,11 @@ fixtures only.
   and Shine Color databases in `tests/fixtures/db/`.
 - **Position translation, back to the Kobo** (S–M, stage C1 of the
   on-device client): KOReader XPointer → Kobo span with offset (kepub) is
-  done (see "Recently completed"), the device test on 6.0 is open; the
+  done and checked on 6.0 (see "Recently completed"); the
   4.x Adobe point only against the fixtures. Back to the Tolino is done.
 - **USB write-back on the Kobo** (S–M): `pull --write` works on the
   Tolino and for EPUBs on the Kobo 6.0; into a mapped kepub it writes the
-  span with offset (see "Recently completed"), the device test on the
-  Clara BW is open. The desktop client's "Get" and "Get all" take mapped
+  span with offset (see "Recently completed"), checked on the Clara BW. The desktop client's "Get" and "Get all" take mapped
   kepubs too.
 - **Messages in the Tolino plugin** (S): each outcome of opening and
   leaving a book as one of Nickel's toasts, chosen by `notify` in
