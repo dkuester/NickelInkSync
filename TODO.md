@@ -824,7 +824,7 @@ der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
     8 s nach, und das Log zeigt die Buchzeile beim Öffnen und was Nickel
     bis zum Verlassen daran ändert. Das Neuladen von Nickels Buch-Cache
     bleibt in PR #26.
-- [~] **N7 Kobalt-Schutz** (von dir gewünscht, 2026-10-31) · Kobalt
+- [x] **N7 Kobalt-Schutz** (von dir gewünscht, 2026-10-31) · Kobalt
   schreibt die Lesepositionen selbst (über Nickel, auch auf dem Tolino) und
   hat auf `develop` seit dem 25.10. einen eigenen KOSync. Erkennung wie
   Kobalts eigene Deinstallation: `libkobalt.so` (oder `.failsafe`) da,
@@ -844,10 +844,11 @@ der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
     Start nach der Installation fehlt Kobalts `uninstall` noch (erwartet).
   - [x] **ich:** Toast jetzt 20 s nach `init`, wenn Kobalt beim Start
     erkannt wird (weiterhin auch beim Öffnen in Nickels Leser).
-  - [ ] **du:** Gerätetest am Tolino: Kobalt installieren, Buch öffnen
-    (Toast „NickelInkSync ist aus“, Log „inactive: Kobalt is installed“,
-    nichts gesendet); `ignore-kobalt` anlegen, Neustart, Sync läuft wieder;
-    Kobalt entfernen, Neustart, Sync läuft ohne Override.
+  - [x] **du:** Zweiter Gerätetest (2026-10-31, 17:52–17:58): ohne Kobalt
+    (nur der Ordner `.adds/kobalt` übrig) geholt und gesendet (82 %);
+    erster Start nach der Kobalt-Installation wie erwartet nicht erkannt;
+    beim nächsten Start erkannt, Toast „NickelInkSync ist aus“ nach etwa
+    20 s; beim Start danach kein Toast mehr (`kobalt-noticed`).
 - [ ] **N6 Zuordnungen auf dem Gerät** · geht in **C3** (Abschnitt
   Kobo-Client) auf; Weg (a) gewählt, nie Original-EPUBs aufs Gerät ·
   Lücke, die du am 2026-10-29 bemerkt hast: Am Rechner sendet `push` ein
