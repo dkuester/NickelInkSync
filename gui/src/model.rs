@@ -507,7 +507,8 @@ mod tests {
     unmap(&key).unwrap();
     let loaded = load(&root, Kind::Nickel, &mut |_, _| {}).unwrap();
     let row = loaded.rows.iter().find(|r| r.id == kepub).unwrap();
-    assert_eq!(row.group, Group::NoReference);
+    // A kepub without a mapping is never synced, library or not.
+    assert_eq!(row.group, Group::NotMapped);
     assert_eq!(row.key, None);
     assert!(unmap(&key).is_err());
     fs::remove_dir_all(&root).unwrap();

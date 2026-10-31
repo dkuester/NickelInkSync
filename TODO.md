@@ -397,10 +397,26 @@ der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
     KOReaders Server-Position in Book R (Anfang R2-63) in
     `OEBPS/text/chapter2.xhtml#point(/1/4/128/1:0)`, wie erwartet. Ob
     Nickel dort öffnet, prüft P2.
-  - [ ] **ich (C1):** Rückwärts für den Kobo: XPointer →
-    Kobo-Span (kepub), am Kobo 6.0 prüfen. Adobe-Point für 4.x (Text um
-    Kommentare zusammengefasst) nur noch gegen die 4.46-Fixtures, kein
-    4.x-Gerät mehr.
+  - [x] **ich (C1):** Rückwärts für den Kobo: XPointer →
+    Kobo-Span mit Offset (`#kobo.N.M:offset`, UTF-16-Einheiten,
+    `position::from_xpointer_kepub`). Rundreise: alle 16 Kobo-Markierungen
+    in den kepubs von Book P und Book Q kommen unverändert zurück,
+    KOReaders Markierungen derselben Wörter ergeben genau die Kobo-Spans,
+    ebenso die Leseposition `#kobo.17.1:204` in Book R. Eine Stelle
+    außerhalb jedes Spans (Leerraum zwischen Absätzen) geht zum nächsten
+    Span. `pull --write` schreibt in ein zugeordnetes kepub am Kobo 6.x;
+    der Seiten-Cache aus PR #48 vergleicht Spans genauso wie Points.
+    Kobo 4.x (Span ohne Offset, Adobe-Point mit zusammengefasstem Text)
+    wird nicht geschrieben, kein 4.x-Gerät mehr.
+  - [x] **du (Entscheidung, 2026-10-31):** Ein kepub wird **nur über eine
+    Zuordnung** zu seinem EPUB synchronisiert, immer unter der Prüfsumme
+    des EPUBs, nie unter der eigenen (auch ohne Bibliothek; ein
+    `.kepub.epub` auf dem Tolino ebenso). Folge: Das Plugin auf dem Gerät
+    kennt keine Zuordnungen und überspringt kepubs, bis die Zuordnungen
+    aufs Gerät kommen.
+  - [ ] **du:** Am Kobo Clara BW (6.0) prüfen: `pull --write` in ein
+    zugeordnetes kepub (Book R), Kobo neu starten, öffnet Nickel an der
+    Stelle?
   - [ ] **ich (Kobo-Durchgang):** Positionsformat und Kapitelzeilen auf
     Kobo 6.0 prüfen (kepub-Span, Adobe-Point: zählt 6.0 Kommentare als
     Knoten wie der Tolino?); die CLI nimmt ab Firmware 5 das
