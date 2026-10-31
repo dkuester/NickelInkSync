@@ -115,6 +115,13 @@ L = a week or more, including verification.
       refuses `--live` and `--write`, and the desktop client blocks "Get";
       sending over USB only warns. Same rule on Kobo and Tolino, in
       `src/kobalt.rs`; override `.adds/NickelInkSync/ignore-kobalt` for tests
+- [x] Position translation back into a kepub (Kobo 6.x): KOReader XPointer
+      → `#kobo.N.M:offset` (`position::from_xpointer_kepub`), round trip
+      with all Kobo kepub highlights of Book P and Book Q and the Book R
+      reading positions; `pull --write` writes a mapped kepub on the Kobo.
+      A kepub now syncs only through a mapping, under its original EPUB's
+      checksum, so the on-device plugin skips kepubs until mappings reach
+      the device (device test on the Clara BW still open)
 
 ## Quick wins
 
@@ -184,14 +191,14 @@ fixtures only.
   `VolumeIndex` is a ToC index, not a spine index. Fixtures: the Clara BW
   and Shine Color databases in `tests/fixtures/db/`.
 - **Position translation, back to the Kobo** (S–M, stage C1 of the
-  on-device client): KOReader XPointer → Kobo span with offset (kepub),
-  for `pull` on the Kobo, checked on 6.0; the 4.x Adobe
-  point only against the fixtures. Position format and chapter rows on
-  6.0 still to be checked. Back to
-  the Tolino is done (see "Recently completed").
+  on-device client): KOReader XPointer → Kobo span with offset (kepub) is
+  done (see "Recently completed"), the device test on 6.0 is open; the
+  4.x Adobe point only against the fixtures. Back to the Tolino is done.
 - **USB write-back on the Kobo** (S–M): `pull --write` works on the
-  Tolino (see "Recently completed"); the Kobo needs the reverse
-  translation for kepub first.
+  Tolino and for EPUBs on the Kobo 6.0; into a mapped kepub it writes the
+  span with offset (see "Recently completed"), the device test on the
+  Clara BW is open. The desktop client's "Get" and "Get all" take mapped
+  kepubs too.
 - **Messages in the Tolino plugin** (S): each outcome of opening and
   leaving a book as one of Nickel's toasts, chosen by `notify` in
   `config.ini` (`all`, `errors`, `none`). Verified on the Tolino, also
