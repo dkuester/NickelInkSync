@@ -228,6 +228,18 @@ Thin C++ layer, no sync logic of its own:
 - A book opened without a pull (no network, or Nickel did not open the
   pulled chapter) is not pushed when it is left: its device position
   would overwrite a newer one on the server.
+- Kobalt (MIT, a reader inside Nickel that writes positions itself and,
+  on its development branch, syncs with KOSync itself): while it is
+  installed the plugin only calls the originals and the CLI refuses
+  `--live` (`NICKELINKSYNC_ERROR` kind `kobalt`) and any `--write`; over
+  USB `push` only warns. Installed means: `libkobalt.so` in
+  `/usr/local/Kobo/imageformats/` (or `libkobalt.so.failsafe` one folder
+  up, where NickelHook moves it for the first seconds of a start; not
+  visible over USB), `.adds/kobalt/uninstall` present and
+  `.adds/kobalt/uninstall-now` absent, Kobalt's own uninstall flags. The
+  rule is in `src/kobalt.rs`, the plugin repeats its paths (a test keeps
+  them equal); `.adds/NickelInkSync/ignore-kobalt` overrides it for tests.
+  The plugin file stays and works again once Kobalt is gone.
 - Settings (server URL, user, device name) in `.adds/NickelInkSync/config.ini`,
   in the same format as the desktop configuration (see the README), passed
   to the CLI with `--config`; the CLI itself lives next to it.

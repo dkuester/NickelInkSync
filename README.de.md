@@ -300,6 +300,17 @@ kurz, weil der Tolino längere abschneidet. `notify` in `config.ini` legt fest, 
 | `errors` | nur, was schiefging oder unterblieb: Server nicht erreicht, Position nicht übernommen, nicht gesendet |
 | `none` | nichts; im Log steht weiterhin alles |
 
+**Mit [Kobalt](https://github.com/nicoverbruggen/kobalt):** Kobalt, ein
+Leseprogramm, das in Nickel läuft, schreibt die Lesepositionen selbst und
+bekommt einen eigenen KOSync. Solange Kobalt installiert ist, schaltet sich
+das Plugin ab: Es schreibt nichts in die Gerätedatenbank und sendet nichts,
+sagt das einmal per Meldung („NickelInkSync ist aus“, etwa 20 Sekunden
+nach dem Start des Tolino) und bei jedem Start im Log. Das Plugin bleibt installiert und arbeitet wieder, sobald Kobalt
+entfernt ist (nach dem nächsten Start). Am Rechner verweigern `pull
+--write` und „Holen“ im Desktop-Client ein Gerät mit Kobalt; `push` und
+„Senden“ warnen nur. Ein übrig gebliebener Ordner `.adds/kobalt` ohne
+seine Datei `uninstall` (so entfernt man Kobalt von Hand) zählt nicht.
+
 **Deinstallieren:** eine leere Datei `.adds/NickelInkSync/uninstall`
 anlegen, auswerfen und den Tolino aus- und wieder einschalten (die Datei
 wird nur beim Start geprüft).
