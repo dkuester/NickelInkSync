@@ -63,8 +63,19 @@ ersten gespeicherten Seite dieses Kapitels. Deshalb verwirft das Schreiben
 auch die gespeicherten Seiten dieses Kapitels (nur dieses Kapitels und nur,
 wenn keine die Stelle enthält); es meldet das, und dann musst du das Gerät
 neu starten, nicht nur auswerfen, weil Nickel diese Seiten im Speicher
-hält. Rückgängig machen: die Sicherung bei eingehängtem Gerät
-zurück nach `.kobo/KoboReader.sqlite` kopieren.
+hält.
+
+Rückgängig machen: `nickelinksync restore --device /Volumes/KOBOeReader`
+listet die Sicherungen dieses Geräts, die neueste zuerst, und `--backup
+PFAD` spielt eine zurück: erst eine Sicherung des jetzigen Stands, dann die
+alte über SQLite (so mischt sich keine liegen gebliebene `-wal` hinein);
+danach das Gerät auswerfen und neu starten. Neben jeder Sicherung liegt
+eine `.device`-Datei, die ihr Gerät über eine Prüfsumme der Seriennummer
+nennt; die Sicherung eines anderen Geräts, eine aus einer anderen
+Datenbankversion (seitdem ein Firmware-Update) und, solange Kobalt
+installiert ist, jede Sicherung wird abgelehnt. Ältere Sicherungen stehen
+als „Gerät unbekannt“ in der Liste. Der Desktop-Client macht dasselbe mit
+„Sicherung zurückspielen …“.
 
 ### Buchzuordnung (im Aufbau)
 

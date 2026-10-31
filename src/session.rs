@@ -23,6 +23,7 @@ use crate::library::Library;
 use crate::mapping::{EpubState, Mapping, Store};
 use crate::not_in_line::NotInLine;
 use crate::position::{from_xpointer, to_xpointer, PointFlavor, Position, Translated, XPointer};
+use crate::restore;
 use crate::sync::{decide, iso_timestamp, parse_timestamp, Confirm, Decision, Direction, Local};
 use crate::transfer::{step_back, transfer, How};
 
@@ -788,14 +789,9 @@ impl Session {
     } else {
       // A second write in the same second (two clicks in the desktop
       // client) gets a backup of its own.
-      let backup = (1..)
-        .map(|n| match n {
-          1 => dir.join(format!("KoboReader-{stamp}.sqlite")),
-          n => dir.join(format!("KoboReader-{stamp}-{n}.sqlite")),
-        })
-        .find(|p| !p.exists())
-        .expect("a free name");
+      let backup = restore::new_path(&dir)?;
       let pages_dropped = self.device.write_positions(writes, &backup)?;
+      restore::tag(&backup, &self.device.root)?;
       Written::Mounted {
         backup,
         pages_dropped,

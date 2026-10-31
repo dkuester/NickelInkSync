@@ -57,8 +57,18 @@ cache of rendered pages and, when no cached page holds the written place,
 at the first cached page of that chapter. So the write also drops the
 cached pages of that chapter (only of that chapter, and only when none
 holds the place); it then says so, and the device has to be restarted, not
-only ejected, because Nickel keeps those pages in memory. To undo, copy the backup back to `.kobo/KoboReader.sqlite` while
-the device is mounted.
+only ejected, because Nickel keeps those pages in memory.
+
+To undo, `nickelinksync restore --device /Volumes/KOBOeReader` lists the
+backups of that device, newest first, and `--backup PATH` puts one back:
+first a backup of the database as it is, then the old one through SQLite
+(so a left-over `-wal` cannot mix with it), then eject and restart the
+device. Each backup has a `.device` file next to it naming its device by a
+checksum of the serial number; a backup of another device, one from
+another database version (a firmware update since) and, while Kobalt is
+installed, any backup is refused. Backups from before this list as of an
+unknown device. The desktop client does the same with "Restore a
+backup …"
 
 ### Book mapping (in progress)
 
@@ -166,7 +176,8 @@ backup of it in the data directory, as `pull --write` does; a `confirm`
 question comes as the same dialog (keep the device's, or take the
 server's), and the device is read again afterwards. Eject the device
 before you open the book, and restart it when the notice says so. "History" lists what the CLI and the window
-sent and wrote (`history.jsonl` in the data directory). "Add from
+sent and wrote (`history.jsonl` in the data directory). "Restore a backup …" puts back
+one of the device's database backups (as `restore` does). "Add from
 library" copies books of the library to `Books/` on a Kobo or Tolino,
 never over a file that is there or an EPUB already on the device; on a
 Kobo optionally as kepubs made by

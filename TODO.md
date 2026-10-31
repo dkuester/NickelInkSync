@@ -32,7 +32,7 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0 bis E5a und O5 erledigt; als Nächstes E5b). **Danach
+fertig, D2 läuft (E0 bis E5b und O5 erledigt; als Nächstes E6). **Danach
 der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
 
 ## Grundlagen
@@ -337,8 +337,17 @@ der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
   - [x] **du:** E5a: ein Buch auf den Tolino kopieren, eins als kepub auf
     den Kobo (2026-10-31): Tolino als EPUB, Kobo als kepub und gleich
     zugeordnet; am Kobo „Holen“ bei EPUBs, bei kepubs nur „Senden“.
-  - [ ] **ich:** **E5b** Sicherungskopie der Gerätedatenbank zurückspielen
-    (Bibliothek, CLI `restore`, Dialog im Fenster).
+  - [x] **ich:** **E5b** Sicherungskopie der Gerätedatenbank zurückspielen
+    (Bibliothek, CLI `restore`, Dialog im Fenster). Umgesetzt:
+    `nickelinksync::restore` und `Device::restore` über SQLites
+    Backup-API, vorher eine Sicherung des jetzigen Stands; abgelehnt werden
+    die Sicherung eines anderen Geräts (`.device`-Datei mit Prüfsumme der
+    Seriennummer, ab jetzt neben jeder Sicherung), eine andere
+    `DbVersion`, ein `-journal` und Kobalt. Ältere Sicherungen gelten als
+    „Gerät unbekannt“. Danach auswerfen und neu starten.
+  - [ ] **du:** E5b: am Tolino eine Stelle holen, dann „Sicherung
+    zurückspielen …“ mit der eben angelegten Sicherung; auswerfen, neu
+    starten, Buch öffnen (alte Stelle).
   - [ ] **ich:** **E6** macOS: `.app` als `.dmg` aus der CI (macOS-Runner,
     eigener Job, kein Pflicht-Check), kepubify-Binaries (feste Version,
     SHA-256 gegen das Release geprüft) mit Lizenzhinweis in „Über“ und

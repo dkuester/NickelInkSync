@@ -81,9 +81,13 @@ impl Setup {
       .unwrap()
   }
 
+  /// The backups, without the `.device` files next to them.
   fn backups(&self) -> Vec<PathBuf> {
     match fs::read_dir(&self.backups) {
-      Ok(dir) => dir.map(|e| e.unwrap().path()).collect(),
+      Ok(dir) => dir
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|e| e == "sqlite"))
+        .collect(),
       Err(_) => Vec::new(),
     }
   }
