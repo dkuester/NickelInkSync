@@ -19,6 +19,7 @@ use crate::i18n::{self, Choice, Lang, Texts};
 use crate::model::{Group, Loaded, Mapped, Row, Suggestions};
 use crate::overview::Overview;
 use crate::settings::Settings;
+use crate::settings_dialog::{self, Request, SettingsDialog};
 use crate::sync::{Compared, Question, ServerState};
 use crate::worker::{Command, Event, Worker};
 
@@ -110,6 +111,7 @@ pub struct App {
   /// The overview window: open, and its contents once read.
   overview_open: bool,
   overview: Option<Overview>,
+  settings_dialog: Option<SettingsDialog>,
 }
 
 impl App {
@@ -146,6 +148,7 @@ impl App {
       history_open: false,
       overview_open: false,
       overview: None,
+      settings_dialog: None,
       history: None,
     }
   }
@@ -277,6 +280,40 @@ impl App {
         }
         Event::History(entries) => self.history = Some(entries),
         Event::Overview(overview) => self.overview = Some(overview),
+        Event::Settings(result) => {
+          if let Some(dialog) = &mut self.settings_dialog {
+            dialog.edit = Some(result);
+          }
+        }
+        Event::SettingsSaved(result) => {
+          let lang = self.lang();
+          let t = i18n::texts(lang);
+          match result {
+            // The key moved: the dialog stays, with the new state.
+            Ok(true) => {
+              self.notice = Some(Ok(t.moved_to_keychain.into()));
+              if let Some(dialog) = &mut self.settings_dialog {
+                dialog.busy = false;
+                dialog.edit = None;
+                self.worker.send(Command::ReadSettings);
+              }
+            }
+            Ok(false) => {
+              self.settings_dialog = None;
+              // The server or library may have changed.
+              if let Some(selected) = self.selected.clone() {
+                self.select(selected);
+              }
+              self.notice = Some(Ok(t.settings_saved.into()));
+            }
+            Err(e) => {
+              if let Some(dialog) = &mut self.settings_dialog {
+                dialog.busy = false;
+                dialog.error = Some(e);
+              }
+            }
+          }
+        }
         // For a device no longer shown.
         Event::Progress { .. }
         | Event::Loaded { .. }
@@ -348,6 +385,10 @@ impl App {
         ui.label(t.language);
         if self.settings.language != before {
           self.save_settings();
+        }
+        if ui.button(t.settings).clicked() {
+          self.settings_dialog = Some(SettingsDialog::new());
+          self.worker.send(Command::ReadSettings);
         }
         if ui.button(t.history).clicked() {
           self.history_open = true;
@@ -624,6 +665,26 @@ impl App {
       }
       Some(false) => self.unreferenced = None,
       None if modal.should_close() => self.unreferenced = None,
+      None => {}
+    }
+  }
+
+  fn settings_dialog(&mut self, ctx: &egui::Context, t: &Texts) {
+    let Some(dialog) = &mut self.settings_dialog else {
+      return;
+    };
+    match settings_dialog::show(ctx, t, dialog) {
+      Some(Request::Save { edit, password }) => {
+        dialog.busy = true;
+        dialog.error = None;
+        self.worker.send(Command::SaveSettings { edit, password });
+      }
+      Some(Request::MoveToKeychain) => {
+        dialog.busy = true;
+        dialog.error = None;
+        self.worker.send(Command::MoveToKeychain);
+      }
+      Some(Request::Close) => self.settings_dialog = None,
       None => {}
     }
   }
@@ -1312,6 +1373,7 @@ impl eframe::App for App {
     self.unreferenced_dialog(&ctx, t);
     self.history_window(&ctx, t);
     self.overview_window(&ctx, t);
+    self.settings_dialog(&ctx, t);
   }
 }
 

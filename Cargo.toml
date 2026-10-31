@@ -24,6 +24,11 @@ serde_json = "1.0.154"
 ureq = { version = "3.5.0", default-features = false, features = ["rustls", "json"] }
 zip = { version = "9.0.5", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
+# The KOSync key in the system keychain (macOS) or Credential Manager
+# (Windows); not on the device or Linux, where it stays in config.ini.
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+keyring = { version = "3.6.3", default-features = false, features = ["apple-native", "windows-native"] }
+
 # Small binary for the device: size over speed, one codegen unit for LTO,
 # no symbols or debug info.
 [profile.release]

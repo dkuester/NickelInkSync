@@ -150,7 +150,10 @@ fixtures only.
   with the `confirm` questions in a dialog, and a history window; E3c,
   taking the server's position into a Tolino per book or all (after a
   backup of the database, the same dialog for `confirm`); the overview of
-  all connected devices side by side, one column per device (O5).
+  all connected devices side by side, one column per device (O5); E4,
+  the settings dialog on `config.ini` (edited line by line, with a backup)
+  and the key in the system keychain on macOS and Windows, which the CLI
+  reads too.
 
 - **Read-only device database layer** (S–M): reading the books and their
   positions is done (`status --device`); still to do: resolve
