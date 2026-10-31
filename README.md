@@ -152,9 +152,14 @@ mapped from there: the library's suggestions with their scores, or an
 EPUB chosen by hand; a mapping can be changed or removed. With a server
 in `config.ini` it shows the server's position next to the device's and
 sends positions per book or all at once; a `confirm` question comes as a
-dialog (keep the server's, or send the device's). "History" lists what
-the CLI and the window sent (`history.jsonl` in the data directory). It
-writes nothing to the device, only `mappings.json` and the history.
+dialog (keep the server's, or send the device's). On a Tolino "Get" and
+"Get all" write the server's position into the device database, after a
+backup of it in the data directory, as `pull --write` does; a `confirm`
+question comes as the same dialog (keep the device's, or take the
+server's), and the device is read again afterwards. Eject the Tolino
+before you open the book. "History" lists what the CLI and the window
+sent and wrote (`history.jsonl` in the data directory). To a Kobo or a
+Kindle it writes nothing, only `mappings.json` and the history.
 Nothing is synced when a device is connected. German or English after the
 system language, switchable. It shares `config.ini` and `mappings.json`
 with the CLI; its own settings (language, Kindle folder) are in
@@ -265,17 +270,15 @@ Wi-Fi on when it needs it; there is no need for the Tolino's own
 "Sync now" (that is the Tolino cloud). Opening a book waits at most about
 10 seconds for Wi-Fi (no dialog) and 15 seconds for the server. To open
 at the server's position, the plugin writes it into the book's row in the
-device database just before Nickel opens the book, while Nickel runs, and
-has Nickel read that row again (Nickel keeps the books in memory); it
+device database just before Nickel opens the book, while Nickel runs; it
 keeps one backup of the database a day in `.adds/NickelInkSync/backups/`
 (the two newest). Without Wi-Fi the book opens unchanged, and leaving it
 then sends nothing, so an older Tolino position never overwrites a newer
 one on the server. Leaving a book never waits: the push follows when
 Wi-Fi is up, after 15 seconds with the Tolino's Wi-Fi dialog.
 
-If Nickel still does not open a book at the position the plugin wrote
-(seen in two of five device tests before the plugin had Nickel read the
-row again), the plugin notes it in
+If Nickel does not open a book at the position the plugin wrote (seen on
+the first opening after the Tolino starts), the plugin notes it in
 `.adds/NickelInkSync/not-in-line.tsv`. Such a book is never sent, not by
 the plugin and not by `push` on the computer (unless `--force`), because
 the place Nickel saved is not yours; the next `pull`, on opening or over
@@ -372,7 +375,7 @@ behavior; the AGPL-3.0 projects are references only, see
 | [KOReader](https://github.com/koreader/koreader) | the KOReader developers | AGPL-3.0 | The partial MD5 book hash, XPointers, the reading-progress sync |
 | [koreader-sync-server](https://github.com/koreader/koreader-sync-server) | the KOReader developers | AGPL-3.0 | The KOSync protocol |
 | [BookOrbit](https://github.com/bookorbit/bookorbit) | the BookOrbit developers | AGPL-3.0 | Matching books by the KOReader hash; the planned manual book mapping |
-| [Kobalt](https://github.com/nicoverbruggen/kobalt) | Nico Verbruggen | MIT | How Nickel caches books (`Cache<Volume>`), how to write progress through Nickel itself, and that the Tolino keeps the reading position in `tolino_bookmark` |
+| [Kobalt](https://github.com/nicoverbruggen/kobalt) | Nico Verbruggen | MIT | How Nickel caches books (`Cache<Volume>`) and how to write progress through Nickel itself |
 | [Amazon Ion 1.0](https://amazon-ion.github.io/ion-docs/) | Amazon | specification | Reading KFX books (Kindle feasibility check) |
 
 ## License

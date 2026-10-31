@@ -1,14 +1,18 @@
-//! The window's side of `status` and `push`, on the library's steps: the
-//! server's position for each book, and sending the device's positions.
-//! A step that needs an answer (`confirm`) comes back as a [`Question`]
-//! carrying the update to send, so the window asks and nothing is decided
-//! twice.
+//! The window's side of `status`, `push` and `pull`, on the library's
+//! steps: the server's position for each book, sending the device's
+//! positions, and writing the server's into a Tolino. A step that needs an
+//! answer (`confirm`) comes back as a [`Question`] carrying what to send or
+//! write, so the window asks and nothing is decided twice.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
+use nickelinksync::db::Write;
 use nickelinksync::history::{self, Entry};
 use nickelinksync::kosync::{self, Client, Progress, Update};
-use nickelinksync::session::{self, Action, KindleSession, Options, PushOutcome, Server, Session};
+use nickelinksync::session::{
+  self, Action, KindleSession, Options, PullOutcome, PushOutcome, Server, Session, Written,
+};
 use nickelinksync::sync::{format_timestamp, outlook, Confirm, Local, Outlook};
 
 use crate::devices::Kind;
@@ -52,7 +56,17 @@ pub enum ServerState {
   Compared(HashMap<String, Compared>),
 }
 
-/// A book whose push needs an answer, with what would be sent.
+/// What a yes to a [`Question`] does.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Answer {
+  /// Send the device's position.
+  Send(Update),
+  /// Write the server's position into the device, and note it so.
+  Write { write: Write, entry: Entry },
+}
+
+/// A book whose push or pull needs an answer, with what would be sent or
+/// written.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Question {
   pub title: String,
@@ -60,18 +74,31 @@ pub struct Question {
   pub local_xpointer: String,
   pub local_time: Option<String>,
   pub remote: Remote,
-  /// The device position lies before the server's.
+  /// The position would move back in the book: for a push the device's
+  /// lies before the server's, for a pull after it.
   pub backwards: bool,
-  pub update: Update,
+  pub answer: Answer,
+}
+
+impl Question {
+  pub fn pulls(&self) -> bool {
+    matches!(self.answer, Answer::Write { .. })
+  }
 }
 
 /// What happened to one book.
 #[derive(Debug, Clone, PartialEq)]
-pub enum Pushed {
+pub enum Outcome {
   Sent,
+  /// The server's position was written into the device.
+  Written,
   InSync,
   /// The server's position is newer: kept.
   ServerNewer,
+  /// The device's position is newer: not taken.
+  DeviceNewer,
+  /// The server holds no position for the book.
+  NothingStored,
   /// The plugin could not bring the book in line on the device.
   NotInLine,
   Skipped(String),
@@ -81,8 +108,10 @@ pub enum Pushed {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Report {
   /// Title and outcome, in the order of the books.
-  pub books: Vec<(String, Pushed)>,
+  pub books: Vec<(String, Outcome)>,
   pub questions: Vec<Question>,
+  /// The copy of the device database made before writing to it.
+  pub backup: Option<PathBuf>,
 }
 
 /// What [`Server::open`] gives, as the window needs it.
@@ -125,7 +154,10 @@ fn compare_books(
           continue;
         };
         let remote = ask(document)?;
-        let local = session.local(book, &identity).ok().map(|(l, _)| l);
+        let local = session
+          .local(book, &identity)
+          .ok()
+          .map(|(l, _)| session.against(book, &identity, l, remote.as_ref()));
         found.insert(
           book.content_id.clone(),
           compared(local.as_ref(), remote.as_ref(), confirm),
@@ -162,15 +194,15 @@ fn settle(
 ) -> Result<(), kosync::Error> {
   let (local, remote, action) = match outcome {
     PushOutcome::Skip { message, .. } => {
-      report.books.push((title, Pushed::Skipped(message)));
+      report.books.push((title, Outcome::Skipped(message)));
       return Ok(());
     }
     PushOutcome::NotInLine { .. } => {
-      report.books.push((title, Pushed::NotInLine));
+      report.books.push((title, Outcome::NotInLine));
       return Ok(());
     }
     PushOutcome::Failed(e) => {
-      report.books.push((title, Pushed::Failed(e.to_string())));
+      report.books.push((title, Outcome::Failed(e.to_string())));
       return Err(e);
     }
     PushOutcome::Ready {
@@ -182,8 +214,8 @@ fn settle(
   };
   let update = session::update(document, &local, device, device_id);
   match (action, remote) {
-    (Action::InSync, _) => report.books.push((title, Pushed::InSync)),
-    (Action::Keep, _) => report.books.push((title, Pushed::ServerNewer)),
+    (Action::InSync, _) => report.books.push((title, Outcome::InSync)),
+    (Action::Keep, _) => report.books.push((title, Outcome::ServerNewer)),
     (Action::Ask { backwards }, Some(remote)) => report.questions.push(Question {
       title,
       local_percent: local.percentage,
@@ -191,7 +223,7 @@ fn settle(
       local_time: local.last_read.map(format_timestamp),
       remote: Remote::from(&remote),
       backwards,
-      update,
+      answer: Answer::Send(update),
     }),
     (Action::Apply | Action::Ask { .. }, _) => {
       deliver(client, title, update, report, sent)?;
@@ -220,11 +252,11 @@ fn deliver(
         percentage: update.percentage,
         by: "gui".into(),
       });
-      report.books.push((title, Pushed::Sent));
+      report.books.push((title, Outcome::Sent));
       Ok(())
     }
     Err(e) => {
-      report.books.push((title, Pushed::Failed(e.to_string())));
+      report.books.push((title, Outcome::Failed(e.to_string())));
       Err(e)
     }
   }
@@ -236,7 +268,7 @@ fn record(sent: &[Entry], report: &mut Report) {
   if let Err(e) = history::record(sent) {
     report
       .books
-      .push(("history.jsonl".into(), Pushed::Failed(e.to_string())));
+      .push(("history.jsonl".into(), Outcome::Failed(e.to_string())));
   }
 }
 
@@ -302,19 +334,163 @@ pub fn push(options: &Options, kind: Kind, ids: &[String]) -> Result<Report, Str
   Ok(report)
 }
 
-/// Sends the updates of the questions answered with "device".
-pub fn send_answers(options: &Options, questions: Vec<Question>) -> Result<Report, String> {
+/// Opens the device for writing: a Tolino. On a Kobo the position is not
+/// written back yet (P2), only sent.
+fn tolino(options: &Options) -> Result<Session, String> {
+  let session = Session::open(options).map_err(|e| e.to_string())?;
+  if session.family != "Tolino" {
+    return Err("only a Tolino takes positions from the server for now".into());
+  }
+  Ok(session)
+}
+
+/// Writes `writes` into the device after a backup, and keeps `taken` in the
+/// history.
+fn write(
+  session: &mut Session,
+  writes: Vec<(String, Write, Entry)>,
+  report: &mut Report,
+) -> Result<(), String> {
+  if writes.is_empty() {
+    return Ok(());
+  }
+  let only: Vec<Write> = writes.iter().map(|(_, w, _)| w.clone()).collect();
+  let backup = match session.write(&only).map_err(|e| e.to_string())? {
+    Written::Mounted { backup } => Some(backup),
+    Written::Live { backup } => backup,
+  };
+  report.backup = backup;
+  let mut taken = Vec::new();
+  for (title, _, entry) in writes {
+    report.books.push((title, Outcome::Written));
+    taken.push(Entry {
+      time: history::now(),
+      ..entry
+    });
+  }
+  record(&taken, report);
+  Ok(())
+}
+
+/// Takes the server's positions for the books with `ids` into a Tolino:
+/// what needs no answer is written at once (after a backup of the
+/// database), the rest comes back as questions.
+pub fn pull(options: &Options, ids: &[String]) -> Result<Report, String> {
   let server = server(options)?.ok_or("no server set up in config.ini")?;
+  let mut session = tolino(options)?;
+  let confirm = server.config.confirm;
   let mut report = Report::default();
-  let mut sent = Vec::new();
-  for q in questions {
-    if let Err(kosync::Error::Unauthorized) =
-      deliver(&server.client, q.title, q.update, &mut report, &mut sent)
-    {
-      break;
+  let mut writes = Vec::new();
+  for book in session.books.iter().filter(|b| ids.contains(&b.content_id)) {
+    let title = book
+      .title
+      .clone()
+      .unwrap_or_else(|| book.content_id.clone());
+    let step = session.pull_step(book, &server.client, confirm, false);
+    let (remote, local, action) = match step.outcome {
+      PullOutcome::Skip { message, .. } => {
+        report.books.push((title, Outcome::Skipped(message)));
+        continue;
+      }
+      PullOutcome::NothingStored => {
+        report.books.push((title, Outcome::NothingStored));
+        continue;
+      }
+      PullOutcome::Failed(e) => {
+        let unauthorized = matches!(e, kosync::Error::Unauthorized);
+        report.books.push((title, Outcome::Failed(e.to_string())));
+        if unauthorized {
+          break;
+        }
+        continue;
+      }
+      PullOutcome::Ready {
+        remote,
+        local,
+        action,
+        ..
+      } => (remote, local, action),
+    };
+    match action {
+      Action::InSync => {
+        report.books.push((title, Outcome::InSync));
+        continue;
+      }
+      Action::Keep => {
+        report.books.push((title, Outcome::DeviceNewer));
+        continue;
+      }
+      Action::Apply | Action::Ask { .. } => {}
+    }
+    let take = match session.take(book, &step.identity, &remote, local.as_ref()) {
+      Ok(take) => take,
+      Err(e) => {
+        report.books.push((title, Outcome::Skipped(e)));
+        continue;
+      }
+    };
+    let entry = Entry {
+      time: 0,
+      direction: history::Direction::Pull,
+      device: session.model.clone(),
+      title: book.title.clone(),
+      document: step.identity.document().unwrap_or_default().to_string(),
+      position: take.write.position.clone(),
+      percentage: remote.percentage,
+      by: "gui".into(),
+    };
+    match (action, local) {
+      (Action::Ask { backwards }, Some(local)) => report.questions.push(Question {
+        title,
+        local_percent: local.percentage,
+        local_xpointer: local.xpointer.clone(),
+        local_time: local.last_read.map(format_timestamp),
+        remote: Remote::from(&remote),
+        backwards,
+        answer: Answer::Write {
+          write: take.write,
+          entry,
+        },
+      }),
+      _ => writes.push((title, take.write, entry)),
     }
   }
-  record(&sent, &mut report);
+  write(&mut session, writes, &mut report)?;
+  Ok(report)
+}
+
+/// Does what the questions answered with yes ask for: sends the device's
+/// positions, or writes the server's into the device.
+pub fn answer(options: &Options, questions: Vec<Question>) -> Result<Report, String> {
+  let mut report = Report::default();
+  let (pulls, pushes): (Vec<Question>, Vec<Question>) =
+    questions.into_iter().partition(Question::pulls);
+  if !pushes.is_empty() {
+    let server = server(options)?.ok_or("no server set up in config.ini")?;
+    let mut sent = Vec::new();
+    for q in pushes {
+      let Answer::Send(update) = q.answer else {
+        unreachable!("partitioned")
+      };
+      if let Err(kosync::Error::Unauthorized) =
+        deliver(&server.client, q.title, update, &mut report, &mut sent)
+      {
+        break;
+      }
+    }
+    record(&sent, &mut report);
+  }
+  if !pulls.is_empty() {
+    let mut session = tolino(options)?;
+    let writes = pulls
+      .into_iter()
+      .map(|q| match q.answer {
+        Answer::Write { write, entry } => (q.title, write, entry),
+        Answer::Send(_) => unreachable!("partitioned"),
+      })
+      .collect();
+    write(&mut session, writes, &mut report)?;
+  }
   Ok(report)
 }
 
@@ -331,12 +507,12 @@ mod tests {
   use super::*;
   use std::fs;
   use std::path::PathBuf;
-  use std::sync::OnceLock;
   use std::time::Duration;
 
   use nickelinksync::hash::partial_md5;
 
-  use crate::common::{fake_device, fixtures, MockServer, PASSWORD, TOLINO_VERSION};
+  use crate::common::{fake_device, fixtures, MockServer, KOBO_VERSION, PASSWORD, TOLINO_VERSION};
+  use crate::test_data::{isolate, DataDir};
 
   /// Where book-a.epub is on the fake Tolino, as KOReader's XPointer.
   const XPOINTER: &str = "/body[1]/DocFragment[82]/body[1]/div[1]/text()[1].0";
@@ -344,22 +520,11 @@ mod tests {
   const LAST_READ: i64 = 1_767_441_600;
   /// Further on than the device.
   const AHEAD: &str = "/body[1]/DocFragment[90]/body[1]/p[1]/text()[1].0";
+  /// How the Tolino stores that place.
+  const AHEAD_ON_DEVICE: &str = "OEBPS/xhtml/xhtml-0-89.xhtml#point(/1/2/1/1:0)";
+  /// Further back than the device.
+  const BEHIND: &str = "/body[1]/DocFragment[40]/body[1]/p[1]/text()[1].0";
   const BOOK_A: &str = "file:///mnt/onboard/Books/book-a.epub";
-
-  /// No configuration and no mappings of the machine running the tests;
-  /// the history in a directory of its own.
-  fn isolate() -> PathBuf {
-    static DIR: OnceLock<PathBuf> = OnceLock::new();
-    DIR
-      .get_or_init(|| {
-        let dir =
-          std::env::temp_dir().join(format!("nickelinksync-gui-{}-data", std::process::id()));
-        std::env::set_var("NICKELINKSYNC_DATA_DIR", &dir);
-        std::env::set_var("NICKELINKSYNC_CONFIG", dir.join("no-config.ini"));
-        dir
-      })
-      .clone()
-  }
 
   fn book_hash() -> String {
     partial_md5(&fixtures().join("epub/book-a.epub")).unwrap()
@@ -369,11 +534,12 @@ mod tests {
     root: PathBuf,
     server: MockServer,
     options: Options,
+    _data: DataDir,
   }
 
   impl Setup {
     fn new(name: &str) -> Self {
-      isolate();
+      let data = isolate();
       let root = fake_device(
         &format!("gui-{name}"),
         "tolino-shinecolor-5.18-placeholder-books.sql",
@@ -394,6 +560,7 @@ mod tests {
         root,
         server,
         options,
+        _data: data,
       }
     }
   }
@@ -414,7 +581,7 @@ mod tests {
     assert_eq!(before[BOOK_A].outlook, Some(Outlook::Push));
 
     let report = push(&s.options, Kind::Nickel, &[BOOK_A.to_string()]).unwrap();
-    assert_eq!(report.books, [("Book A".to_string(), Pushed::Sent)]);
+    assert_eq!(report.books, [("Book A".to_string(), Outcome::Sent)]);
     assert!(report.questions.is_empty());
     assert_eq!(s.server.puts().len(), 1);
     assert_eq!(
@@ -436,7 +603,7 @@ mod tests {
     assert_eq!(after[BOOK_A].remote.as_ref().unwrap().xpointer, XPOINTER);
     // Pushing again sends nothing.
     let report = push(&s.options, Kind::Nickel, &[BOOK_A.to_string()]).unwrap();
-    assert_eq!(report.books, [("Book A".to_string(), Pushed::InSync)]);
+    assert_eq!(report.books, [("Book A".to_string(), Outcome::InSync)]);
     assert_eq!(s.server.puts().len(), 1);
   }
 
@@ -454,12 +621,117 @@ mod tests {
     assert_eq!(q.local_xpointer, XPOINTER);
     assert!(s.server.puts().is_empty());
 
-    let report = send_answers(&s.options, std::mem::take(&mut report.questions)).unwrap();
-    assert_eq!(report.books, [("Book A".to_string(), Pushed::Sent)]);
+    let report = answer(&s.options, std::mem::take(&mut report.questions)).unwrap();
+    assert_eq!(report.books, [("Book A".to_string(), Outcome::Sent)]);
     assert_eq!(
       s.server.document(&book_hash()).unwrap()["progress"],
       XPOINTER
     );
+  }
+
+  /// `ChapterIDBookmarked` and `___PercentRead` of book-a.epub.
+  fn row(root: &std::path::Path) -> (String, i64) {
+    let session = Session::open(&Options {
+      device: root.to_path_buf(),
+      config: None,
+      book: None,
+      content_id: Some(BOOK_A.into()),
+      live: false,
+      timeout: Duration::from_secs(5),
+      library: None,
+    })
+    .unwrap();
+    let book = &session.books[0];
+    (book.position.clone().unwrap(), book.percent_read)
+  }
+
+  #[test]
+  fn pull_writes_after_a_backup_and_records_it() {
+    let s = Setup::new("pull");
+    s.server.store(&book_hash(), AHEAD, 0.9, LAST_READ + 60);
+    let report = pull(&s.options, &[BOOK_A.to_string()]).unwrap();
+    assert_eq!(report.books, [("Book A".to_string(), Outcome::Written)]);
+    assert!(report.questions.is_empty());
+    assert!(
+      report.backup.as_ref().is_some_and(|b| b.exists()),
+      "{report:?}"
+    );
+    assert_eq!(row(&s.root), (AHEAD_ON_DEVICE.into(), 90));
+    let entry = history(200)
+      .unwrap()
+      .into_iter()
+      .find(|e| e.position == AHEAD_ON_DEVICE)
+      .unwrap();
+    assert_eq!(entry.direction, history::Direction::Pull);
+    assert_eq!(entry.by, "gui");
+
+    // In line now: nothing more to write, and no new backup.
+    let report = pull(&s.options, &[BOOK_A.to_string()]).unwrap();
+    assert_eq!(report.books, [("Book A".to_string(), Outcome::InSync)]);
+    assert_eq!(report.backup, None);
+  }
+
+  #[test]
+  fn after_a_pull_inside_a_paragraph_the_server_column_says_same() {
+    let s = Setup::new("pull-inside");
+    let inside = "/body[1]/DocFragment[90]/body[1]/p[1]/text()[1].20";
+    s.server.store(&book_hash(), inside, 0.9, LAST_READ + 60);
+    let report = pull(&s.options, &[BOOK_A.to_string()]).unwrap();
+    assert_eq!(report.books, [("Book A".to_string(), Outcome::Written)]);
+    let ServerState::Compared(after) = compare(&s.options, Kind::Nickel) else {
+      panic!("not compared")
+    };
+    assert_eq!(after[BOOK_A].outlook, Some(Outlook::InSync));
+    let report = push(&s.options, Kind::Nickel, &[BOOK_A.to_string()]).unwrap();
+    assert_eq!(report.books, [("Book A".to_string(), Outcome::InSync)]);
+    assert!(s.server.puts().is_empty());
+  }
+
+  #[test]
+  fn a_pull_back_is_written_only_after_the_answer() {
+    // The server is newer but further back than the device.
+    let s = Setup::new("pull-ask");
+    s.server.store(&book_hash(), BEHIND, 0.5, LAST_READ + 60);
+    let before = row(&s.root);
+    let mut report = pull(&s.options, &[BOOK_A.to_string()]).unwrap();
+    assert!(report.books.is_empty(), "{report:?}");
+    assert_eq!(report.backup, None);
+    let q = &report.questions[0];
+    assert!(q.pulls() && q.backwards);
+    assert_eq!(row(&s.root), before);
+
+    let report = answer(&s.options, std::mem::take(&mut report.questions)).unwrap();
+    assert_eq!(report.books, [("Book A".to_string(), Outcome::Written)]);
+    assert!(report.backup.is_some());
+    assert_ne!(row(&s.root), before);
+    assert_eq!(row(&s.root).1, 50);
+  }
+
+  #[test]
+  fn a_kobo_is_not_written() {
+    let _data = isolate();
+    let root = fake_device(
+      "gui-pull-kobo",
+      "kobo-clarabw-4.46-placeholder-books.sql",
+      KOBO_VERSION,
+    );
+    let server = MockServer::start();
+    let options = Options {
+      device: root.clone(),
+      config: Some(server.config(&root, PASSWORD)),
+      book: None,
+      content_id: None,
+      live: false,
+      timeout: Duration::from_secs(5),
+      library: None,
+    };
+    let before = fs::read(root.join(".kobo/KoboReader.sqlite")).unwrap();
+    assert!(pull(&options, &[BOOK_A.to_string()]).is_err());
+    assert_eq!(
+      fs::read(root.join(".kobo/KoboReader.sqlite")).unwrap(),
+      before
+    );
+    let _ = fs::remove_dir_all(&root);
   }
 
   #[test]

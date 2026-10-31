@@ -25,7 +25,11 @@ pub enum Command {
     kind: Kind,
     ids: Vec<String>,
   },
-  /// Send the positions of the questions answered with "device".
+  /// Write the server's positions for the books with `ids` into a Tolino,
+  /// then read it again.
+  Pull { root: PathBuf, ids: Vec<String> },
+  /// Do what the questions answered with yes ask for: send the device's
+  /// positions, or write the server's.
   Answer {
     root: PathBuf,
     kind: Kind,
@@ -57,8 +61,9 @@ pub enum Event {
     root: PathBuf,
     state: ServerState,
   },
-  /// What a push did; the server is asked again after it.
-  Pushed {
+  /// What a push or pull did; the server is asked again after it, and the
+  /// device read again after a write.
+  Synced {
     root: PathBuf,
     result: Result<Report, String>,
   },
@@ -133,6 +138,18 @@ fn run(inbox: &Receiver<Command>, outbox: &Sender<Event>, repaint: &dyn Fn()) {
       compare(root, kind);
     }
   };
+  let synced = |root: PathBuf, kind: Kind, result: Result<Report, String>| {
+    let wrote = result.as_ref().is_ok_and(|r| r.backup.is_some());
+    send(Event::Synced {
+      root: root.clone(),
+      result,
+    });
+    if wrote {
+      load(root, kind);
+    } else {
+      compare(root, kind);
+    }
+  };
   // Read once, when first needed: a big library takes a while.
   let mut library: Option<Option<Library>> = None;
   while let Ok(command) = inbox.recv() {
@@ -149,23 +166,19 @@ fn run(inbox: &Receiver<Command>, outbox: &Sender<Event>, repaint: &dyn Fn()) {
       Command::Load { root, kind } => load(root, kind),
       Command::Push { root, kind, ids } => {
         let result = sync::push(&model::options(&root), kind, &ids);
-        send(Event::Pushed {
-          root: root.clone(),
-          result,
-        });
-        compare(root, kind);
+        synced(root, kind, result);
+      }
+      Command::Pull { root, ids } => {
+        let result = sync::pull(&model::options(&root), &ids);
+        synced(root, Kind::Nickel, result);
       }
       Command::Answer {
         root,
         kind,
         questions,
       } => {
-        let result = sync::send_answers(&model::options(&root), questions);
-        send(Event::Pushed {
-          root: root.clone(),
-          result,
-        });
-        compare(root, kind);
+        let result = sync::answer(&model::options(&root), questions);
+        synced(root, kind, result);
       }
       Command::History => send(Event::History(sync::history(200))),
       Command::Suggest { root, id } => {

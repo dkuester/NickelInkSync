@@ -161,9 +161,14 @@ Vorschlägen der Bibliothek samt Bewertung oder einer selbst gewählten
 EPUB; eine Zuordnung lässt sich ändern oder entfernen. Mit einem Server
 in `config.ini` zeigt es die Stelle auf dem Server neben der auf dem
 Gerät und sendet je Buch oder alle auf einmal; eine Rückfrage nach
-`confirm` kommt als Dialog (Server behalten oder Gerät senden). „Verlauf“
-zeigt, was CLI und Fenster gesendet haben (`history.jsonl` im
-Datenordner). Aufs Gerät schreibt es nichts, nur `mappings.json` und den
+`confirm` kommt als Dialog (Server behalten oder Gerät senden). Am
+Tolino schreiben „Holen“ und „Alle holen“ die Stelle vom Server in die
+Gerätedatenbank, vorher legt es eine Sicherung im Datenordner an, wie
+`pull --write`; eine Rückfrage kommt im selben Dialog (Gerät behalten oder
+Server übernehmen), danach liest es das Gerät neu ein. Wirf den Tolino
+aus, bevor du das Buch öffnest. „Verlauf“ zeigt, was CLI und Fenster
+gesendet und geschrieben haben (`history.jsonl` im Datenordner). Auf einen
+Kobo oder Kindle schreibt es nichts, nur `mappings.json` und den
 Verlauf. Beim Anstecken wird nichts
 synchronisiert. Deutsch oder Englisch nach Systemsprache, umschaltbar.
 `config.ini` und `mappings.json` teilt es mit der CLI; seine eigenen
@@ -246,17 +251,15 @@ ist nicht nötig (das ist die Tolino-Cloud). Beim Öffnen eines Buchs wartet es
 höchstens etwa 10 Sekunden auf das WLAN (ohne Dialog) und 15 Sekunden auf
 den Server. Damit das Buch an der Server-Position öffnet, schreibt das Plugin
 sie kurz vor dem Öffnen in die Zeile des Buchs in der Gerätedatenbank,
-während Nickel läuft, und lässt Nickel diese Zeile neu lesen (Nickel hält
-die Bücher im Speicher); einmal am Tag sichert es die Datenbank nach
+während Nickel läuft; einmal am Tag sichert es die Datenbank nach
 `.adds/NickelInkSync/backups/` (die zwei neuesten bleiben). Ohne WLAN öffnet
 das Buch unverändert, und beim Verlassen wird dann nichts gesendet, damit eine
 ältere Tolino-Position nie eine neuere auf dem Server überschreibt. Beim
 Verlassen wartet es nie: Der Push folgt, sobald das WLAN da ist, nach 15
 Sekunden mit dem WLAN-Dialog des Tolino.
 
-Öffnet Nickel ein Buch trotzdem nicht an der Position, die das Plugin
-geschrieben hat (in zwei von fünf Gerätetests, bevor das Plugin Nickel die
-Zeile neu lesen ließ), vermerkt
+Öffnet Nickel ein Buch nicht an der Position, die das Plugin geschrieben
+hat (beobachtet beim ersten Öffnen nach dem Start des Tolino), vermerkt
 das Plugin es in `.adds/NickelInkSync/not-in-line.tsv`. Ein solches Buch
 wird nie gesendet, weder vom Plugin noch mit `push` am Rechner (außer mit
 `--force`), weil die Stelle, die Nickel gespeichert hat, nicht deine ist;
@@ -354,8 +357,8 @@ Die Tabelle mit Lizenzen und Links steht im [englischen README](README.md#credit
   (KOSync-Protokoll), beide AGPL-3.0;
   [BookOrbit](https://github.com/bookorbit/bookorbit) (AGPL-3.0, Zuordnung
   über die KOReader-Prüfsumme); [Kobalt](https://github.com/nicoverbruggen/kobalt)
-  von Nico Verbruggen (MIT, Nickels Buch-Cache, Schreiben über Nickel
-  selbst und die Leseposition des Tolino in `tolino_bookmark`); die [Amazon-Ion-1.0-Spezifikation](https://amazon-ion.github.io/ion-docs/)
+  von Nico Verbruggen (MIT, Nickels Buch-Cache und Schreiben über Nickel
+  selbst); die [Amazon-Ion-1.0-Spezifikation](https://amazon-ion.github.io/ion-docs/)
   (KFX, Kindle-Machbarkeit).
 
 ## Lizenz

@@ -32,7 +32,7 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0 bis E3b erledigt; als Nächstes E3c).
+fertig, D2 läuft (E0 bis E3c erledigt; als Nächstes E4).
 
 ## Grundlagen
 
@@ -268,14 +268,31 @@ fertig, D2 läuft (E0 bis E3b erledigt; als Nächstes E3c).
     Server erneut. Knopf „Verlauf“ oben rechts (letzte 200 Einträge, von
     CLI und GUI). Ohne Server in `config.ini` ein Hinweis statt der
     Knöpfe.
-  - [ ] **du:** E3b: Book R am Tolino senden, einmal mit Rückfrage
-    (KOReader weiter vorn), Verlauf ansehen; Kindle-Kopie senden.
-  - [ ] **ich:** **E3c** Holen und Rückschreiben am Tolino in der GUI
+  - [x] **du:** E3b: Book R am Tolino senden, einmal mit Rückfrage
+    (KOReader weiter vorn), Verlauf ansehen (2026-10-31, PR #41).
+  - [ ] **du:** E3b: Kindle-Kopie senden (später, getrennt).
+  - [x] **ich:** **E3c** Holen und Rückschreiben am Tolino in der GUI
     (`pull_step`, `take`, `write` mit Sicherungskopie, gleicher Dialog),
-    Kobo nur „zum Server“, bis P2 für den Kobo fertig ist;
-    Geräteansicht nebeneinander (O5).
-  - [ ] **du:** E3c: Book R vom Server auf den Tolino holen, auswerfen,
-    öffnen.
+    Kobo nur „zum Server“, bis P2 für den Kobo fertig ist. Umgesetzt:
+    „Holen“ je Buch und „Alle holen“ oben, nur am Tolino und nur für
+    zugeordnete Bücher und solche mit eigener Prüfsumme; Rückfragen im
+    Dialog mit „Gerät behalten“ (vorgewählt) oder „Server übernehmen“;
+    danach liest die App das Gerät neu ein; die Meldung nennt die
+    Sicherung und erinnert ans Auswerfen. Verlauf mit `by: "gui"`. Zwei
+    Schreibvorgänge in derselben Sekunde bekommen getrennte Sicherungen
+    (`…-2.sqlite`), statt dass der zweite scheitert. Nach dem Holen einer
+    Stelle mitten im Absatz galt das Buch als „Server neuer“, weil der
+    Rückweg zum XPointer an den Absatzanfang rückt; jetzt gilt es als
+    gleich, wenn auf dem Gerät genau das steht, was Holen schreiben würde
+    (`Session::against`, für `status`, `push`, `pull` und die GUI). Bei
+    „gleich“ sind „Senden“ und „Holen“ ausgegraut; „Alle senden“ und „Alle
+    holen“ lassen solche Bücher aus.
+  - [ ] **ich:** Geräteansicht nebeneinander (O5): aus E3c herausgenommen,
+    die Gestaltung ist noch offen (siehe Frage im PR).
+  - [x] **du:** E3c: Book R vom Server auf den Tolino holen, auswerfen,
+    öffnen (2026-10-31): Holen schreibt die richtige Stelle, danach „gleich“
+    und ausgegraute Knöpfe. Nickel öffnet nur am Kapitelanfang (R2-1 statt
+    R2-19), das ist N5 (PR #40), nicht E3c.
   - [ ] **ich:** **E4** Einstellungen; Schlüssel im Schlüsselbund bzw. in
     der Anmeldeinformationsverwaltung (`keyring`, nur für macOS und
     Windows, nicht im Gerätebau). Die CLI sucht `password`/`key` in der
@@ -726,7 +743,8 @@ fertig, D2 läuft (E0 bis E3b erledigt; als Nächstes E3c).
     noch nicht (leer), und das Plugin hielt das für ein anderes Kapitel.
   - [x] **ich:** Prüfung nach dem Öffnen fragt bei leerer Stelle bis zu
     8 s lang jede Sekunde nach; bleibt sie leer, gilt die Übernahme nach
-    dem Cache-Neuladen als geglückt. Testschalter wieder ausgebaut.
+    dem Cache-Neuladen als geglückt (das nur in PR #26). Testschalter
+    wieder ausgebaut.
   - [x] **du:** Kurzer Gerätetest der neuen Prüfung (2026-10-28,
     15:52–16:03): die Prüfung arbeitet, aber Nickel öffnete Book R danach
     immer am Anfang von Kapitel 1, auch nach einer Minute Pause.
@@ -737,15 +755,15 @@ fertig, D2 läuft (E0 bis E3b erledigt; als Nächstes E3c).
     Spur, nicht bewiesen: Nickels Cache gezeichneter Seiten
     (`CachePersistenceRenderedPageData`); alle fehlgeschlagenen Stellen
     lagen in Seiten, die dort fehlten.
-  - [x] **ich:** Ursache gefunden (29.10.): Nickel nimmt die Stelle aus
+  - [x] **ich:** Vermutete Ursache (29.10.): Nickel nimmt die Stelle aus
     der Tabelle `tolino_bookmark`; dort stand für Book R der
-    Kapitelanfang. CLI und Plugin schreiben nur `content`. Kobalt (MIT,
-    develop, `tolino_progress.h`) schreibt die Zeile mit.
-  - [ ] **ich:** `tolino_bookmark` beim Schreiben einer Position mit
-    setzen (CLI und Plugin), in der 5.18-VM prüfen, eigene PR. PR #26
-    bleibt bis dahin Entwurf; auf deinem Tolino ist das Plugin bis dahin
-    aus (`config.ini.off`).
-  - [ ] **ich (nur falls Kobalt nicht hilft):** Seiten-Cache als Ursache
+    Kapitelanfang. Kobalt (MIT, develop, `tolino_progress.h`) schreibt die
+    Zeile mit. PR #40 (Entwurf) schreibt sie jetzt auch.
+  - [x] **du:** Gerätetest von PR #40 (2026-10-31): Beide Zeilen hatten
+    die gezogene Stelle, Nickel öffnete trotzdem am Kapitelanfang. Damit
+    ist `tolino_bookmark` nicht die Ursache; beide Stellen lagen wieder
+    außerhalb der gespeicherten Seiten.
+  - [ ] **ich:** Seiten-Cache als Ursache
     prüfen (Cache-Zeilen des Buchs löschen, dann öffnen), `libnickel` von
     5.18.279364 beschaffen und die Symbole neu prüfen. Position über Nickel selbst
     schreiben, Vorbild Kobalt (MIT, nur das Konzept):
@@ -756,6 +774,13 @@ fertig, D2 läuft (E0 bis E3b erledigt; als Nächstes E3c).
   - [ ] **ich (nach dem Test):** Gerätesprache: Das Log zeigt `QLocale()`
     beim Start; folgt sie Nickels Spracheinstellung, kommen die Meldungen
     auch auf Englisch.
+  - [x] **ich:** Aus den Gerätetests (25.–28.10.) übernommen: kürzere
+    Toast-Texte (der Tolino schneidet nach etwa 24/45 Zeichen ab), längere
+    Anzeige (5 s, Probleme 8 s), strengere Nähe-Prüfung nach dem Öffnen
+    (12 statt 40 Knoten), die Prüfung fragt bei noch leerer Stelle bis zu
+    8 s nach, und das Log zeigt die Buchzeile beim Öffnen und was Nickel
+    bis zum Verlassen daran ändert. Das Neuladen von Nickels Buch-Cache
+    bleibt in PR #26.
 - [ ] **N6 Zuordnungen auf dem Gerät** (nach D2, vor dem Kobo-Plugin N2) ·
   Lücke, die du am 2026-10-29 bemerkt hast: Am Rechner sendet `push` ein
   zugeordnetes Buch (kepub, von Calibre verändertes EPUB) unter der

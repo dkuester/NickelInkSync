@@ -263,10 +263,12 @@ pushed, and the next pull takes the server's position regardless of the
 
 ### Step 5: Nickel's Volume cache
 
-The disassembly confirms the cache (2026-10-25). After the CLI has
-written the row, the plugin drops Nickel's `Volume` cache and loads the
-book again before it calls the original `setVolume`; the reloaded
-`Volume` (with the position set as well) is what Nickel opens from.
+The disassembly confirms the cache (2026-10-25). The draft PR #26 (not in
+`main`) builds on it: after the CLI has written the row, its plugin drops
+Nickel's `Volume` cache and loads the book again before it calls the
+original `setVolume`; the reloaded `Volume` (with the position set as
+well) is what Nickel opens from. `main` uses only `getById`, `isValid` and
+`getDbValues`, for the log.
 
 | Purpose | Symbol | Signature (checked) |
 |---|---|---|
@@ -378,9 +380,9 @@ was the plugin's check: 3 s after opening,
 of the nine takes (on 25.10. never), and the check took that for another
 chapter, so the book was not pushed on leaving. The same showed in the
 emulated Nickel VM (PR #27). The check now asks again every second
-for up to 8 s more; if the place is still unknown and the cache was
-reloaded, the take counts as done and leaving pushes. The test switch is
-gone.
+for up to 8 s more (PR #44); still unknown, it behaves as before. In the
+draft #26, with the cache reloaded, an unknown place counts as taken. The
+test switch was removed again.
 
 **Firmware 5.18.279364** (28.10.): the Tolino had updated itself that
 day, before the fourth test; everything above was analysed on
@@ -397,7 +399,7 @@ three that failed (`/1/4/136`, `/1/4/224`, `/1/4/314` in chapter 1) lay
 in a stretch with no cached page, and on 25.10. the page with
 `/1/4/314` had been cached. `.kobo/BookReader.sqlite` is encrypted.
 
-**Cause: `tolino_bookmark`.** The database has a table `tolino_bookmark`
+**`tolino_bookmark`, ruled out.** The database has a table `tolino_bookmark`
 (`uuid`, `position`, `currentPosition`, `lastPosition`, `progress`,
 `modified`, `deletedLocally`, `modifiedLocally`, ...); for a sideloaded
 book `uuid` is the ContentID and `position` the same Adobe point as
@@ -406,9 +408,13 @@ book `uuid` is the ContentID and `position` the same Adobe point as
 kept opening at, because the CLI and the plugin write only `content`. In
 the Nickel VM on 5.18.279364 a freshly imported book, with no such row,
 opened at the pulled place. Kobalt (MIT) writes this row on the Tolino
-(develop commit 8b144d2, `platforms/kobo/common/tolino_progress.h`). So
-the page-cache lead is most likely wrong; the fix is to write
-`tolino_bookmark` as well.
+(develop commit 8b144d2, `platforms/kobo/common/tolino_progress.h`).
+The draft PR #40 makes the CLI write it as well. In a device test on
+31.10. (USB write with the plugin off, and opening with the plugin on)
+both `content` and `tolino_bookmark` held the pulled place, and Nickel
+still opened Book R at `/1/4/2`. So this row is not the cause. Both
+failing points (`/1/4/180`, `/1/4/358`) again lay where no page of the
+book was cached, so the page-cache lead stands.
 
 Not tried, in case this is not enough: writing the position through
 Nickel instead of the CLI, as Kobalt does on the Kobo (concept only):
@@ -465,10 +471,10 @@ both lines, places it in `uiGeometry()` and starts a `QTimer` with
 `QueuedToast::getDuration()`: the `int` is how long the toast stays, in
 milliseconds. Nickel's own `RatingControls::showFeedbackToast` passes
 1500. The plugin uses 5000 for results and 8000 for problems (3000 and
-5000 were too short to read on the device). The Tolino cuts the primary
-line after about 24 characters and the secondary after about 45, so the
-plugin's texts stay below that. Optional:
-without it the plugin works as before, silently.
+5000 were too short to read in a device test). The Tolino cuts the
+primary line after about 24 characters and the secondary after about 45,
+so the texts are short. Optional: without it the plugin works as before,
+silently.
 
 The texts are German only for now: no way was found yet to tell the
 device language with certainty. The plugin logs `QLocale()` and

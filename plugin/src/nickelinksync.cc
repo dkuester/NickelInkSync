@@ -599,8 +599,7 @@ static QString row_diff(const QMap<QString, QVariant> &before, const QMap<QStrin
 }
 
 // The row Nickel opened the current book with; leaving logs what Nickel
-// changed in it (device test: a take fails after the book was left on the
-// page it opened on, without turning a page).
+// changed in it.
 static QMap<QString, QVariant> g_open_row;
 
 // Loads the book again after the CLI wrote its row, into `fresh` (which
