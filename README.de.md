@@ -116,7 +116,9 @@ Kapitel fehlt in der anderen Datei, z. B. Calibres `titlepage.xhtml`).
 `pull --write` bringt die Server-Position genauso in eine zugeordnete EPUB
 auf dem Tolino zurück; in ein kepub schreibt es noch nichts.
 
-**Kindle.** `status` und `push` lesen auch die Bücher eines Kindle, und
+**Kindle (experimentell).** Die Kindle-Unterstützung bleibt, wie sie ist,
+bis Kobo und Tolino stabil laufen: keine Weiterentwicklung und kein
+Gerätetest vor 0.1.0. `status` und `push` lesen auch die Bücher eines Kindle, und
 zwar jedes KFX, das seiner EPUB zugeordnet ist (`map add`): Die zuletzt
 gelesene Seite (`lpr` im `.sdr`-Ordner) wird in die EPUB übersetzt und
 unter deren Prüfsumme gesendet. Auf den Kindle wird nichts geschrieben,
