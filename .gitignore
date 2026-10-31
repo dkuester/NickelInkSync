@@ -22,3 +22,8 @@ plugin/**/*.d
 plugin/**/*.moc
 /dist/
 plugin/nm.txt
+
+# Nickel VM (vm/vm.sh): firmware download, helper builds, VM state
+/vm/cache/
+/vm/build/
+/vm/state/

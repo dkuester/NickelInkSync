@@ -13,14 +13,18 @@ default:
 # Host checks, as in CI
 check:
   cargo fmt --check
-  cargo clippy --all-targets -- -D warnings
-  cargo test
+  cargo clippy --workspace --all-targets -- -D warnings
+  cargo test --workspace
   python3 .github/scripts/check_md_links.py
 
 # Build the device binary
 build-device:
-  cargo zigbuild --release --target {{ target }}
+  cargo zigbuild --release --target {{ target }} -p nickelinksync
   @echo {{ device_bin }}
+
+# Start the desktop client (the window; reads devices, writes nothing to them)
+gui:
+  cargo run -p nickelinksync-gui
 
 # Build the device binary and run `--version` in an ARMv7 container (Docker, QEMU)
 check-device: build-device
@@ -47,3 +51,8 @@ package: build-device plugin
   chmod 755 dist/NickelInkSync/.adds/NickelInkSync/nickelinksync
   cp plugin/config.ini.example dist/NickelInkSync/.adds/NickelInkSync/config.ini.example
   find dist/NickelInkSync -type f | sort
+
+# Nickel VM: Kobo firmware 6.0 in Tolino mode under qemu-user, with a KOSync
+# mock (docs/nickel-vm.md). `just vm image`, `just vm up`, `just vm shot`, ...
+vm *args:
+  vm/vm.sh {{ args }}

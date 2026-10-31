@@ -37,7 +37,8 @@ pub enum Anchor {
   /// Chapter only (Nickel stores no fragment at a chapter start).
   None,
   /// `#kobo.N.M` in a kepub; `offset` in UTF-16 units into the span's text
-  /// (0 for a reading position, set for highlights).
+  /// (set for highlights; for a reading position 0 on firmware 4.x, which
+  /// stores the span only, and set on 6.x, which stores `#kobo.N.M:offset`).
   KoboSpan { id: String, offset: usize },
   /// `#point(/1/a/b…:offset)`; `steps` are 1-based, the first one is `html`;
   /// `offset` in UTF-8 bytes.
@@ -50,9 +51,16 @@ impl Position {
   pub fn parse(stored: &str) -> Self {
     let (chapter, fragment) = stored.split_once('#').unwrap_or((stored, ""));
     let anchor = if let Some(id) = fragment.strip_prefix("kobo.") {
+      // Kobo 6.x adds the offset into the span: `kobo.17.1:204`.
+      let (id, offset) = match id.rsplit_once(':') {
+        Some((id, offset)) if !offset.is_empty() && offset.bytes().all(|b| b.is_ascii_digit()) => {
+          (id, offset.parse().unwrap_or(0))
+        }
+        _ => (id, 0),
+      };
       Anchor::KoboSpan {
         id: format!("kobo.{id}"),
-        offset: 0,
+        offset,
       }
     } else if let Some((steps, offset)) = parse_point(fragment) {
       Anchor::Point { steps, offset }
@@ -72,7 +80,8 @@ impl fmt::Display for Position {
     write!(f, "{}", self.chapter)?;
     match &self.anchor {
       Anchor::None => Ok(()),
-      Anchor::KoboSpan { id, .. } => write!(f, "#{id}"),
+      Anchor::KoboSpan { id, offset: 0 } => write!(f, "#{id}"),
+      Anchor::KoboSpan { id, offset } => write!(f, "#{id}:{offset}"),
       Anchor::Point { steps, offset } => {
         write!(f, "#point(")?;
         for step in steps {
@@ -217,18 +226,9 @@ pub fn from_xpointer(
       "positions back to Kobo firmware 4.x are not translated yet",
     ));
   }
-  let bad = || Error::BadXPointer(xpointer.to_string());
-  let rest = xpointer
-    .strip_prefix("/body[1]/DocFragment[")
-    .or_else(|| xpointer.strip_prefix("/body/DocFragment["))
-    .ok_or_else(bad)?;
-  let (n, below) = rest.split_once(']').ok_or_else(bad)?;
-  let spine_index = n
-    .parse::<usize>()
-    .ok()
-    .and_then(|n| n.checked_sub(1))
-    .filter(|&i| i < epub.spine.len())
-    .ok_or_else(bad)?;
+  let (spine_index, below) = split_xpointer(xpointer)
+    .filter(|&(i, _)| i < epub.spine.len())
+    .ok_or_else(|| Error::BadXPointer(xpointer.to_string()))?;
   let chapter = epub.spine[spine_index].clone();
   let html = epub.chapter(spine_index)?;
   let resolved = Some(below)
@@ -263,6 +263,26 @@ pub fn from_xpointer(
     },
     exact,
   })
+}
+
+/// The 0-based spine index of `/body[1]/DocFragment[n]…` and the part
+/// below it.
+pub(crate) fn split_xpointer(xpointer: &str) -> Option<(usize, &str)> {
+  let rest = xpointer
+    .strip_prefix("/body[1]/DocFragment[")
+    .or_else(|| xpointer.strip_prefix("/body/DocFragment["))?;
+  let (n, below) = rest.split_once(']')?;
+  Some((n.parse::<usize>().ok()?.checked_sub(1)?, below))
+}
+
+/// Like [`point_for`], but the offset in characters of the text node as
+/// written (not collapsed).
+pub(crate) fn node_for(html: &Element, below: &str) -> Option<(Vec<usize>, usize)> {
+  let (path, bytes) = point_for(html, below)?;
+  match html.node_at(&path)? {
+    Node::Text(t) | Node::CData(t) => Some((path, bytes_to_chars(t, bytes))),
+    _ => None,
+  }
 }
 
 /// Child indices from `html` and a UTF-8 byte offset for the part of a
@@ -562,6 +582,13 @@ mod tests {
         offset: 356
       }
     );
+    assert_eq!(
+      Position::parse("OEBPS/text/chapter2.xhtml#kobo.17.1:204").anchor,
+      Anchor::KoboSpan {
+        id: "kobo.17.1".into(),
+        offset: 204
+      }
+    );
     assert_eq!(Position::parse("OEBPS/a.xhtml").anchor, Anchor::None);
     assert_eq!(Position::parse("OEBPS/a.xhtml#aid_1").anchor, Anchor::None);
     assert_eq!(
@@ -625,6 +652,7 @@ mod tests {
     for stored in [
       "OEBPS/a.xhtml",
       "OEBPS/a.xhtml#kobo.2.1",
+      "OEBPS/a.xhtml#kobo.17.1:204",
       "OPS/a.html#point(/1/4/16/1:356)",
     ] {
       assert_eq!(Position::parse(stored).to_string(), stored);

@@ -62,6 +62,8 @@ fn run(root: &Path, config: &Path, args: &[&str]) -> Output {
     .arg(root)
     .arg("--config")
     .arg(config)
+    // No mappings of the machine running the tests.
+    .env("NICKELINKSYNC_DATA_DIR", root.join("no-data"))
     .output()
     .unwrap()
 }
@@ -99,10 +101,22 @@ fn push_sends_each_book_once() {
   assert_eq!(body["device"], "Tolino Shine Color");
   assert_eq!(body["device_id"], device_id("Tolino Shine Color"));
 
+  // Each position sent is in the history.
+  let history = nickelinksync::history::read(&s.root.join("no-data/history.jsonl"), 10).unwrap();
+  assert_eq!(history.len(), 3);
+  let sent = history.iter().find(|e| e.document == book_hash()).unwrap();
+  assert_eq!(sent.direction, nickelinksync::history::Direction::Push);
+  assert_eq!(sent.position, XPOINTER);
+  assert_eq!(sent.device, "Tolino Shine Color");
+  assert_eq!(sent.title.as_deref(), Some("Book A"));
+  assert_eq!(sent.by, "cli");
+
   // Nothing changed since: nothing is sent again.
   let out = stdout(&s.run(&["push"]));
   assert_eq!(s.server.puts().len(), 3, "{out}");
   assert!(out.contains("  in sync   "), "{out}");
+  let history = nickelinksync::history::read(&s.root.join("no-data/history.jsonl"), 10).unwrap();
+  assert_eq!(history.len(), 3);
 }
 
 #[test]

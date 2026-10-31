@@ -14,17 +14,25 @@ Erledigte Punkte wandern in der Roadmap nach „Recently completed“.
 
 **Reihenfolge der Geräte:** Erst wird alles, was mit dem **Tolino Shine Color
 (5.18)** allein geht, umgesetzt und am Gerät getestet: P3, K4 rückwärts für
-normale EPUBs, P2 am Tolino, N3, N4. Danach kommt der **Kobo** (Clara BW,
-4.46) in einem eigenen Durchgang: P1-Durchlauf mit allen Geräten,
-K4 rückwärts für kepub (`#kobo.N.M`), P2 am Kobo, N1, N2. So geraten die
+normale EPUBs, P2 am Tolino, N3, N4. Danach kommt der **Kobo** (Clara BW)
+in einem eigenen Durchgang: P1-Durchlauf mit allen Geräten,
+K4 rückwärts für kepub (`#kobo.N.M`), P2 am Kobo, N2. So geraten die
 beiden Geräte beim Testen nicht durcheinander.
+
+**Kobo jetzt auf Firmware 6.0:** Der Referenz-Clara-BW hat sich am
+2026-10-28 selbst auf **6.0.279225** (Datenbankversion 222) aktualisiert.
+Ein Kobo mit 4.x ist nicht mehr da. Der Kobo-Durchgang läuft deshalb auf
+6.0 (Qt6 wie der Tolino, die Nickel-VM nutzt ebenfalls Kobo 6.0); was nur
+4.x betrifft (Adobe-Point mit zusammengefasstem Text, Qt5-Plugin), bleibt
+im Code, ist aber nur noch über die 4.46-Fixtures geprüft.
 
 **Danach zuerst D1, dann D2:** Sobald der Tolino-Durchgang abgeschlossen
 ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 **Client mit grafischer Oberfläche (D2)**, mit höchster Priorität und vor
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
-dürfen jederzeit dazwischengeschoben werden.
+dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
+fertig, D2 läuft (E0 bis E3b erledigt; als Nächstes E3c).
 
 ## Grundlagen
 
@@ -62,18 +70,78 @@ dürfen jederzeit dazwischengeschoben werden.
 
 ## Desktop-Client
 
-- [ ] **D1 CLI mit manueller Buchzuordnung** · höchste Priorität nach dem
-  Tolino-Durchgang. Löst O1 ab und entblockt den Sync kepub ↔ EPUB und den
-  Kindle-Sync (L1).
-  - [ ] **ich:** Zuordnungsspeicher: Buch auf dem Gerät (kepub, EPUB unter
-    anderem Hash, KFX) ↔ EPUB und KOReader-Prüfsumme; Testfall Heat 2.
-  - [ ] **ich:** Befehle zum Anlegen, Anzeigen und Löschen einer Zuordnung;
-    Vorschläge aus Titel und Autor (beim Kindle auch `content_id`).
-  - [ ] **ich:** `status`/`push`/`pull` nutzen die Zuordnung; Positionen
-    werden in der zugeordneten EPUB übersetzt.
-- [ ] **D2 Desktop-Client mit grafischer Oberfläche** · direkt nach D1.
+- [x] **D1 CLI mit manueller Buchzuordnung** · PR #28, #31, #32, #33 ·
+  höchste Priorität nach dem Tolino-Durchgang. Löst O1 ab und entblockt
+  den Sync kepub ↔ EPUB und den Kindle-Sync (L1). In Etappen, je ein PR: (1) Speicher und Befehle,
+  (2) Bibliothek mit Originalen und Vorschläge, (3) `status`/`push`/`pull`
+  über die Zuordnung mit Positionsübersetzung, (4) Kindle in `status`/`push`.
+  - [x] **ich:** Zuordnungsspeicher (`src/mapping.rs`): Buch auf dem Gerät
+    (Kobo/Tolino: Prüfsumme der Gerätedatei; Kindle: `content_id`) ↔
+    Original-EPUB (Pfad und Prüfsumme), `mappings.json` im Datenordner
+    (`$NICKELINKSYNC_DATA_DIR`), Formatversion, atomar geschrieben;
+    fehlende oder geänderte EPUB = kaputte Zuordnung. Begründung der
+    Schlüssel in `SCOPE.md` (Book identity).
+  - [x] **ich:** `map add|list|remove`; Kindle-Bücher per USB ohne
+    Jailbreak (`src/kindle_device.rs`). Tests mit Book A (kepub ↔ EPUB),
+    gleicher Datei und den Kindle-Fixtures (`tests/mapping.rs`).
+  - [x] **du:** Etappe 1 am Kobo 6.0 ausprobiert (2026-10-28): Book R
+    kepub ↔ EPUB, `map add`, `map list`. Heat 2 vom Tolino steht noch aus.
+  - [x] **ich:** Bibliothek mit Originalen (`library =` in `config.ini`,
+    `--library`, `src/library.rs`): Calibre-`metadata.db` nur lesend
+    (`immutable=1`), sonst `*.epub` rekursiv mit Titel/Autor aus der OPF;
+    nie hineinschreiben (Test vergleicht die Dateien vorher und nachher).
+  - [x] **ich:** `map suggest` (`src/suggest.rs`): Titel (auch gegen den
+    Dateinamen, für Send-to-Kindle), Autor und Kapitel, jede Teilbewertung
+    sichtbar; Bücher mit gleicher Prüfsumme wie in der Bibliothek brauchen
+    keine Zuordnung. `map add` ohne `--epub` fragt im Terminal nach dem
+    Vorschlag. Die Kindle-`content_id` wählt das Buch aus, steht aber nicht
+    in der Bibliothek und zählt deshalb nicht zur Bewertung. Tests mit
+    selbst erzeugter Calibre-`metadata.db` (`tests/library.rs`).
+  - [x] **du:** Etappe 2 mit deiner Calibre-Bibliothek und dem Kobo 6.0
+    geprüft (2026-10-28): drei kepubs aus Calibre, je der richtige Band
+    vorn (100 %, 99 %, 91 %). Calibre ersetzt beim Umwandeln die
+    Cover-Seite und teilt große Kapitel (`_split_NNN`).
+  - [x] **ich:** Etappe 3 (`src/transfer.rs`): `status`/`push`/`pull`
+    über die Zuordnung, unter der Prüfsumme der Original-EPUB; Position
+    über Kapitelpfad (Calibres `_split_NNN` zusammengeführt) und sichtbaren
+    Text übersetzt, sonst Kapitelanfang bzw. Prozent, in der Ausgabe
+    benannt. Mit Bibliothek wird ein Buch ohne Zuordnung, das weder in der
+    Bibliothek liegt noch Original einer Zuordnung ist, nicht
+    synchronisiert; ohne Bibliothek wie bisher. `pull --write` übersetzt
+    zurück in eine zugeordnete EPUB auf dem Tolino und schreibt nie in ein
+    kepub. Tests: Markierungen Book P/Q kepub ↔ EPUB, Kobo-6.0-Position
+    in Book R, Calibre-artige Umwandlung von Book R, Mock-Server
+    (`tests/transfer.rs`, `tests/sync_mapping.rs`).
+  - [x] **du:** Etappe 3 am Gerät (2026-10-28): Vampire Hunter D
+    (Calibre-kepub mit geteilten Kapiteln) auf dem Kobo 6.0 bis „the events
+    of the day“ gelesen; die gesendete Stelle stimmt zeichengenau, KOReader
+    zeigt sie aber weit unten auf seiner Seite.
+  - [x] **ich:** `position = paragraph | sentence | exact` in
+    `config.ini` (Standard `paragraph`): `push` sendet den Absatzanfang,
+    höchstens etwa eine halbe Seite zurück, sonst den Satzanfang; Ausgabe
+    nennt die Verschiebung (`transfer::step_back`).
+  - [x] **du:** Mit `position = paragraph` geprüft (2026-10-28): Vampire
+    Hunter D sendet den Absatzanfang (`p[26]`, 103 Zeichen zurück);
+    KOReader blieb auf derselben Seite, passt.
+  - [x] **ich:** Etappe 4: Kindle in `status`/`push` (nur lesend, ohne
+    Jailbreak), `pull` lehnt ab. Der Paperwhite bietet am Mac nur MTP: die
+    CLI liest eine Kopie (Ordner mit `documents/` oder mit `.kfx` und
+    `.sdr`, z. B. mit OpenMTP). KFX-Leser für echte Send-to-Kindle-Bücher
+    erweitert: eingebettete Schriften (`$418`), Läufe mit Offset in
+    `$609`, geschützte Leerzeichen und `<br/>` als `\n`, Cover-Abschnitt
+    und geteilte Kapitel (Block über den Text gesucht). Gekaufte Bücher
+    (DRM) werden übersprungen. Geprüft an Kopien von „Good Boy“ und „Der
+    wiedergefundene Freund“ (alle bzw. fast alle Blöcke exakt).
+  - [x] **du:** Kindle-Test (2026-10-29): „Good Boy“ (Send-to-Kindle, 16
+    Abschnitte gegen 14 Kapitel) bis 14 % gelesen, per OpenMTP kopiert,
+    `map add` über den Vorschlag, `push`: KOReader öffnet dieselbe Seite
+    („In the end it wasn't the stone“ oben rechts).
+  - [ ] **ich (später, vor oder in D2):** Kindle direkt per MTP lesen
+    (libmtp), ohne Kopie.
+- [~] **D2 Desktop-Client mit grafischer Oberfläche** · direkt nach D1.
   Baut auf derselben Bibliothek auf: Geräte und Bücher anzeigen, Zuordnung
-  anlegen, Sync auslösen.
+  anlegen, Sync auslösen. In Etappen E0–E8, je ein PR (Plan vom
+  2026-10-29, unten).
   - [x] **du:** Plattformen festgelegt: zuerst **macOS**, dann **Windows**,
     Linux optional, dann für möglichst viele Distributionen und Versionen.
   - [x] **du:** Funktionsumfang der ersten Version festgelegt (2026-10-24):
@@ -108,22 +176,138 @@ dürfen jederzeit dazwischengeschoben werden.
   - [x] **du:** kepubify wird **mitgeliefert**: ein Binary je Plattform
     (macOS, Windows, Linux im AppImage), mit dem MIT-Lizenzhinweis von
     kepubify in der App und im Paket.
-  - [ ] **ich:** kepubify-Binaries in der CI laden (feste Version, Prüfsumme
-    gegen das Release prüfen) und ins Paket legen; Lizenzhinweis in
-    „Über“ und neben dem Binary.
-  - [ ] **ich:** GUI mit **egui/eframe** (reines Rust, MIT/Apache, ohne
-    WebView, ein Code für alle drei Systeme).
-  - [ ] **ich:** macOS: `.app`-Bundle als `.dmg`, aus der CI (macOS-Runner);
-    ohne Apple Developer ID nicht notarisiert (erster Start per
-    Rechtsklick → „Öffnen“).
-  - [ ] **ich:** Windows: `.exe` aus der CI (Windows-Runner); ohne
+  - [x] **du:** Plan und offene Punkte entschieden (2026-10-29): macOS ab
+    **11** als Universal-Binary (arm64 + x86_64); bis E5 testest du per
+    `cargo run`, das `.dmg` kommt in E6; App-Name **NickelInkSync**, das
+    Icon entwerfe ich als SVG, du gibst Rückmeldung; im Schlüsselbund liegt
+    der **MD5-Schlüssel**, nicht das Passwort; Hinweis auf ein neues
+    Release höchstens einmal am Tag über die GitHub-API, abschaltbar;
+    Releases per Tag (`v0.2.0`) mit `.dmg`, später `.exe` und dem
+    Tolino-Paket; gemeinsamer Verlauf `history.jsonl` für CLI und GUI;
+    Windows als **ZIP** (`.exe`, `kepubify.exe`, Lizenzen) statt
+    Installer; für E7 testest du auf deinem Windows-Gaming-PC.
+  - Architektur: Das Paket `nickelinksync` (Bibliothek und CLI) bleibt,
+    wie es ist; die GUI kommt als zweites Paket `gui/`
+    (`nickelinksync-gui`) in einen Cargo-Workspace und hängt nur von der
+    Bibliothek ab. Der Gerätebau (`-p nickelinksync`) und das
+    Tolino-Paket bleiben ohne egui. Lange Vorgänge laufen in einem
+    Arbeits-Thread (Befehle und Ereignisse über Kanäle). Die Rückfrage
+    `confirm` ist Teil der Daten (`session::Action::Ask`): Die CLI fragt im
+    Terminal, die GUI im Dialog, beide wenden dieselben Schritte an.
+    Einstellungen nur für die GUI (Sprache, Kindle-Ordner,
+    Update-Prüfung) in `gui.json` im Datenordner, weil `config.ini`
+    unbekannte Schlüssel ablehnt.
+  - [x] **ich:** **E0** Sync-Ablauf in die Bibliothek (`src/session.rs`):
+    `Session`/`KindleSession`, `Server`, `Identity`, je Buch
+    `push_step`/`pull_step` mit `Action` (`InSync`, `Apply`, `Keep`,
+    `Ask`), `take`, `write`, `sync::outlook` für `status`; nichts darin
+    gibt aus oder fragt. Die CLI gibt aus und fragt wie bisher: Ihre
+    Ausgabe ist über alle Aufrufe der Testsuite zeichengleich geblieben.
+    Tests ohne CLI in `tests/session.rs`.
+  - [x] **ich:** **E1** Workspace und Fenster, das nur anzeigt: angesteckte
+    Kobo/Tolino (`/Volumes/*` mit `.kobo/KoboReader.sqlite`), Kindle-Ordner
+    wählen, Bücher nach gleicher Prüfsumme, zugeordnet und „Nicht
+    zugeordnet“, Position auf dem Gerät; Arbeits-Thread; Deutsch/Englisch
+    (`sys-locale`, umschaltbar). CI: clippy/test mit `--workspace`,
+    Gerätebau mit `-p nickelinksync`, eigener Job `gui-macos` (kein
+    Pflicht-Check). eframe 0.37; Ordnerdialog (`rfd`) nur für macOS und
+    Windows, unter Linux wird der Pfad eingetippt. `just gui` startet.
+  - [x] **du:** E1 am Mac mit Kobo, Tolino und der Kindle-Kopie
+    ausprobiert (`just gui`, 2026-10-29): Bücher und Status stimmen, auch
+    im Kindle-Ordner; Sprachwahl wirkt und bleibt nach dem Neustart. Am
+    Tolino nur Book R, weil Paradise Lost und Good Boy Shop-Bücher sind
+    (siehe P4). Der gewählte Kindle-Ordner ließ sich nicht wieder
+    entfernen: jetzt Knopf „Kindle-Ordner entfernen“.
+  - [x] **du:** Knopf geprüft (2026-10-29): Der Ordner verschwindet und
+    bleibt nach dem Neustart weg.
+  - [x] **ich:** **E2** Zuordnung in der GUI: Vorschläge mit Bewertung,
+    bestätigen oder EPUB selbst wählen, entfernen. Die Logik von
+    `map add`/`map suggest` liegt jetzt in der Bibliothek (`src/map.rs`:
+    `device_books`, `open_library`, `candidates`, `add`), die CLI gibt nur
+    noch aus (Ausgabe zeichengleich). In der GUI: „Zuordnen …“ bei Büchern
+    ohne Zuordnung, „Ändern …“ und „Entfernen“ (mit Rückfrage) bei
+    zugeordneten und kaputten; der Dialog zeigt die Kandidaten mit
+    Bewertung (der beste ab 80 % vorausgewählt, darunter „unsicher“), die
+    gleiche Datei in der Bibliothek, oder ohne Bibliothek nur „EPUB wählen
+    …“. Geschrieben wird nur `mappings.json`, nie das Gerät.
+  - [x] **du:** E2 am Kobo ausprobiert (2026-10-29): „Acts of Contrition“
+    (neues kepub) in der GUI zugeordnet, klappt. Der Test zeigte zwei
+    Schwächen, beide behoben: Ohne `library =` standen ungeprüfte Bücher
+    unter „Gleiche Datei“ (jetzt „Eigene Prüfsumme“ mit Grund, auch dort
+    „Zuordnen …“), und die Knöpfe lagen bei langen Pfaden außerhalb des
+    Fensters (jetzt neben dem Titel).
+  - [x] **ich:** Auf deinen Wunsch: Ohne Referenz-EPUB gibt die App einen
+    Hinweis statt einer falschen Meldung. Ohne Bibliothek steht oben eine
+    Warnung, ungeprüfte Bücher stehen in der Gruppe „Ohne Referenz-EPUB“
+    (Warnfarbe, „Zuordnen …“), „Eigene Prüfsumme“ zeigt nur Geprüftes
+    (gleiche Datei wie in der Bibliothek, Original einer Zuordnung, Letzteres
+    auch ohne Bibliothek); der Dialog sagt „Keine Referenz-EPUB gefunden“.
+    Die CLI sendet ohne Bibliothek weiter unter der eigenen Prüfsumme; ob
+    die GUI solche Bücher beim Push überspringt oder fragt, entscheiden wir
+    in E3.
+  - E3 neu geschnitten (2026-10-29, wegen des Nutzungslimits) in drei
+    kleine PRs:
+  - [x] **ich:** **E3a** Verlauf: `src/history.rs`, `history.jsonl` im
+    Datenordner (eine JSON-Zeile je gesendeter oder geschriebener
+    Position, Richtung, Gerät, Titel, Dokument, Stelle, Prozent, `by`).
+    Die CLI schreibt nach `push` (Kobo/Tolino und Kindle) und nach
+    `pull --write`, nicht auf dem Gerät (`--live`); Ausgabe unverändert.
+  - [x] **ich:** **E3b** GUI: Server-Positionen in der Bücherliste (Spalte
+    „Server“ mit Prozent, Gerät, Zeit und Aussage nach `sync::outlook`),
+    „Senden“ je Buch und „Alle senden“ über `Session::push_step`; Fragen
+    (`Action::Ask`) sammeln und in einem Dialog beantworten (Gerät,
+    Server, Überspringen), dann die gemerkten `Update`s senden; Bücher
+    ohne Referenz-EPUB überspringt „Alle senden“, „Senden“ am einzelnen
+    Buch fragt vorher; Verlauf (`by: "gui"`) als Fenster. Kindle über
+    `KindleSession::push_step`. Tests in `gui/` mit dem Mock-Server aus
+    `tests/common` (`#[path]`). Umgesetzt in `gui/src/sync.rs`: nach dem
+    Einlesen fragt die App den Server (Spalte „Server“: Prozent, Gerät,
+    „gleich“/„Gerät neuer“/„Server neuer“/„fragt vorher“); „Senden“ je
+    Buch, „Alle senden“ oben; Fragen kommen in einen Dialog mit „Server
+    behalten“ (vorgewählt) oder „Gerät senden“; danach fragt sie den
+    Server erneut. Knopf „Verlauf“ oben rechts (letzte 200 Einträge, von
+    CLI und GUI). Ohne Server in `config.ini` ein Hinweis statt der
+    Knöpfe.
+  - [ ] **du:** E3b: Book R am Tolino senden, einmal mit Rückfrage
+    (KOReader weiter vorn), Verlauf ansehen; Kindle-Kopie senden.
+  - [ ] **ich:** **E3c** Holen und Rückschreiben am Tolino in der GUI
+    (`pull_step`, `take`, `write` mit Sicherungskopie, gleicher Dialog),
+    Kobo nur „zum Server“, bis P2 für den Kobo fertig ist;
+    Geräteansicht nebeneinander (O5).
+  - [ ] **du:** E3c: Book R vom Server auf den Tolino holen, auswerfen,
+    öffnen.
+  - [ ] **ich:** **E4** Einstellungen; Schlüssel im Schlüsselbund bzw. in
+    der Anmeldeinformationsverwaltung (`keyring`, nur für macOS und
+    Windows, nicht im Gerätebau). Die CLI sucht `password`/`key` in der
+    Datei, dann im Schlüsselbund; die GUI bietet an, ein Passwort aus der
+    Datei dorthin zu verschieben.
+  - [ ] **ich:** **E5** Bücher aus Calibre auf Tolino oder Kobo kopieren,
+    beim Kobo auf Wunsch mit kepubify, Zuordnung entsteht dabei;
+    Sicherungskopie der Gerätedatenbank zurückspielen (Bibliothek und
+    CLI). Nichts auf dem Gerät überschreiben.
+  - [ ] **ich:** **E6** macOS: `.app` als `.dmg` aus der CI (macOS-Runner,
+    eigener Job, kein Pflicht-Check), kepubify-Binaries (feste Version,
+    SHA-256 gegen das Release geprüft) mit Lizenzhinweis in „Über“ und
+    neben dem Binary, Release-Workflow per Tag, Hinweis auf neue
+    Releases. Ohne Apple Developer ID nicht notarisiert: Seit macOS 15
+    öffnet Rechtsklick → „Öffnen“ die App nicht mehr, sondern
+    Systemeinstellungen → Datenschutz & Sicherheit → „Dennoch öffnen“
+    (README).
+  - [ ] **du:** Icon-Entwurf (SVG) ansehen; `.dmg` aus der CI installieren.
+  - [ ] **ich:** **E7** Windows: Pfade für Konfiguration und Daten
+    (`%APPDATA%`, heute nur `HOME`/XDG), Wechsellaufwerke erkennen,
+    Anmeldeinformationsverwaltung, ZIP aus der CI (Windows-Runner); ohne
     Code-Signing warnt SmartScreen beim ersten Start.
-  - [ ] **ich (optional):** Linux als **AppImage**, gebaut auf einer alten
-    glibc-Basis (ältestes noch unterstütztes Ubuntu LTS), damit es auf
+  - [ ] **du:** E7 auf dem Windows-PC mit Tolino oder Kobo.
+  - [ ] **ich (optional):** **E8** Linux als **AppImage**, gebaut auf einer
+    alten glibc-Basis (ältestes noch unterstütztes Ubuntu LTS), damit es auf
     möglichst vielen Distributionen und Versionen läuft; keine Abhängigkeit
     außer Grafik- und Fensterbibliotheken (X11/Wayland, OpenGL), die jede
     Desktop-Installation hat. Ein statischer musl-Build geht für die GUI
     nicht, weil die Grafiktreiber zur Laufzeit geladen werden.
+  - Nicht in D2: Kindle direkt per MTP (nach der ersten Version, siehe D1;
+    am Mac kollidiert libmtp mit `ptpcamerad`, Windows braucht WPD);
+    Rückschreiben am Kobo (Kobo-Durchgang).
 
 ## Kern
 
@@ -179,8 +363,16 @@ dürfen jederzeit dazwischengeschoben werden.
     `OEBPS/text/chapter2.xhtml#point(/1/4/128/1:0)`, wie erwartet. Ob
     Nickel dort öffnet, prüft P2.
   - [ ] **ich (Kobo-Durchgang):** Rückwärts für den Kobo: XPointer →
-    Kobo-Span (kepub) und Adobe-Point für 4.x (Text um Kommentare
-    zusammengefasst).
+    Kobo-Span (kepub), am Kobo 6.0 prüfen. Adobe-Point für 4.x (Text um
+    Kommentare zusammengefasst) nur noch gegen die 4.46-Fixtures, kein
+    4.x-Gerät mehr.
+  - [ ] **ich (Kobo-Durchgang):** Positionsformat und Kapitelzeilen auf
+    Kobo 6.0 prüfen (kepub-Span, Adobe-Point: zählt 6.0 Kommentare als
+    Knoten wie der Tolino?); die CLI nimmt ab Firmware 5 das
+    Tolino-Verhalten an (`PointFlavor::for_firmware`), ungeprüft.
+  - [ ] **du:** Fixture-Bücher (Book P, Q, R, je kepub und EPUB) auf den
+    Kobo 6.0 laden, Book P und Q markieren wie zuvor, dann
+    Datenbankkopie für neue Fixtures (`tools/make_db_fixture.py`).
   - [x] **ich:** Zweites Probebuch für Umlaute, Zeichen mit 3 und 4 Bytes,
     CDATA, Leerraum am Absatzanfang und kombinierende Akzente, unter eigenem
     Namen (**Book Q**, `book-q*.epub`), damit es nicht mit Book P verwechselt
@@ -281,16 +473,45 @@ dürfen jederzeit dazwischengeschoben werden.
     `status` meldet „push asks first“, `push` fragt, Antwort `s` behält die
     Server-Position; mit `< /dev/null` wird nichts gesendet.
 
+- [ ] **P4 Shop- und Cloud-Bücher ohne DRM** (nach D2) · Bisher werden nur
+  seitengeladene Bücher (`file:///mnt/onboard/…`) synchronisiert, weil
+  Shop-Bücher als DRM-Bücher galten. Am Tolino (2026-10-29) liegen
+  heruntergeladene Shop-Bücher ohne Verschlüsselung in
+  `.kobo/kepub/<ContentID>` (Paradise Lost, Good Boy), Position wie bei
+  seitengeladenen EPUBs (`#point(...)`). Beim Herunterladen legt der
+  Tolino `META-INF/cdp.info` (Bestellnummer) ins EPUB, die Prüfsumme
+  weicht also immer von der eigenen Kopie ab.
+  - [ ] **ich:** DRM sicher erkennen: `encryption.xml` nur, wenn
+    Textdateien verschlüsselt sind (nicht bei verschleierten Schriften),
+    `rights.xml` (Adobe), `license.lcpl` (LCP), Kobo-Store-Schlüssel in
+    `content_keys`; zusätzlich muss das erste Kapitel als XHTML lesbar
+    sein, sonst überspringen und nennen.
+  - [ ] **ich:** Shop-Bücher in `status`/`push` und in der GUI: immer über
+    eine Zuordnung zur Original-EPUB, Schlüssel ist die **ContentID**
+    (wie die Kindle-`content_id`), weil sich die Datei beim erneuten
+    Herunterladen ändern kann; ohne Zuordnung nicht synchronisiert, auch
+    ohne Bibliothek. `SCOPE.md` anpassen („Out of scope“: Bücher mit DRM
+    statt Shop-Bücher).
+  - [ ] **du:** Good Boy auf dem Tolino zuordnen, `push`, in KOReader
+    öffnen.
+  - [ ] **ich + du (später):** Rückschreiben erst nach einem Test, ob der
+    eigene Cloud-Sync von Tolino/Kobo die geschriebene Stelle
+    überschreibt (Flugmodus, dann WLAN). Das Plugin bleibt bis dahin bei
+    seitengeladenen Büchern.
+
 ## Plugin
 
-- [ ] **N1 Symbole für Kobo 4.46 (Qt5)**
+- [!] **N1 Symbole für Kobo 4.46 (Qt5)** · blockiert: kein Kobo mit 4.x
+  mehr (Clara BW seit 2026-10-28 auf 6.0). Nur noch, falls ein 4.x-Gerät
+  zum Testen auftaucht.
   - [ ] **du:** Firmware-Update 4.46 für den Clara BW besorgen (wegen `libnickel.so`).
   - [ ] **ich:** Symbole für „Buch geöffnet“, „Buch geschlossen“ und „an
     Position springen“ suchen.
-- [ ] **N2 Plugin Qt5**
-  - [ ] **ich:** NickelHook-Plugin, das das Programm beim Schließen (`push`)
-    und Öffnen (`pull`) aufruft; Paket `KoboRoot.tgz`.
-  - [ ] **du:** Test auf dem Clara BW.
+- [ ] **N2 Plugin für den Kobo 6.0** (statt Qt5 für 4.x)
+  - [ ] **ich:** Symbole aus `libnickel.so` von Kobo 6.0 prüfen (Vorbild
+    N3, Tolino 5.18) und das Tolino-Plugin (Qt6) für den Kobo bauen;
+    Paket `Kobo.tgz`.
+  - [ ] **du:** Test auf dem Clara BW (6.0).
 - [x] **N3 Symbole für Tolino 5.18 (Qt6)** · Ergebnis in
   [`docs/nickel-5.18-symbols.md`](docs/nickel-5.18-symbols.md)
   - [x] **du:** `libnickel.so` aus dem Kobo-Build 5.18.270971 und die
@@ -535,10 +756,32 @@ dürfen jederzeit dazwischengeschoben werden.
   - [ ] **ich (nach dem Test):** Gerätesprache: Das Log zeigt `QLocale()`
     beim Start; folgt sie Nickels Spracheinstellung, kommen die Meldungen
     auch auf Englisch.
+- [ ] **N6 Zuordnungen auf dem Gerät** (nach D2, vor dem Kobo-Plugin N2) ·
+  Lücke, die du am 2026-10-29 bemerkt hast: Am Rechner sendet `push` ein
+  zugeordnetes Buch (kepub, von Calibre verändertes EPUB) unter der
+  Prüfsumme der Original-EPUB, mit der Stelle in sie übersetzt; KOReader
+  findet sie, wenn er dieselbe Original-Datei hat. Das Plugin auf dem
+  Gerät (`--live`) kennt aber keine Zuordnungen und sendet unter der
+  eigenen Prüfsumme der Gerätedatei, mit der KOReader nichts anfangen
+  kann; dasselbe beim Holen. Für die Übersetzung braucht die Bibliothek
+  heute die Original-EPUB selbst, und die liegt nicht auf dem Gerät.
+  - [ ] **ich:** Weg wählen und vorschlagen: (a) beim Anlegen der
+    Zuordnung eine kleine Übersetzungstabelle erzeugen (Prüfsumme des
+    Originals, Kapitelpfade, Textlängen bzw. Offsets je Kapitel kepub ↔
+    Original) und nach `.adds/NickelInkSync/` aufs Gerät legen (die GUI
+    beim Kopieren in E5 oder per Knopf, die CLI per Befehl); (b) die
+    Original-EPUB verborgen mit aufs Gerät kopieren (einfacher, kostet
+    Speicher). Beide Richtungen, Kobo und Tolino.
+  - [ ] **ich:** Umsetzen in Bibliothek und CLI (`--live` liest die
+    Tabelle), Tests mit Book A/R (kepub ↔ EPUB) und Calibre-artiger
+    Umwandlung.
+  - [ ] **du:** Am Gerät prüfen: ein Calibre-kepub auf dem Kobo bzw. ein
+    Calibre-EPUB auf dem Tolino lesen, Buch verlassen, in KOReader mit der
+    Original-EPUB öffnen.
 
 ## Optional (später)
 
-- [ ] **O1 Manuelle Zuordnung** von Büchern (kepub ↔ EPUB), Testfall Heat 2.
+- [x] **O1 Manuelle Zuordnung** von Büchern (kepub ↔ EPUB), Testfall Heat 2.
   **Geht in D1 auf** (CLI mit manueller Buchzuordnung, höchste Priorität).
   Vorbild: BookOrbit, nur als Konzept (AGPL-3.0). Blockiert auch den
   Kindle-Sync (L1): Nichts im KFX führt zur EPUB-Prüfsumme; Kandidaten für
@@ -550,10 +793,9 @@ dürfen jederzeit dazwischengeschoben werden.
 - [ ] **O3 Einstellungsdialog** auf dem Gerät.
 - [ ] **O4 Sync-Status** im Buchmenü, plus „Jetzt synchronisieren“.
 - [ ] **O5 Geräteübersicht** in `status`: alle Positionen eines Buchs nebeneinander.
-- [ ] **O6 Markierungen auf Kobo 5.x/6.x nachtesten** · `[!]` erst, wenn alle
-  Tests mit Kobo 4.x durch sind: Das Update auf 5.18+ kostet das einzige
-  4.x-Gerät (Clara BW). · **du:** Book P auf dem Kobo mit Firmware 5.18 oder
-  6.x markieren. Auf 4.46 zeigt Nickel Markierungen im kepub verschoben und im
+- [ ] **O6 Markierungen auf Kobo 5.x/6.x nachtesten** · nicht mehr
+  blockiert: Der Clara BW ist seit 2026-10-28 auf 6.0. · **du:** Book P auf
+  dem Kobo mit Firmware 6.0 markieren. Auf 4.46 zeigt Nickel Markierungen im kepub verschoben und im
   EPUB teils gar nicht an (gespeichert wird richtig); auf dem Tolino mit 5.18
   tritt das nicht auf.
 
@@ -584,11 +826,7 @@ dürfen jederzeit dazwischengeschoben werden.
     Book P und Q und die Book-R-Positionen ergeben KOReaders XPointer;
     nur q5w04 (CDATA) ist nicht exakt (Text weicht ab, gefunden über den
     Text danach).
-  - [!] **ich:** Kindle in die CLI: `status --device` für einen gemounteten
-    Kindle (KFX + `.sdr` lesen, Position übersetzen), nur lesend.
-    Blockiert durch D1 (Buchzuordnung in der CLI): ohne Zuordnung KFX ↔
-    EPUB-Prüfsumme kein Sync.
-    Der Leser und die Übersetzung liegen fertig in der Bibliothek
-    (`kindle::to_xpointer`).
+  - [x] **ich:** Kindle in die CLI: `status`/`push` über die Zuordnung,
+    nur lesend (D1 Etappe 4).
   - [ ] **du:** Prüfen, ob der Kindle eine geänderte `.yjf` übernimmt
     (Flugmodus, damit Amazons Sync nicht dazwischenfunkt).

@@ -24,14 +24,20 @@ everything else is still an assumption.
 
 | | |
 |---|---|
-| Devices | Kobo on firmware 4.x (Qt5), Tolino Shine 5, Shine Color and Vision Color on firmware 5.x (Qt6) |
+| Devices | Kobo on firmware 4.x (Qt5) and 6.x (Qt6, not checked yet), Tolino Shine 5, Shine Color and Vision Color on firmware 5.x (Qt6) |
 | Formats | kepub (`.kepub.epub`) and plain EPUB |
 | Books | Sideloaded only (`ContentID` starting with `file:///mnt/onboard/`) |
 | Server | Any KOSync-compatible server (koreader-sync-server, self-hosted forks) |
 
-Both firmware lines are needed: the reference Kobo (Clara BW) runs 4.46, the
+Both firmware lines are needed: the reference Kobo (Clara BW) ran 4.46, the
 reference Tolino (Shine Color) runs 5.18. The Rust core is unaffected; the
 NickelHook plugin is built twice (Qt5 and Qt6).
+
+On 2026-10-28 the reference Clara BW updated itself to firmware
+**6.0.279225** (database version 222). There is no 4.x device left: the
+4.46 findings below stay verified, but 4.x-only behaviour can be checked
+against the fixtures only, and the Kobo pass targets 6.0 (see
+[Open technical questions](#open-technical-questions)).
 
 ## Book identity
 
@@ -42,13 +48,91 @@ up to 1 GiB, stopping at the end of the file; checked against the
 `partial_md5_checksum` KOReader stored for every EPUB fixture). A kepub on one device and the source
 EPUB on another are different books to the server.
 
-Later: a manual mapping that links several file hashes to one book, so a
-kepub and its source EPUB share progress (see the roadmap).
-[BookOrbit](https://github.com/bookorbit/bookorbit) does this
-([`docs/KOREADER_HASH_MATCHING.md`](https://github.com/bookorbit/bookorbit/blob/main/docs/KOREADER_HASH_MATCHING.md),
-manual links take precedence over automatic hash matches) and has a position
-converter for Kobo spans, XPointer and CFI
-(`server/src/modules/position-converter/`).
+**Manual mapping** (D1, in progress): a book on a device whose file differs
+from the original EPUB is linked to that EPUB, and synced under the EPUB's
+checksum. Concept as in
+[BookOrbit](https://github.com/bookorbit/bookorbit)
+([`docs/KOREADER_HASH_MATCHING.md`](https://github.com/bookorbit/bookorbit/blob/main/docs/KOREADER_HASH_MATCHING.md):
+manual links take precedence over automatic hash matches; it also has a
+position converter for Kobo spans, XPointer and CFI,
+`server/src/modules/position-converter/`), re-implemented, no code taken.
+
+| | Key | Why |
+|---|---|---|
+| Kobo, Tolino (kepub or EPUB) | partial MD5 of the file on the device | what the sync computes anyway; independent of mount point, folder and file name, so moving or renaming keeps the mapping, and one file on two devices shares it. A re-converted file has a new checksum and loses its mapping: positions in the old file may not fit the new one. |
+| Kindle (KFX) | `content_id` from the KFX metadata | nothing in the KFX leads to the EPUB checksum; `title` is the file stem it was sent under and need not be unique; the KFX is rewritten by Amazon, the `content_id` stays with the document. A new conversion shows up anyway: the stored position no longer fits the KFX's position maps. |
+| Original EPUB | path and its partial MD5 at the time of mapping | the checksum is what KOReader and the server use; if the file is missing or its checksum changed, the mapping is reported as broken instead of syncing under a checksum KOReader no longer has. |
+
+Path, title and author of the device book are kept for display only. The
+mappings live in `mappings.json` in the data directory
+(`$NICKELINKSYNC_DATA_DIR`, else `$XDG_DATA_HOME/nickelinksync`, else
+`~/.local/share/nickelinksync`), human-readable JSON with a `format`
+version, written atomically (temporary file, then rename), shared by the
+CLI and the desktop client (D2); a file with a newer format is refused,
+not rewritten. Commands: `nickelinksync map add|list|remove`
+(`src/mapping.rs`, `src/kindle_device.rs`).
+
+**Library of originals** (`src/library.rs`): `library` in `config.ini` or
+`--library`. A folder with a Calibre `metadata.db` is read through that
+database only, opened as `file:…?mode=ro&immutable=1` (no journal, no
+lock, nothing written), joining `books`, `data` (format `EPUB`; the file is
+`<books.path>/<data.name>.epub`) and `authors` via `books_authors_link`;
+any other folder is searched for `*.epub` (not `*.kepub.epub`) with title
+and authors from the OPF. **`map suggest`** (`src/suggest.rs`) ranks the
+library against a device book by title (word overlap with the EPUB's title
+or file name: Send-to-Kindle sets the KFX `title` to the stem of the sent
+file), authors and, for the five best, chapters (spine paths, or KFX
+sections against spine items), and checks their checksums: a library EPUB
+with the device file's checksum needs no mapping. The Kindle's
+`content_id` is the key of its mapping and how `--content-id` picks the
+book; it does not appear in the library, so it adds nothing to the score.
+
+**Syncing through the mapping** (`src/transfer.rs`, `status`/`push`/`pull`
+on the desktop; the plugin does not read mappings): a mapped book syncs
+under the original's checksum; a broken mapping, and with a library
+configured a book that is neither mapped, nor in the library, nor the
+original of a mapping, does not sync at all; without a library every
+unmapped book syncs under its own checksum as before. The position moves
+between the two files as a KOReader XPointer, by chapter and text, never
+by spine index or node path:
+
+- **Chapter:** the spine item's path, with calibre's `_split_NNN` taken
+  off, so the parts of a split chapter are one chapter. Calibre's Kobo
+  driver (EPUB → kepub on copy, owner's library on the Kobo 6.0,
+  2026-10-28) replaced the cover page by `titlepage.xhtml` in all three
+  books and split two chapters of one into `…_split_000`/`_split_001`
+  (34 spine items against 27).
+- **Text:** the chapter's visible characters in document order, without
+  whitespace, soft hyphens and zero-width characters (a kepub adds
+  wrapper `div`s, spans and whitespace between elements). Same text: the
+  same character (*same text*). Otherwise the 32 characters after the
+  position (before it, at a chapter end) are looked up, nearest to the
+  same relative place (*found by its text*).
+- **Fallbacks, shown:** the chapter's start if the text is not found; if
+  the chapter is not in the other file, the place at the book's
+  percentage, counted in visible characters (*from the percentage only*).
+
+Checked: KOReader's highlights of the same 16 words in the kepub and the
+EPUB of Book P and Book Q move to each other exactly, both ways; the
+Kobo 6.0's `#kobo.17.1:204` in the Book R kepub lands on
+`p[16]/text()[1].204` of the EPUB; Book A's `#kobo.1.1` is KOReader's own
+position in the EPUB; a calibre-like conversion of Book R (cover page,
+split chapter, changed text) moves both ways (`tests/transfer.rs`,
+`tests/sync_mapping.rs`). `pull --write` translates back into a mapped
+EPUB on the Tolino; a kepub is never written (Nickel expects a span
+there, and the translation back to a span is not done).
+
+**Place to send** (`position`, `transfer::step_back`): a device stores
+its page start, often mid-sentence; KOReader opens the page holding that
+place by its own layout, so it may sit anywhere on the page (Vampire Hunter
+D on the Kobo 6.0, 2026-10-28: the Kobo's page started at "the events of
+the day", which KOReader showed near the bottom of its page, though the
+XPointer was exact). By default `push` sends the start of the innermost
+block element (paragraph) instead, at most 600 visible characters back,
+else the sentence start (after `.`, `!`, `?`, `…` and closing quotes),
+else the place itself; `sentence` and `exact` are the other settings.
+The local position used for `status` and `confirm` is the same moved one,
+so the device does not look newer because of it.
 
 ## License
 
@@ -105,6 +189,12 @@ for the device. It owns all logic:
   opened overwrite a position read further on in KOReader. In a terminal
   the CLI asks "device or server?"; without one (the plugin, later) it
   overwrites nothing and reports the book. `--force` skips the question.
+
+The run itself (open the device and the server, then one step per book)
+is in the library too (`session`), not in the CLI: a step says what
+`push` or `pull` would do, and a question from `confirm` is part of it
+(`Action::Ask`). The CLI asks in the terminal, the desktop client in a
+dialog; both apply the same steps.
 
 Desktop use: `nickelinksync push|pull|status --device /Volumes/KOBOeReader`.
 On-device use: the same binary, called by the hook.
@@ -245,6 +335,19 @@ different XPointers for the same text. Element indices match the source DOM.
 Positions taken by paging (end of Book C) are page starts and differ between
 renderers; only chapter starts line up exactly.
 
+**Kobo firmware 6.0** (Clara BW, 6.0.279225, database version 222, Book R
+as kepub and EPUB, read 2026-10-28): the plain EPUB stores
+`chapter3.xhtml#point(/1/4/66/1:0)`, the Adobe point as on 4.46 and the
+Tolino, exactly the start of `R3-32` at the top of the page. The kepub
+stores **the offset into the span** as well:
+`chapter2.xhtml#kobo.17.1:204`, where 4.46 stored `#kobo.N.M` only. Span
+`kobo.17.1` is `R2-16`, and character 204 of its text is the first word
+on the page ("alt See hören …", after umlauts, so characters, not UTF-8
+bytes; UTF-16 units are assumed, as in Kobo highlights). Chapter rows
+(`ContentType = 9`) have UUID `ContentID`s for the kepub too, as on the
+Tolino. The database is in WAL mode. Not checked yet: comments and CDATA
+in the 6.0 Adobe point, and highlights.
+
 **Store vs. sideloaded**: store books have UUID `ContentID`s on both
 firmware lines; filtering on `file:///mnt/onboard/` is enough.
 
@@ -318,8 +421,8 @@ mind it.
 ## Kindle (feasibility check, outside scope)
 
 Checked on a **Kindle Paperwhite 11 (PW5), firmware 5.19.2** (jailbroken,
-but everything below needs only the USB mount, so it holds for a stock
-Kindle), with Book A, C, P, Q and R
+but everything below needs only the files under `documents/`, so it holds
+for a stock Kindle), with Book A, C, P, Q and R
 sent through **Send-to-Kindle** (2026-10-24). Read from copies only; the
 format was decoded with our own reader, no Amazon or calibre code.
 Answer: **reading the position over USB and mapping it to KOReader works,
@@ -414,12 +517,14 @@ What it would take, and what is open:
   (`sync_lpr`), so a changed `.yjf` may be ignored or overwritten. The
   Kindle also left `.yjr.bad_file` copies next to the `.yjr` files.
 - **Jailbreak:** assume users have **none**. The test Kindle is
-  jailbroken, but every finding above used only the USB mount, so it holds
-  for a stock Kindle. Any Kindle feature set is split in two:
+  jailbroken, but every finding above used only the files under
+  `documents/`, which a stock Kindle offers over USB (MTP on recent
+  ones), so it holds for a stock Kindle. Any Kindle feature set is split
+  in two:
 
   | | Stock Kindle (default) | Jailbroken Kindle (extra) |
   |---|---|---|
-  | Read the position | desktop CLI over USB, `.yjf` | same, plus `cc.db` (`p_location`, `p_percentFinished`) as root |
+  | Read the position | desktop CLI over USB (a copy, where only MTP is offered), `.yjf` | same, plus `cc.db` (`p_location`, `p_percentFinished`) as root |
   | Book mapping | KFX metadata + manual link to the EPUB hash | same |
   | Write back | desktop CLI over USB, `.yjf` only, if the reader takes it (unchecked) | also `cc.db`, while the framework is stopped |
   | Sync without a cable | no | an on-device daemon or KUAL action (no in-process hook exists on the Kindle) |
@@ -428,6 +533,44 @@ What it would take, and what is open:
   column only adds to it.
 - Only Send-to-Kindle (PDOC KFX) was checked; books sideloaded as AZW3 or
   KFX via calibre store their position in other files (`.azw3f`/`.azw3r`).
+
+**In the CLI** (D1, 2026-10-28): `status` and `push` read a Kindle, or a
+copy of its books, and send each mapped KFX's `lpr` under the mapped
+EPUB's checksum (`src/kindle_device.rs`, `KindleSession` in
+`src/main.rs`); `pull` refuses. Checked on the owner's Paperwhite with
+real books sent from the Calibre library:
+
+- **No USB mount:** the Paperwhite (USB product `0x9981`) offers only
+  **MTP**, which macOS does not mount. The CLI reads a copy instead: a
+  folder with `documents/`, or one with the `.kfx` files and `.sdr`
+  folders up to two levels down (OpenMTP copies). Direct MTP access is
+  open (libmtp).
+- **Store books have DRM:** a book bought in the Kindle store is a
+  `DRMION` container (`\xeaDRMION\xee`), its text unreadable; it is
+  skipped. Only Send-to-Kindle documents work, and those are separate
+  books on the Kindle with their own position.
+- **`content_id`** of a real Send-to-Kindle document is 32 base32
+  characters (`HJ5YDU…`), not hex; read from the metadata.
+- **Embedded fonts** are entities of type `$418` (OpenType data, not
+  Ion) and are skipped like images (`$417`).
+- **Position runs** in `$609` may be `[pid delta, eid, offset]`: a block
+  that goes on after a nested one, from that character.
+- **Text:** the KFX keeps **no-break spaces** (before `–` and `…`, in
+  dates), where the probe books had plain spaces; both count as a space.
+  A `<br/>` is `\n` in the block, a space before it kept, whitespace after
+  it dropped (`that <br/>I` → `that \nI`). A paragraph may be split into
+  two blocks at `<br/><br/>`.
+- **Sections ≠ spine items:** Send-to-Kindle put a **cover section**
+  without text in front and **split a chapter** into two sections (Good
+  Boy: 16 sections, 14 spine items). With differing counts, a block is
+  found by its text in every chapter (the neighbouring blocks deciding
+  between equal texts, then the relative place), also as a part of a
+  longer EPUB block; a position on the cover is the start of the first
+  chapter with text, marked not exact.
+- Result: every text block of *Der wiedergefundene Freund* (292 of 292)
+  and nearly all of *Good Boy* (1203 of 1207; the rest are blurbs and
+  links in the front and back matter, found but not exact) translate
+  exactly; the finished book's `lpr` (`pid` 107449) is the last page.
 
 ## Open technical questions
 
@@ -445,7 +588,11 @@ What it would take, and what is open:
    the plugin sets the pulled position in the `Volume` passed to
    `setVolume` and in the one `VolumeManager::getById` loads while opening
    ([docs/nickel-5.18-symbols.md](docs/nickel-5.18-symbols.md)). The Qt5
-   symbols for 4.46 are still open.
+   symbols for 4.46 are still open, and on hold without a 4.x device.
+4. **Kobo firmware 6.0.** Not checked yet: the position format (kepub
+   span, and whether the Adobe point counts comments and CDATA as nodes
+   like the Tolino; the CLI assumes so from firmware 5 on), the chapter
+   rows, and the plugin symbols. Reference device: Clara BW, 6.0.279225.
 
 ## Test data still needed
 

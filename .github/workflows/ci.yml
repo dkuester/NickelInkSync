@@ -39,15 +39,16 @@ jobs:
       - name: Formatting
         run: cargo fmt --check
       - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Tests
-        run: cargo test
+        run: cargo test --workspace
       # Statically linked musl binary: independent of the device glibc, so one
       # file runs on Kobo firmware 4.x and Tolino firmware 5.x.
       - name: Install cargo-zigbuild and Zig
         run: pip install cargo-zigbuild==0.23.4 ziglang==0.17.0
       - name: Device build (armv7-unknown-linux-musleabihf)
-        run: cargo zigbuild --release --target armv7-unknown-linux-musleabihf
+        # Only the CLI package: the desktop client (gui/) never goes to the device.
+        run: cargo zigbuild --release --target armv7-unknown-linux-musleabihf -p nickelinksync
       - name: Device binary is a static 32-bit ARM ELF and runs under QEMU
         run: |
           sudo apt-get update -qq
@@ -100,3 +101,20 @@ jobs:
           path: dist/NickelInkSync/
           include-hidden-files: true
           if-no-files-found: error
+
+  # The desktop client on the platform it targets first. Not a required
+  # check (the ruleset requires "check" only).
+  gui-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Clippy
+        run: cargo clippy -p nickelinksync-gui --all-targets -- -D warnings
+      - name: Tests
+        run: cargo test -p nickelinksync-gui
+      - name: Build
+        run: cargo build --release -p nickelinksync-gui

@@ -8,6 +8,12 @@ license = "MIT"
 repository = "https://github.com/dkuester/NickelInkSync"
 publish = false
 
+# The desktop client is a second package, so the device build
+# (`-p nickelinksync`, also the default member) never compiles egui.
+[workspace]
+members = [".", "gui"]
+default-members = ["."]
+
 [dependencies]
 clap = { version = "4.6.7", features = ["derive"] }
 md-5 = "0.11.0"

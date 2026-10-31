@@ -38,18 +38,127 @@ nickelinksync pull --device /Volumes/KOBOeReader
 | `pull` | Shows which books have a newer position on the server, how the device would store it and where it would ask first. Only with `--write` is it written to the device (Tolino so far, experimental, see below); `--force` takes the server position without asking. |
 
 All three take `--book <text>` to limit them to books whose title or file
-path contains the text, and `--config <file>` for another configuration
-file. The device is only read, never written, except by `pull --write`
+path contains the text, `--config <file>` for another configuration
+file and `--library <folder>` for the library of originals (see [Book
+mapping](#book-mapping-in-progress)), which decides which books are
+synced. The device is only read, never written, except by `pull --write`
 (and by the plugin, see below).
 
 `pull --write` first copies `.kobo/KoboReader.sqlite` to
 `~/.local/share/nickelinksync/backups/KoboReader-<UTC time>.sqlite` (or
-`$XDG_DATA_HOME/nickelinksync/backups`, or `$NICKELINKSYNC_BACKUP_DIR`),
+`backups` in the data directory, see below, or `$NICKELINKSYNC_BACKUP_DIR`),
 then sets the position of all books in one transaction. It refuses to
 write without `.kobo/version` (not a mounted device) or while SQLite
 journal files lie next to the database. Eject the device before you open
 the book. To undo, copy the backup back to `.kobo/KoboReader.sqlite` while
 the device is mounted.
+
+### Book mapping (in progress)
+
+The sync server knows a book by a checksum of its file. A kepub on the
+Kobo, a differently converted EPUB on the Tolino or a KFX on a Kindle has
+another checksum than the original EPUB that KOReader opens. A mapping
+links such a book to its original EPUB:
+
+```sh
+nickelinksync map suggest --device /Volumes/KOBOeReader --library ~/Calibre\ Library
+nickelinksync map add --device /Volumes/KOBOeReader --book "Heat 2" --epub ~/Books/heat-2.epub
+nickelinksync map add --device ~/Kindle-copy --book heat-2
+nickelinksync map list
+nickelinksync map remove 1a2b3c4d
+```
+
+| Command | What it does |
+|---|---|
+| `map suggest` | For each book on the device (or those `--book`/`--content-id` select): already mapped, the same file as one in the library (no mapping needed), or up to three candidates from the library with their score, and the `map add` command for the best one. Stores nothing. |
+| `map add` | Maps one book on the device (`--book <text>` or `--content-id`) to the original EPUB given with `--epub` and says how many chapters of the two files match. Without `--epub` it shows the suggestions from the library and asks which one to take (only in a terminal). A file identical to the EPUB needs no mapping and is not stored. Mapping the same device book again replaces the old mapping. |
+| `map list` | Shows every mapping and checks its EPUB: a mapping whose EPUB is missing or has changed since is reported as broken. |
+| `map remove` | Removes the mapping with this checksum or Kindle `content_id` (or a unique start of it). |
+
+A Kobo or Tolino book is recognized by the checksum of its file, so moving
+or renaming it on the device keeps the mapping; a Kindle book by its
+`content_id`. Neither the device nor the EPUB is changed.
+
+**Syncing through the mapping.** `status`, `push` and `pull` decide per
+book under which checksum it syncs (shown as `sync as`):
+
+| Book | Synced |
+|---|---|
+| mapped, EPUB unchanged | under the original EPUB's checksum, the position translated (below) |
+| mapped, EPUB missing or changed | not at all, until it is mapped again |
+| the same file as in the library, or the original EPUB of a mapping | under its own checksum |
+| none of these, with a library configured | not at all ("not mapped"; `map suggest` helps) |
+| no library configured | under its own checksum, as before |
+
+The position is translated between the device file and the original by
+chapter (the file's path; calibre's split chapters `ch1_split_000.xhtml`,
+`_split_001` … count as `ch1.xhtml`) and by the chapter's visible text
+(whitespace and soft hyphens left out). Where something does not match,
+the output says so: *found by its text* (the text differs, the position was
+found by the 32 characters after it), *chapter start only* (the place in
+the chapter was not found), *from the percentage only* (the chapter is not
+in the other file, for example calibre's `titlepage.xhtml`). `pull
+--write` moves the server position back into a mapped EPUB on the Tolino
+the same way; into a kepub it writes nothing yet.
+
+**Kindle.** `status` and `push` also read a Kindle's books, for every KFX
+that is mapped to its EPUB (`map add`): the last page read (`lpr` in the
+`.sdr` folder) is translated into the EPUB and sent under its checksum.
+Nothing is written to the Kindle, and `pull` refuses. A recent Kindle
+offers only MTP, which a Mac does not mount: copy the `documents` folder,
+or only a book's `.kfx` file with its `.sdr` folder, with
+[OpenMTP](https://openmtp.ganeshrvel.com/) to a folder and give that as
+`--device`. Only books sent with **Send-to-Kindle** can be read; books
+bought in the Kindle store are encrypted (DRM) and are skipped. A
+jailbreak is not needed.
+
+```sh
+nickelinksync map add --device ~/Kindle-copy --book "Good Boy" --library ~/Calibre\ Library
+nickelinksync push --device ~/Kindle-copy
+```
+
+The mappings are only read on the computer: the Tolino plugin syncs every
+book under its own checksum, as before.
+
+**Library.** The original EPUBs come from a folder given with `--library`
+or as `library` in the configuration file. If it holds a Calibre library
+(`metadata.db`), titles, authors and EPUB paths come from Calibre's
+database, opened read-only as an immutable file; otherwise every `*.epub`
+below the folder (not `*.kepub.epub`) is read, with title and authors from
+its OPF. NickelInkSync never writes into the library.
+
+**Score.** Suggestions compare the title (word overlap with the EPUB's
+title or file name; a Kindle book's title is the name of the file it was
+sent as), the authors, and for the best candidates the chapters (spine
+items found by path, or KFX sections against spine items): title × 0.7 +
+author × 0.3, then 0.8 × that + 0.2 × chapters. Accents and umlauts are
+folded, numbers count, so "Volume 1" and "Volume 2" differ. Candidates
+below 50 % are not shown; below 80 % the best one is marked "uncertain".
+
+The mappings are kept in `mappings.json` in the data directory
+`~/.local/share/nickelinksync/` (or `$XDG_DATA_HOME/nickelinksync`, or
+`$NICKELINKSYNC_DATA_DIR`), shared with the desktop client.
+
+### Desktop client (in progress)
+
+A window for the same work, built on the same library (`gui/`, egui):
+`just gui` or `cargo run -p nickelinksync-gui`. It finds a Kobo or
+Tolino connected over USB (macOS: `/Volumes`), takes a copy of a
+Kindle's books as a folder, and lists the books by how they sync (not
+mapped, no reference EPUB, mapped, own checksum) with their position on
+the device; without a library it warns that it cannot check which books
+KOReader knows. A book is
+mapped from there: the library's suggestions with their scores, or an
+EPUB chosen by hand; a mapping can be changed or removed. With a server
+in `config.ini` it shows the server's position next to the device's and
+sends positions per book or all at once; a `confirm` question comes as a
+dialog (keep the server's, or send the device's). "History" lists what
+the CLI and the window sent (`history.jsonl` in the data directory). It
+writes nothing to the device, only `mappings.json` and the history.
+Nothing is synced when a device is connected. German or English after the
+system language, switchable. It shares `config.ini` and `mappings.json`
+with the CLI; its own settings (language, Kindle folder) are in
+`gui.json` in the data directory.
 
 ## Configuration
 
@@ -75,6 +184,12 @@ password = your password
 
 # Messages of the Tolino plugin: all (default), errors, none
 # notify = all
+
+# Folder with the original EPUBs, a Calibre library or any folder (book mapping)
+# library = ~/Calibre Library
+
+# Which place push sends: paragraph (default), sentence, exact
+# position = paragraph
 ```
 
 - The password is only read from this file, never from the command line.
@@ -102,6 +217,26 @@ password = your password
   and the book is reported. `--force` overwrites without asking.
 - `notify` is only read by the Tolino plugin (see below): which messages
   it shows on the screen.
+- `library` is used by the `map` commands and decides which books
+  `status`, `push` and `pull` sync (see [Book
+  mapping](#book-mapping-in-progress)). A leading `~/` is your home
+  folder. The `map` commands need no server settings: a file with only
+  `library` (and `position`) is enough; `status` then shows no server.
+- `position` decides which place `push` sends. The device stores where
+  its page starts, often mid-sentence, and KOReader opens the page that
+  holds that place by its own page layout, so it can be anywhere on the
+  page; the start of a paragraph or sentence is easier to find there.
+
+  | Value | Sends |
+  |---|---|
+  | `paragraph` (default) | the start of the paragraph; if that is more than about half a page (600 characters without spaces) back, the start of the sentence; if that is too, the place itself |
+  | `sentence` | the start of the sentence, at most half a page back |
+  | `exact` | the place itself, to the character |
+
+  The output says how far it moved ("moved back 103 characters to the
+  paragraph start"), and `status` and `confirm` compare with the same
+  place, so a book is not reported as newer on the device just because
+  of it. `pull` takes the server position as it is.
 - Lines starting with `#` or `;` are comments; unknown keys are an error.
 
 ## Plugin for the Tolino (experimental)
@@ -170,8 +305,8 @@ Tolino starts).
 - Sideloaded kepub and EPUB books without DRM
 - For now, put the **same file** on every device. The sync server tells
   books apart by a hash of the file, so a kepub on one device and the original
-  EPUB on another count as two different books. Manual mapping between them
-  is on the roadmap.
+  EPUB on another count as two different books. The manual mapping between
+  them is being built (see [Book mapping](#book-mapping-in-progress)).
 
 ## History
 

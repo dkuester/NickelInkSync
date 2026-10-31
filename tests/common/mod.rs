@@ -14,8 +14,14 @@ use std::sync::{Arc, Mutex};
 use rusqlite::Connection;
 use serde_json::{json, Value};
 
+/// `tests/fixtures` of the repository, also from the desktop client's
+/// package (`gui/`), which uses these helpers too.
 pub fn fixtures() -> PathBuf {
-  Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
+  let package = Path::new(env!("CARGO_MANIFEST_DIR"));
+  match package.join("tests/fixtures") {
+    dir if dir.is_dir() => dir,
+    _ => package.join("../tests/fixtures"),
+  }
 }
 
 pub const KOBO_VERSION: &str =
@@ -41,6 +47,29 @@ pub fn fake_device(name: &str, sql: &str, version: &str) -> PathBuf {
       root.join("Books").join(file),
     )
     .unwrap();
+  }
+  root
+}
+
+/// A fake Kindle: the Kindle fixtures where Send-to-Kindle puts them.
+pub fn fake_kindle(name: &str) -> PathBuf {
+  let root = std::env::temp_dir().join(format!("nickelinksync-{}-{name}", std::process::id()));
+  let _ = fs::remove_dir_all(&root);
+  let items = root.join("documents/Downloads/Items01");
+  fs::create_dir_all(&items).unwrap();
+  fs::create_dir_all(root.join("system")).unwrap();
+  for entry in fs::read_dir(fixtures().join("kindle")).unwrap() {
+    let entry = entry.unwrap();
+    let to = items.join(entry.file_name());
+    if entry.file_type().unwrap().is_dir() {
+      fs::create_dir_all(&to).unwrap();
+      for file in fs::read_dir(entry.path()).unwrap() {
+        let file = file.unwrap();
+        fs::copy(file.path(), to.join(file.file_name())).unwrap();
+      }
+    } else {
+      fs::copy(entry.path(), to).unwrap();
+    }
   }
   root
 }

@@ -184,7 +184,7 @@ fn resolve(r: &BytesRef) -> Result<String, Error> {
 }
 
 /// The XML entities and the HTML ones that show up in EPUBs.
-fn entity(name: &str) -> Option<&'static str> {
+pub(crate) fn entity(name: &str) -> Option<&'static str> {
   Some(match name {
     "amp" => "&",
     "lt" => "<",

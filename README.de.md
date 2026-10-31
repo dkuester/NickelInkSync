@@ -40,18 +40,135 @@ nickelinksync pull --device /Volumes/KOBOeReader
 | `pull` | Zeigt, für welche Bücher der Server eine neuere Position hat, wie das Gerät sie speichern würde und wo es nachfragen würde. Nur mit `--write` wird sie aufs Gerät geschrieben (bisher nur Tolino, experimentell, siehe unten); `--force` übernimmt die Server-Position ohne Rückfrage. |
 
 Alle drei nehmen `--book <Text>` (nur Bücher, deren Titel oder Dateipfad den
-Text enthält) und `--config <Datei>` für eine andere Konfigurationsdatei. Das
+Text enthält), `--config <Datei>` für eine andere Konfigurationsdatei und
+`--library <Ordner>` für die Bibliothek mit den Originalen (siehe
+[Buchzuordnung](#buchzuordnung-im-aufbau)); sie entscheidet mit, welche
+Bücher synchronisiert werden. Das
 Gerät wird nur gelesen, nie beschrieben, außer von `pull --write` (und vom
 Plugin, siehe unten).
 
 `pull --write` kopiert zuerst `.kobo/KoboReader.sqlite` nach
 `~/.local/share/nickelinksync/backups/KoboReader-<UTC-Zeit>.sqlite` (oder
-`$XDG_DATA_HOME/nickelinksync/backups`, oder `$NICKELINKSYNC_BACKUP_DIR`)
+`backups` im Datenordner, siehe unten, oder `$NICKELINKSYNC_BACKUP_DIR`)
 und setzt dann die Position aller Bücher in einer Transaktion. Es schreibt
 nicht ohne `.kobo/version` (kein eingehängtes Gerät) und nicht, solange
 SQLite-Journaldateien neben der Datenbank liegen. Wirf das Gerät aus, bevor
 du das Buch öffnest. Rückgängig machen: die Sicherung bei eingehängtem Gerät
 zurück nach `.kobo/KoboReader.sqlite` kopieren.
+
+### Buchzuordnung (im Aufbau)
+
+Der Sync-Server erkennt ein Buch an einer Prüfsumme der Datei. Ein kepub auf
+dem Kobo, ein anders umgewandeltes EPUB auf dem Tolino oder ein KFX auf dem
+Kindle hat eine andere Prüfsumme als das Original-EPUB, das KOReader öffnet.
+Eine Zuordnung verbindet so ein Buch mit seinem Original-EPUB:
+
+```sh
+nickelinksync map suggest --device /Volumes/KOBOeReader --library ~/Calibre-Bibliothek
+nickelinksync map add --device /Volumes/KOBOeReader --book "Heat 2" --epub ~/Books/heat-2.epub
+nickelinksync map add --device ~/Kindle-Kopie --book heat-2
+nickelinksync map list
+nickelinksync map remove 1a2b3c4d
+```
+
+| Befehl | Was er tut |
+|---|---|
+| `map suggest` | Für jedes Buch auf dem Gerät (oder die mit `--book`/`--content-id` gewählten): schon zugeordnet, dieselbe Datei wie eine in der Bibliothek (keine Zuordnung nötig) oder bis zu drei Kandidaten aus der Bibliothek mit Bewertung und dem `map add`-Befehl für den besten. Speichert nichts. |
+| `map add` | Ordnet ein Buch auf dem Gerät (`--book <Text>` oder `--content-id`) dem mit `--epub` angegebenen Original-EPUB zu und sagt, wie viele Kapitel der beiden Dateien übereinstimmen. Ohne `--epub` zeigt es die Vorschläge aus der Bibliothek und fragt, welcher es sein soll (nur im Terminal). Eine Datei, die mit dem EPUB identisch ist, braucht keine Zuordnung und wird nicht gespeichert. Wird dasselbe Buch erneut zugeordnet, ersetzt das die alte Zuordnung. |
+| `map list` | Zeigt alle Zuordnungen und prüft ihr EPUB: Fehlt es oder hat es sich seitdem geändert, wird die Zuordnung als kaputt gemeldet. |
+| `map remove` | Löscht die Zuordnung mit dieser Prüfsumme bzw. Kindle-`content_id` (oder einem eindeutigen Anfang davon). |
+
+Ein Buch auf Kobo oder Tolino wird an der Prüfsumme seiner Datei erkannt;
+Verschieben oder Umbenennen auf dem Gerät behält die Zuordnung. Ein
+Kindle-Buch wird an seiner `content_id` erkannt. Weder Gerät noch EPUB
+werden verändert.
+
+**Synchronisieren über die Zuordnung.** `status`, `push` und `pull`
+entscheiden für jedes Buch, unter welcher Prüfsumme es synchronisiert wird
+(Zeile `sync as`):
+
+| Buch | Synchronisiert |
+|---|---|
+| zugeordnet, EPUB unverändert | unter der Prüfsumme der Original-EPUB, Position übersetzt (siehe unten) |
+| zugeordnet, EPUB fehlt oder geändert | gar nicht, bis es neu zugeordnet ist |
+| dieselbe Datei wie in der Bibliothek, oder die Original-EPUB einer Zuordnung | unter der eigenen Prüfsumme |
+| nichts davon, Bibliothek eingerichtet | gar nicht („not mapped“; `map suggest` hilft) |
+| keine Bibliothek eingerichtet | unter der eigenen Prüfsumme, wie bisher |
+
+Die Position wird zwischen Gerätedatei und Original über das Kapitel (den
+Pfad der Datei; von Calibre geteilte Kapitel `ch1_split_000.xhtml`,
+`_split_001` … zählen als `ch1.xhtml`) und den sichtbaren Text des Kapitels
+übersetzt (ohne Leerraum und weiche Trennstriche). Wo etwas nicht passt,
+sagt die Ausgabe es: *found by its text* (der Text weicht ab, die Stelle
+wurde über die 32 Zeichen danach gefunden), *chapter start only* (die
+Stelle im Kapitel wurde nicht gefunden), *from the percentage only* (das
+Kapitel fehlt in der anderen Datei, z. B. Calibres `titlepage.xhtml`).
+`pull --write` bringt die Server-Position genauso in eine zugeordnete EPUB
+auf dem Tolino zurück; in ein kepub schreibt es noch nichts.
+
+**Kindle.** `status` und `push` lesen auch die Bücher eines Kindle, und
+zwar jedes KFX, das seiner EPUB zugeordnet ist (`map add`): Die zuletzt
+gelesene Seite (`lpr` im `.sdr`-Ordner) wird in die EPUB übersetzt und
+unter deren Prüfsumme gesendet. Auf den Kindle wird nichts geschrieben,
+`pull` lehnt ab. Ein aktueller Kindle bietet nur MTP an, das der Mac nicht
+als Laufwerk einhängt: Kopiere den Ordner `documents` oder nur die
+`.kfx`-Datei eines Buchs samt `.sdr`-Ordner mit
+[OpenMTP](https://openmtp.ganeshrvel.com/) in einen Ordner und gib diesen
+als `--device` an. Lesen lassen sich nur Bücher, die per
+**Send-to-Kindle** geschickt wurden; im Kindle-Shop gekaufte Bücher sind
+verschlüsselt (DRM) und werden übersprungen. Ein Jailbreak ist nicht
+nötig.
+
+```sh
+nickelinksync map add --device ~/Kindle-Kopie --book "Good Boy" --library ~/Calibre-Bibliothek
+nickelinksync push --device ~/Kindle-Kopie
+```
+
+Die Zuordnungen werden nur auf dem Computer gelesen: Das Tolino-Plugin
+synchronisiert jedes Buch wie bisher unter seiner eigenen Prüfsumme.
+
+**Bibliothek.** Die Original-EPUBs kommen aus einem Ordner, angegeben mit
+`--library` oder als `library` in der Konfigurationsdatei. Liegt dort eine
+Calibre-Bibliothek (`metadata.db`), kommen Titel, Autoren und EPUB-Pfade
+aus Calibres Datenbank, nur lesend als unveränderliche Datei geöffnet;
+sonst wird jedes `*.epub` unterhalb des Ordners gelesen (nicht
+`*.kepub.epub`), Titel und Autoren aus seiner OPF. NickelInkSync schreibt
+nie in die Bibliothek.
+
+**Bewertung.** Vorschläge vergleichen den Titel (gemeinsame Wörter mit dem
+Titel oder Dateinamen der EPUB; bei einem Kindle-Buch ist der Titel der
+Name der gesendeten Datei), die Autoren und bei den besten Kandidaten die
+Kapitel (Spine-Einträge nach Pfad bzw. KFX-Abschnitte gegen
+Spine-Einträge): Titel × 0,7 + Autor × 0,3, dann 0,8 × das + 0,2 ×
+Kapitel. Akzente und Umlaute werden vereinfacht, Zahlen zählen mit, „Band
+1“ und „Band 2“ unterscheiden sich also. Kandidaten unter 50 % werden nicht
+gezeigt, unter 80 % ist der beste als „uncertain“ markiert.
+
+Die Zuordnungen liegen in `mappings.json` im Datenordner
+`~/.local/share/nickelinksync/` (oder `$XDG_DATA_HOME/nickelinksync`, oder
+`$NICKELINKSYNC_DATA_DIR`), den sich CLI und Desktop-Client teilen.
+
+### Desktop-Client (im Aufbau)
+
+Ein Fenster für dieselbe Arbeit, auf derselben Bibliothek (`gui/`, egui):
+`just gui` oder `cargo run -p nickelinksync-gui`. Es findet einen per USB
+angesteckten Kobo oder Tolino (macOS: `/Volumes`), nimmt eine Kopie der
+Bücher eines Kindle als Ordner und zeigt die Bücher danach, wie sie
+synchronisiert werden (nicht zugeordnet, ohne Referenz-EPUB, zugeordnet,
+eigene Prüfsumme), mit der Stelle auf dem Gerät; ohne Bibliothek warnt es,
+dass es nicht prüfen kann, welche Bücher KOReader kennt. Dort ordnest du ein Buch auch zu: mit den
+Vorschlägen der Bibliothek samt Bewertung oder einer selbst gewählten
+EPUB; eine Zuordnung lässt sich ändern oder entfernen. Mit einem Server
+in `config.ini` zeigt es die Stelle auf dem Server neben der auf dem
+Gerät und sendet je Buch oder alle auf einmal; eine Rückfrage nach
+`confirm` kommt als Dialog (Server behalten oder Gerät senden). „Verlauf“
+zeigt, was CLI und Fenster gesendet haben (`history.jsonl` im
+Datenordner). Aufs Gerät schreibt es nichts, nur `mappings.json` und den
+Verlauf. Beim Anstecken wird nichts
+synchronisiert. Deutsch oder Englisch nach Systemsprache, umschaltbar.
+`config.ini` und `mappings.json` teilt es mit der CLI; seine eigenen
+Einstellungen (Sprache, Kindle-Ordner) liegen in `gui.json` im
+Datenordner.
 
 ## Konfiguration
 
@@ -60,8 +177,27 @@ es sie gibt. Standardort: `~/.config/nickelinksync/config.ini` (oder
 `$XDG_CONFIG_HOME/nickelinksync/config.ini`, oder der Pfad in
 `$NICKELINKSYNC_CONFIG`). Das Format steht im [englischen README](README.md#configuration):
 `server`, `user`, `password` (oder `key` = MD5 des Passworts), optional
-`device`, `device_id`, `confirm` und `notify` (nur für das Tolino-Plugin,
-siehe unten).
+`device`, `device_id`, `confirm`, `notify` (nur für das Tolino-Plugin,
+siehe unten), `library` (Ordner mit den Original-EPUBs für die
+Buchzuordnung) und `position`. Für die `map`-Befehle genügt eine Datei, die
+nur `library` (und `position`) enthält; `status` zeigt dann keinen Server.
+
+`position` legt fest, welche Stelle `push` sendet. Das Gerät speichert, wo
+seine Seite beginnt, oft mitten im Satz. KOReader öffnet die Seite, auf der
+diese Stelle liegt, nach seinem eigenen Seitenumbruch, die Stelle kann also
+irgendwo auf der Seite stehen. Ein Absatz- oder Satzanfang ist dort leichter
+zu finden.
+
+| Wert | Sendet |
+|---|---|
+| `paragraph` (Standard) | den Anfang des Absatzes; liegt der mehr als etwa eine halbe Seite (600 Zeichen ohne Leerzeichen) zurück, den Anfang des Satzes; liegt auch der so weit zurück, die Stelle selbst |
+| `sentence` | den Anfang des Satzes, höchstens eine halbe Seite zurück |
+| `exact` | die Stelle selbst, zeichengenau |
+
+Die Ausgabe sagt, wie weit zurückgesetzt wurde („moved back 103 characters
+to the paragraph start“), und `status` und `confirm` vergleichen mit
+derselben Stelle; ein Buch gilt deshalb nicht als auf dem Gerät neuer.
+`pull` übernimmt die Server-Position, wie sie ist.
 
 `confirm` legt fest, wann `push` und `pull` „Gerät oder Server?“ fragen,
 statt die neuere Position gewinnen zu lassen:
@@ -152,7 +288,8 @@ wird nur beim Start geprüft).
 - Vorerst muss auf jedem Gerät **dieselbe Datei** liegen. Der Sync-Server
   erkennt Bücher an einer Prüfsumme der Datei, ein kepub auf dem einen und das
   ursprüngliche EPUB auf dem anderen Gerät gelten also als zwei verschiedene
-  Bücher. Eine manuelle Zuordnung steht auf der Roadmap.
+  Bücher. Die manuelle Zuordnung ist im Aufbau (siehe
+  [Buchzuordnung](#buchzuordnung-im-aufbau)).
 
 ## Vorgeschichte
 

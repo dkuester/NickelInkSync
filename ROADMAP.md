@@ -86,6 +86,18 @@ L = a week or more, including verification.
       KOReader in both directions. The renderer is TENG; changing Nickel's
       memory or `goToBookmark` did not move it
       ([docs/nickel-5.18-symbols.md](docs/nickel-5.18-symbols.md))
+- [x] Manual book mapping in the CLI (D1, PRs #28, #31, #32, #33): a book on
+      a device (kepub, an EPUB with another checksum, a Kindle KFX) linked to
+      its original EPUB (`mappings.json` in the data directory, keyed by the
+      device file's checksum or the Kindle `content_id`), `map add|list|
+      suggest|remove` with a library of originals (Calibre `metadata.db`
+      read-only, or a folder) and readable scores; `status`/`push`/`pull`
+      sync under the original's checksum, the position moved by chapter path
+      (calibre's split chapters joined) and visible text, with visible
+      fallbacks and `position = paragraph` by default; the Kindle read from a
+      copy of its books (MTP), store books with DRM skipped. Verified on the
+      Kobo 6.0 (calibre kepubs) and the Paperwhite (Send-to-Kindle): KOReader
+      opens the same page.
 
 ## Quick wins
 
@@ -98,22 +110,15 @@ L = a week or more, including verification.
 
 Order: everything the Tolino Shine Color (5.18) can test on its own comes
 first (reverse translation for plain EPUB, USB write-back, Qt6 symbols and
-plugin). **Right after that, before anything else: the manual book
-mapping in the CLI, then a desktop client with a graphical UI.**
-Maintenance and bug fixes may be slotted in at any time. The Kobo (4.46:
-kepub reverse translation, write-back, Qt5 plugin) follows in a pass of
-its own.
+plugin). **Now, before anything else: the desktop client with a graphical UI**
+(the manual book mapping in the CLI is done, see "Recently completed").
+Maintenance and bug fixes may be slotted in at any time. The Kobo
+(kepub reverse translation, write-back, plugin) follows in a pass of its
+own. The reference Clara BW updated itself to firmware **6.0.279225** on
+2026-10-28, so that pass targets Kobo 6.0 (Qt6, like the Tolino); there is
+no 4.x device left, and 4.x-only behaviour is checked against the 4.46
+fixtures only.
 
-- **Manual book mapping in the CLI** (M–L): link a book on a device
-  (kepub, an EPUB with another hash, a Kindle KFX) to the EPUB and its
-  KOReader hash, and sync through that link. Why: without the mapping
-  there is no sync between kepub and EPUB and no Kindle sync. A manual
-  link wins over the automatic hash match; translating the position
-  between two different files needs matching chapter hrefs or a text
-  anchor. Reference: BookOrbit's hash matching and position converter
-  (AGPL-3.0, concept only, see the license note in
-  [SCOPE.md](SCOPE.md#license)). Test case: *Heat 2* on the two reference
-  devices.
 - **Desktop client with a graphical UI** (L): right after the CLI
   mapping, on the same library: devices and books, creating mappings,
   starting a sync. egui/eframe (pure Rust, MIT/Apache, no WebView), one
@@ -131,7 +136,18 @@ its own.
   and mappings shared with the CLI; German and English; side-by-side device
   view, restoring the database backup, sync history, release notice.
   kepubify is bundled (one binary per platform, a pinned and
-  checksum-verified release, with its MIT notice).
+  checksum-verified release, with its MIT notice). Nine stages (E0–E8 in
+  [TODO.md](TODO.md)), the GUI as a second package in a Cargo workspace
+  so the device build stays without it. Done: E0, the sync run (device,
+  server, one step per book with the `confirm` question as data) moved
+  from the CLI into the library (`session`), CLI output unchanged; E1, a
+  read-only window (`gui/`, eframe) that finds connected devices and lists
+  their books by how they sync; E2, mapping a book in the window
+  (suggestions with their scores, or an EPUB chosen by hand; change and
+  remove), on the mapping code moved from the CLI into the library; E3a,
+  the sync history (`history.jsonl`, written by the CLI and the window);
+  E3b, the server's position for each book and sending per book or all,
+  with the `confirm` questions in a dialog, and a history window.
 
 - **Read-only device database layer** (S–M): reading the books and their
   positions is done (`status --device`); still to do: resolve
@@ -141,7 +157,9 @@ its own.
   `VolumeIndex` is a ToC index, not a spine index. Fixtures: the Clara BW
   and Shine Color databases in `tests/fixtures/db/`.
 - **Position translation, back to the Kobo** (S–M): KOReader XPointer →
-  Kobo span (kepub) and the 4.x Adobe point, for `pull` on the Kobo. Back to
+  Kobo span (kepub), for `pull` on the Kobo, checked on 6.0; the 4.x Adobe
+  point only against the fixtures. Position format and chapter rows on
+  6.0 still to be checked. Back to
   the Tolino is done (see "Recently completed").
 - **USB write-back on the Kobo** (S–M): `pull --write` works on the
   Tolino (see "Recently completed"); the Kobo needs the reverse
@@ -159,12 +177,27 @@ its own.
   after opening now waits until Nickel knows its place (it often does not
   after 3 s). **Paused (28.10.):** after the Tolino updated itself to
   firmware 5.18.279364, Nickel opens at the chapter start even without
-  the plugin Cause: Nickel takes the position from the table
-  `tolino_bookmark`, which the CLI and the plugin do not write yet (Kobalt
-  does). Next: write that row too.
-- **NickelHook plugin, Qt5 (Kobo 4.x)** (L): push on book close, pull on open,
-  jump via Nickel's own navigation. Blocker: find the libnickel symbol for
-  "open at position" on 4.46; verification is on-device only.
+  the plugin. Writing `tolino_bookmark` as well (PR #40) did not change
+  that on the device. Lead, not proven: Nickel's cache of rendered pages;
+  every failing point lay where no page of the book was cached.
+- **NickelHook plugin for the Kobo 6.0** (M–L): the Tolino plugin (Qt6)
+  built and checked for Kobo 6.0 (symbols from its `libnickel.so`). The
+  Qt5 plugin for 4.x is on hold: no 4.x device to test on.
+- **Book mappings on the device** (M): the plugin syncs every book under
+  its own checksum, so a mapped book (kepub, an EPUB changed by Calibre)
+  pushed from the device is useless to KOReader, which knows the
+  original EPUB. The desktop translates through the original EPUB, which
+  is not on the device: either a small translation table made with the
+  mapping (original checksum, chapter paths, text offsets) or the
+  original copied to the device, read by `--live`. After the desktop
+  client, before the Kobo plugin.
+- **Store and cloud books without DRM** (S–M): downloaded Tolino store
+  books without encryption sit in `.kobo/kepub/<ContentID>` and store
+  positions like sideloaded EPUBs, but only sideloaded books sync so far.
+  Sync them through a mapping keyed by `ContentID` (the store adds
+  `cdp.info` to the file), skip books with DRM (detected by encrypted
+  text, `rights.xml`, LCP or Kobo store keys), push first; write-back only
+  after checking the store's own cloud sync. After the desktop client.
 
 ## Low priority (optional)
 
@@ -181,13 +214,11 @@ Feasibility checks (each ends in a yes/no and a sketch, not in code) and
 what follows from a positive one. Both families are outside the current scope (Nickel devices only, see
 [SCOPE.md](SCOPE.md)).
 
-- **Kindle ↔ KOSync: CLI and book mapping** (M): read `lpr` from the
-  `.yjf` of a mounted Kindle in `status --device` and link the KFX
-  (`content_id`, title, author) to the EPUB's hash; the reader and the
-  translation to a KOReader XPointer are done (see "Recently completed").
-  Why: the feasibility check found the position readable over USB and
-  character-exact. Depends on the manual book mapping in the CLI; writing back is
-  unchecked (`cc.db` and Amazon's own sync also hold the position).
+- **Kindle ↔ KOSync** (M): reading `lpr` and pushing it through the book
+  mapping is done (D1 stage 4). Open: reading a Kindle directly over MTP
+  (recent Kindles offer nothing else; the CLI reads a copy so far), and
+  writing back, which is unchecked (`cc.db` and Amazon's own sync also
+  hold the position).
   Users are assumed to have no jailbreak: the base feature set is the
   desktop CLI over USB; a jailbroken Kindle only adds to it (`cc.db`, sync
   without a cable through an on-device daemon).
