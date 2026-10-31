@@ -129,9 +129,10 @@ Order: everything the Tolino Shine Color (5.18) can test on its own comes
 first (reverse translation for plain EPUB, USB write-back, Qt6 symbols and
 plugin). **Now, before anything else: the desktop client with a graphical UI**
 (the manual book mapping in the CLI is done, see "Recently completed").
-Maintenance and bug fixes may be slotted in at any time. After the
-desktop client comes the **on-device client** for the Kobo and the Tolino
-(kepub reverse translation, write-back, mappings on the device, plugin,
+Maintenance and bug fixes may be slotted in at any time. The first
+release brings the desktop client and the kepub reverse translation;
+after it, in the second release, comes the **on-device client** for the Kobo and the Tolino
+(mappings on the device, a base position and a pending list, plugin,
 dialog), planned in eight stages (C0–C7 in [TODO.md](TODO.md)). The
 reference Clara BW updated itself to firmware **6.0.279225** on
 2026-10-28, so the Kobo targets Kobo 6.0 (Qt6, like the Tolino); there is
@@ -197,8 +198,10 @@ fixtures only.
   `config.ini` (`all`, `errors`, `none`). Verified on the Tolino, also
   opening within the chapter last read. Still to do: English texts (the
   plugin logs `QLocale()`, `de_DE` so far).
-- **On-device client for the Kobo 6.0 and the Tolino** (L): one plugin
-  for both devices, after the desktop client. Opening a book takes a
+- **On-device client for the Kobo 6.0 and the Tolino** (L, second
+  release): one plugin for both devices, after the first release (the
+  desktop client and the kepub reverse translation). Like today's plugin
+  it stays idle while Kobalt is installed (N7). Opening a book takes a
   newer server position, written through Nickel itself as Kobalt (MIT)
   does (`VolumeManager::updateBookmark`/`updateFields` in Nickel's
   transaction, then `Repository::refreshCache<Volume>`); leaving it sends

@@ -32,8 +32,10 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0 bis E5a und O5 erledigt; als Nächstes E5b). **Danach
-der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
+fertig, D2 läuft (E0 bis E5a und O5 erledigt; als Nächstes E5b). Das
+**erste Release** bringt D2 und die kepub-Rückübersetzung (PR #55); **der
+Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31) kommt
+ins **zweite Release**.
 
 ## Grundlagen
 
@@ -895,7 +897,13 @@ der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
 ## Kobo-Client
 
 Client auf dem Gerät (ein Plugin für Kobo 6.0 und Tolino 5.18), geplant
-am 2026-10-31 (deine Antworten auf meine Rückfragen). **Beginnt nach D2.**
+am 2026-10-31 (deine Antworten auf meine Rückfragen). **Release 2:**
+beginnt erst, wenn das erste Release (D2 und PR #55) draußen ist, außer
+du sagst etwas anderes. **Kobalt-Schutz (N7):** Jeder neue Einstieg des
+Plugins (Öffnen, Verlassen, Buchmenü, NickelMenu-Auslöser, Nachholen der
+Vormerkliste, Dialog) geht durch dieselbe Prüfung wie heute und bleibt
+untätig, solange Kobalt installiert ist; Gerätetests mit Kobalt daneben
+nur mit `.adds/NickelInkSync/ignore-kobalt`.
 Fasst N2 und N6, die Kobo-Teile von K4 und P2 sowie O3/O4 (Rückfrage,
 „Jetzt synchronisieren“) zusammen. Eine Etappe = eine eigene Session, ein
 Branch von `origin/main`, ein PR. Jede Etappe endet mit dem PR, diesem
@@ -951,6 +959,8 @@ Auf dem Kobo ist das Plugin inaktiv.
     (`ActionProxyMixin::setupBookListMenu`).
 - [ ] **C1 kepub zurück** (K4-Rest): XPointer → `#kobo.N.M:offset`
   (UTF-16-Einheiten), Fixtures Book P/Q/R; `pull --write` am Kobo per USB.
+  **Kommt schon mit PR #55 ins erste Release**; nach dessen Merge hier
+  abhaken, was er abdeckt, und nur den Rest für Release 2 lassen.
   - [ ] **ich:** Übersetzung, Tests, P2 für den Kobo.
   - [ ] **du:** Book R vom Server per USB auf den Kobo schreiben, auswerfen,
     öffnen.
