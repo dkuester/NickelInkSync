@@ -20,9 +20,18 @@ mod common;
 #[cfg(test)]
 mod test_data;
 
+/// The window's icon, rendered from `packaging/icon.svg` (`rsvg-convert -w
+/// 256 -h 256 packaging/icon.svg -o gui/assets/icon.png`). Without it eframe
+/// shows egui's own icon while the app runs, also in the macOS Dock.
+const ICON: &[u8] = include_bytes!("../assets/icon.png");
+
 fn main() -> eframe::Result {
+  let mut viewport = eframe::egui::ViewportBuilder::default();
+  if let Ok(icon) = eframe::icon_data::from_png_bytes(ICON) {
+    viewport = viewport.with_icon(icon);
+  }
   let options = eframe::NativeOptions {
-    viewport: eframe::egui::ViewportBuilder::default()
+    viewport: viewport
       .with_title("NickelInkSync")
       .with_inner_size([960.0, 640.0])
       .with_min_inner_size([640.0, 400.0]),
