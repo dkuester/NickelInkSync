@@ -837,6 +837,13 @@ der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
     Öffnen und Verlassen, bis zum Neustart), Toast einmal je Erkennung
     (`kobalt-noticed`), Log bei jedem Start. Override
     `.adds/NickelInkSync/ignore-kobalt`.
+  - [x] **du:** Erster Gerätetest (2026-10-31, 17:35–17:45): Erkennung
+    richtig (installiert, `ignore-kobalt`, entfernt mit liegen gebliebenem
+    Ordner). Der Toast kam nicht: Mit Kobalt als Standard-Leser ruft Nickel
+    seinen eigenen Leser und damit `setVolume` nie auf. Beim allerersten
+    Start nach der Installation fehlt Kobalts `uninstall` noch (erwartet).
+  - [x] **ich:** Toast jetzt 20 s nach `init`, wenn Kobalt beim Start
+    erkannt wird (weiterhin auch beim Öffnen in Nickels Leser).
   - [ ] **du:** Gerätetest am Tolino: Kobalt installieren, Buch öffnen
     (Toast „NickelInkSync ist aus“, Log „inactive: Kobalt is installed“,
     nichts gesendet); `ignore-kobalt` anlegen, Neustart, Sync läuft wieder;

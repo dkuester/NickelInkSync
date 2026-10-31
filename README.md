@@ -319,8 +319,9 @@ Tolino cuts longer ones off. `notify` in `config.ini` picks which:
 reader that runs inside Nickel, writes the reading positions itself and
 is getting a KOSync client of its own. While Kobalt is installed, the
 plugin switches itself off: it writes nothing into the device database and
-sends nothing, says so once in a message ("NickelInkSync ist aus") and
-notes it in the log at every start. The plugin stays installed and works
+sends nothing, says so once in a message ("NickelInkSync ist aus", about
+20 seconds after the Tolino starts) and notes it in the log at every
+start. The plugin stays installed and works
 again once Kobalt is removed (after the next start). On the computer,
 `pull --write` and "Get" in the desktop client refuse a device with Kobalt
 on it; `push` and "Send" only warn. A leftover `.adds/kobalt` folder

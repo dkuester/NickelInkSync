@@ -65,7 +65,9 @@
  * aside by NickelHook for the first seconds after a start), its file
  * `uninstall` and no `uninstall-now`. Once found, it stays found until
  * Nickel restarts, the only time Kobalt installs or removes itself. One
- * toast the first time; `ignore-kobalt` next to the CLI syncs anyway (tests).
+ * toast the first time, 20 s after the start or when a book is opened in
+ * Nickel's reader (with Kobalt as the default reader Nickel's own is not
+ * used); `ignore-kobalt` next to the CLI syncs anyway (tests).
  *
  * Symbols and signatures: docs/nickel-5.18-symbols.md.
  *
@@ -148,6 +150,9 @@ static const int kCheckOpenTries = 12;
 static const int kToastMs = 5000;
 static const int kProblemToastMs = 8000;
 static const int kOpenToastDelayMs = 1000;
+// How long after init() the toast about Kobalt is shown: Nickel's home
+// screen is up by then.
+static const int kKobaltToastDelayMs = 20000;
 // Seconds per request for push, and when the plugin gives up on it.
 static const char kPushTimeout[] = "15";
 static const int kPushWaitMs = 60000;
@@ -363,9 +368,9 @@ static bool kobalt_blocks()
     return true;
 }
 
-// The toast about Kobalt, only the first time it is found (kKobaltNoticed;
-// init() removes the mark once Kobalt is gone).
-static void notice_kobalt()
+// The toast about Kobalt after `delay_ms`, only the first time it is found
+// (kKobaltNoticed; init() removes the mark once Kobalt is gone).
+static void notice_kobalt(int delay_ms)
 {
     QFile mark(QString::fromLatin1(kKobaltNoticed));
     if (mark.exists() || !mark.open(QIODevice::WriteOnly)) {
@@ -373,7 +378,7 @@ static void notice_kobalt()
     }
     mark.close();
     toast(true, QStringLiteral("NickelInkSync ist aus"), QStringLiteral("Kobalt ist installiert, siehe README"),
-          kOpenToastDelayMs);
+          delay_ms);
 }
 
 static bool online()
@@ -737,7 +742,7 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     }
     if (kobalt_blocks()) {
         ReadingController__setVolume(self, volume, bookmark);
-        notice_kobalt();
+        notice_kobalt(kOpenToastDelayMs);
         return;
     }
     const QString id = Content__getId(volume, QString());
@@ -950,8 +955,15 @@ static int nickelinksync_init()
     }
     g_notify = read_notify();
     if (kobalt_blocks()) {
-        // Stays loaded, only to tell once that it is off.
+        // Stays loaded, only to tell once that it is off. Not on opening a
+        // book alone: with Kobalt as the default reader Nickel's own reader,
+        // and so setVolume, is never called (device test). Nickel loads
+        // plugins with its application running; the toast waits until its
+        // main window is up.
         g_active = true;
+        if (QCoreApplication::instance()) {
+            notice_kobalt(kKobaltToastDelayMs);
+        }
         return 0;
     }
     if (!kobalt_installed()) {
