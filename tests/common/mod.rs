@@ -14,8 +14,14 @@ use std::sync::{Arc, Mutex};
 use rusqlite::Connection;
 use serde_json::{json, Value};
 
+/// `tests/fixtures` of the repository, also from the desktop client's
+/// package (`gui/`), which uses these helpers too.
 pub fn fixtures() -> PathBuf {
-  Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
+  let package = Path::new(env!("CARGO_MANIFEST_DIR"));
+  match package.join("tests/fixtures") {
+    dir if dir.is_dir() => dir,
+    _ => package.join("../tests/fixtures"),
+  }
 }
 
 pub const KOBO_VERSION: &str =

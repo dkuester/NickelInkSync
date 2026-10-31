@@ -385,9 +385,10 @@ fn status(target: &Target) -> Result<bool> {
           None => println!("  server    (nothing stored)"),
         }
         if let Ok((local, _)) = &local {
+          let local = session.against(book, &identity, local.clone(), remote.as_ref());
           println!(
             "  sync      {}",
-            sync_note(local, remote.as_ref(), server.config.confirm)
+            sync_note(&local, remote.as_ref(), server.config.confirm)
           );
         }
       }

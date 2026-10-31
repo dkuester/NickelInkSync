@@ -32,7 +32,7 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0, E1, E2 und E3a erledigt; als Nächstes E3b).
+fertig, D2 läuft (E0 bis E3c erledigt; als Nächstes E4).
 
 ## Grundlagen
 
@@ -252,7 +252,7 @@ fertig, D2 läuft (E0, E1, E2 und E3a erledigt; als Nächstes E3b).
     Position, Richtung, Gerät, Titel, Dokument, Stelle, Prozent, `by`).
     Die CLI schreibt nach `push` (Kobo/Tolino und Kindle) und nach
     `pull --write`, nicht auf dem Gerät (`--live`); Ausgabe unverändert.
-  - [ ] **ich:** **E3b** GUI: Server-Positionen in der Bücherliste (Spalte
+  - [x] **ich:** **E3b** GUI: Server-Positionen in der Bücherliste (Spalte
     „Server“ mit Prozent, Gerät, Zeit und Aussage nach `sync::outlook`),
     „Senden“ je Buch und „Alle senden“ über `Session::push_step`; Fragen
     (`Action::Ask`) sammeln und in einem Dialog beantworten (Gerät,
@@ -260,15 +260,39 @@ fertig, D2 läuft (E0, E1, E2 und E3a erledigt; als Nächstes E3b).
     ohne Referenz-EPUB überspringt „Alle senden“, „Senden“ am einzelnen
     Buch fragt vorher; Verlauf (`by: "gui"`) als Fenster. Kindle über
     `KindleSession::push_step`. Tests in `gui/` mit dem Mock-Server aus
-    `tests/common` (`#[path]`).
-  - [ ] **du:** E3b: Book R am Tolino senden, einmal mit Rückfrage
-    (KOReader weiter vorn), Verlauf ansehen; Kindle-Kopie senden.
-  - [ ] **ich:** **E3c** Holen und Rückschreiben am Tolino in der GUI
+    `tests/common` (`#[path]`). Umgesetzt in `gui/src/sync.rs`: nach dem
+    Einlesen fragt die App den Server (Spalte „Server“: Prozent, Gerät,
+    „gleich“/„Gerät neuer“/„Server neuer“/„fragt vorher“); „Senden“ je
+    Buch, „Alle senden“ oben; Fragen kommen in einen Dialog mit „Server
+    behalten“ (vorgewählt) oder „Gerät senden“; danach fragt sie den
+    Server erneut. Knopf „Verlauf“ oben rechts (letzte 200 Einträge, von
+    CLI und GUI). Ohne Server in `config.ini` ein Hinweis statt der
+    Knöpfe.
+  - [x] **du:** E3b: Book R am Tolino senden, einmal mit Rückfrage
+    (KOReader weiter vorn), Verlauf ansehen (2026-10-31, PR #41).
+  - [ ] **du:** E3b: Kindle-Kopie senden (später, getrennt).
+  - [x] **ich:** **E3c** Holen und Rückschreiben am Tolino in der GUI
     (`pull_step`, `take`, `write` mit Sicherungskopie, gleicher Dialog),
-    Kobo nur „zum Server“, bis P2 für den Kobo fertig ist;
-    Geräteansicht nebeneinander (O5).
-  - [ ] **du:** E3c: Book R vom Server auf den Tolino holen, auswerfen,
-    öffnen.
+    Kobo nur „zum Server“, bis P2 für den Kobo fertig ist. Umgesetzt:
+    „Holen“ je Buch und „Alle holen“ oben, nur am Tolino und nur für
+    zugeordnete Bücher und solche mit eigener Prüfsumme; Rückfragen im
+    Dialog mit „Gerät behalten“ (vorgewählt) oder „Server übernehmen“;
+    danach liest die App das Gerät neu ein; die Meldung nennt die
+    Sicherung und erinnert ans Auswerfen. Verlauf mit `by: "gui"`. Zwei
+    Schreibvorgänge in derselben Sekunde bekommen getrennte Sicherungen
+    (`…-2.sqlite`), statt dass der zweite scheitert. Nach dem Holen einer
+    Stelle mitten im Absatz galt das Buch als „Server neuer“, weil der
+    Rückweg zum XPointer an den Absatzanfang rückt; jetzt gilt es als
+    gleich, wenn auf dem Gerät genau das steht, was Holen schreiben würde
+    (`Session::against`, für `status`, `push`, `pull` und die GUI). Bei
+    „gleich“ sind „Senden“ und „Holen“ ausgegraut; „Alle senden“ und „Alle
+    holen“ lassen solche Bücher aus.
+  - [ ] **ich:** Geräteansicht nebeneinander (O5): aus E3c herausgenommen,
+    die Gestaltung ist noch offen (siehe Frage im PR).
+  - [x] **du:** E3c: Book R vom Server auf den Tolino holen, auswerfen,
+    öffnen (2026-10-31): Holen schreibt die richtige Stelle, danach „gleich“
+    und ausgegraute Knöpfe. Nickel öffnet nur am Kapitelanfang (R2-1 statt
+    R2-19), das ist N5 (PR #40), nicht E3c.
   - [ ] **ich:** **E4** Einstellungen; Schlüssel im Schlüsselbund bzw. in
     der Anmeldeinformationsverwaltung (`keyring`, nur für macOS und
     Windows, nicht im Gerätebau). Die CLI sucht `password`/`key` in der
@@ -675,35 +699,88 @@ fertig, D2 läuft (E0, E1, E2 und E3a erledigt; als Nächstes E3b).
     Verlassen auf der übernommenen Seite sendete nichts („aktuell“),
     Weiterlesen bis R3-186 sendete. Die Sperre bei einem misslungenen
     Öffnen ist am Gerät noch nicht getestet.
-  - [ ] **ich:** Ursache des ersten Öffnens: Nickels `Volume`-Cache
-    (`Repository::refreshCache<Volume>`), Vorbild Kobalt (MIT): Position
-    über Nickel schreiben (`VolumeManager::updateBookmark`/`updateFields`)
-    oder den Cache nach dem Schreiben der CLI auffrischen. Entwurf dazu:
-    PR #26 (Volume-Cache), pausiert.
-  - [x] **du:** Der Tolino hat sich am 2026-10-28 auf 5.18.279364
-    aktualisiert. Danach öffnete Book R nach `pull --write` per USB auch
-    mit ausgeschaltetem Plugin (`config.ini.off`) am Anfang von Kapitel 1,
-    genau an der Stelle aus der Tabelle `tolino_bookmark`, die weder CLI
-    noch Plugin schreiben.
-  - [x] **ich:** `tolino_bookmark` wird jetzt mitgeschrieben (PR #40), per
-    USB und beim Öffnen durch das Plugin, in derselben Transaktion wie die
-    Buchzeile: Stelle, Seite und Seitenzahl, `progress`, `modified`;
-    Felder wie bei Kobalt (MIT, Commit 8b144d2). Ein Buch ohne Zeile
-    bekommt keine. `status` zeigt die Zeile, wenn sie von der Position
-    abweicht (`tolino    …`).
-  - [x] **ich:** VM-Test (5.18.279364): Die VM zeigt den Fehler **nicht**.
-    Schon vorher öffnete Nickel trotz alter `tolino_bookmark`-Zeile an der
-    geholten Stelle, über das Plugin, per USB mit Neustart und per USB
-    ohne Neustart. Nachher ebenso, und die Zeile stimmt. Ob
-    `tolino_bookmark` am Gerät die Ursache ist, entscheidet dein Test.
-  - [ ] **du:** Gerätetest mit Book R, per USB mit Plugin aus und beim
-    Öffnen mit Plugin an (Anleitung im PR).
-  - [ ] **ich (nach dem Test):** Klappt es, PR #26 schließen; klappt es
-    nicht, mit der `tolino`-Zeile aus `status` weitersuchen (dann wieder
-    Volume-Cache, PR #26).
+  - [~] **ich:** Ursache der misslungenen Übernahmen: Nickels
+    `Volume`-Cache. Per Disassembly geprüft: `VolumeManager::getById` liest
+    nur den Cache, sobald es ihn gibt, nie die Datenbank; was die CLI von
+    außen schreibt, sieht Nickel also nicht. Jetzt leert das Plugin nach dem
+    Schreiben den Cache (`Qt6RepositoryAccess<Volume>::purgeCache`, wie
+    Nickels eigene Migrationen nach einem SQL-Schreiben, unter Nickels
+    Mutex; `Repository::purgeCache<Volume>` fehlt im Tolino-Build), lädt
+    das Buch mit `getById` neu (das füllt den Cache aus der Datenbank) und
+    öffnet mit diesem `Volume`. Das Log zeigt Cache-Stand vorher und
+    nachher und 3 s nach dem Öffnen die Stelle. PR #26.
+  - [x] **du:** Gerätetest dazu (2026-10-25, vier Übernahmen): Der Cache
+    wird jedes Mal neu geladen und hält danach die geholte Position, aber
+    zwei Übernahmen öffneten trotzdem am Kapitelanfang (14:56 Kapitel 1 →
+    2, 15:02 im Kapitel 2, beide kurz nach einem Neustart). Der Cache war
+    also nicht die ganze Ursache. Gemeinsam ist den Fehlschlägen (auch
+    13:47): Das Buch wurde vorher auf der Seite verlassen, auf der es
+    geöffnet hatte, ohne zu blättern. Und die Prüfung ließ um 14:56 den
+    Kapitelanfang als „übernommen“ durch (36 Schritte bei Grenze 40).
+  - [x] **ich:** Grenze in `near()` auf 12 Schritte (die richtigen Seiten
+    lagen 2 bis 4 davor), Toasts länger (5 s, Probleme 8 s), und das Log
+    zeigt die Zeile beim Öffnen, die Spalten, die das Neuladen ändert, und
+    die Spalten, die Nickel bis zum Verlassen ändert.
+  - [x] **du:** Gezielter Gerätetest (2026-10-25, 15:14–15:32): Blättern
+    ist es nicht, und keine Spalte der Zeile unterscheidet Erfolg und
+    Fehlschlag (15:18 und 15:19 öffneten mit derselben Zeile). Seit dem
+    Cache-Neuladen klappten alle 6 Übernahmen mit schon eingeschaltetem
+    WLAN; von 5, bei denen das Plugin erst aufs WLAN wartete (lokale
+    Ereignisschleife mitten in `setVolume`), schlugen 3 fehl.
+  - [x] **ich:** Toast-Texte gekürzt: Der Tolino schneidet die erste Zeile
+    nach etwa 24 Zeichen ab, die zweite nach etwa 45.
+  - [x] **du:** Gerätetest WLAN aus / WLAN an (2026-10-25, 15:44–15:49):
+    drei Übernahmen richtig, zwei davon mit Warten (7 s und 1 s); einmal
+    kam kein WLAN (richtig behandelt). Stand mit Cache-Neuladen: ohne
+    Warten 7 von 7 richtig, mit Warten 4 von 7. Nicht eindeutig.
+  - [x] **ich:** Testschalter: Gibt es `.adds/NickelInkSync/debug-open-wait`,
+    wartet das Plugin bei jedem Öffnen 10 s in einer lokalen
+    Ereignisschleife, auch bei verbundenem WLAN.
+  - [x] **du:** Gerätetest mit Schalter (2026-10-28, 15:06–15:22): Nickel
+    öffnete in allen neun Übernahmen auf der Seite mit der gezogenen
+    Stelle, mit und ohne Warten. Falsch war die Prüfung des Plugins: 3 s
+    nach dem Öffnen kannte Nickel seine Stelle in acht von neun Fällen
+    noch nicht (leer), und das Plugin hielt das für ein anderes Kapitel.
+  - [x] **ich:** Prüfung nach dem Öffnen fragt bei leerer Stelle bis zu
+    8 s lang jede Sekunde nach; bleibt sie leer, gilt die Übernahme nach
+    dem Cache-Neuladen als geglückt (das nur in PR #26). Testschalter
+    wieder ausgebaut.
+  - [x] **du:** Kurzer Gerätetest der neuen Prüfung (2026-10-28,
+    15:52–16:03): die Prüfung arbeitet, aber Nickel öffnete Book R danach
+    immer am Anfang von Kapitel 1, auch nach einer Minute Pause.
+  - [x] **ich:** Was sich geändert hat, liegt außerhalb des Plugins: Der
+    Tolino hat sich am 28.10. selbst auf Firmware **5.18.279364**
+    aktualisiert (vorher 5.18.264769). Auch ohne Plugin, nach einem
+    `pull --write` über USB und Neustart, öffnet Nickel am Kapitelanfang.
+    Spur, nicht bewiesen: Nickels Cache gezeichneter Seiten
+    (`CachePersistenceRenderedPageData`); alle fehlgeschlagenen Stellen
+    lagen in Seiten, die dort fehlten.
+  - [x] **ich:** Vermutete Ursache (29.10.): Nickel nimmt die Stelle aus
+    der Tabelle `tolino_bookmark`; dort stand für Book R der
+    Kapitelanfang. Kobalt (MIT, develop, `tolino_progress.h`) schreibt die
+    Zeile mit. PR #40 (Entwurf) schreibt sie jetzt auch.
+  - [x] **du:** Gerätetest von PR #40 (2026-10-31): Beide Zeilen hatten
+    die gezogene Stelle, Nickel öffnete trotzdem am Kapitelanfang. Damit
+    ist `tolino_bookmark` nicht die Ursache; beide Stellen lagen wieder
+    außerhalb der gespeicherten Seiten.
+  - [ ] **ich:** Seiten-Cache als Ursache
+    prüfen (Cache-Zeilen des Buchs löschen, dann öffnen), `libnickel` von
+    5.18.279364 beschaffen und die Symbole neu prüfen. Position über Nickel selbst
+    schreiben, Vorbild Kobalt (MIT, nur das Konzept):
+    `VolumeManager::updateBookmark`, `updateFields` in einer
+    `DatabaseAdapter`-Transaktion; die CLI entscheidet dann nur noch
+    (`pull --live --emit` ohne `--write`), die Tagessicherung bleibt vor
+    jedem Schreiben.
   - [ ] **ich (nach dem Test):** Gerätesprache: Das Log zeigt `QLocale()`
     beim Start; folgt sie Nickels Spracheinstellung, kommen die Meldungen
     auch auf Englisch.
+  - [x] **ich:** Aus den Gerätetests (25.–28.10.) übernommen: kürzere
+    Toast-Texte (der Tolino schneidet nach etwa 24/45 Zeichen ab), längere
+    Anzeige (5 s, Probleme 8 s), strengere Nähe-Prüfung nach dem Öffnen
+    (12 statt 40 Knoten), die Prüfung fragt bei noch leerer Stelle bis zu
+    8 s nach, und das Log zeigt die Buchzeile beim Öffnen und was Nickel
+    bis zum Verlassen daran ändert. Das Neuladen von Nickels Buch-Cache
+    bleibt in PR #26.
 - [ ] **N6 Zuordnungen auf dem Gerät** (nach D2, vor dem Kobo-Plugin N2) ·
   Lücke, die du am 2026-10-29 bemerkt hast: Am Rechner sendet `push` ein
   zugeordnetes Buch (kepub, von Calibre verändertes EPUB) unter der

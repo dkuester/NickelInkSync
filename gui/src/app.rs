@@ -1,19 +1,24 @@
 //! The window: devices on the left, the chosen device's books in the
-//! middle, grouped by how they sync, with a dialog to map a book to its
-//! original EPUB.
+//! middle, grouped by how they sync, with the server's position for each;
+//! dialogs to map a book to its original EPUB and to answer the `confirm`
+//! questions of a push or pull; the sync history.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use eframe::egui;
+use nickelinksync::history::{self, Entry};
 use nickelinksync::library;
 use nickelinksync::session::Own;
 use nickelinksync::suggest;
+use nickelinksync::sync::{format_timestamp, Outlook};
 
 use crate::devices::{Found, Kind};
 use crate::i18n::{self, Choice, Lang, Texts};
 use crate::model::{Group, Loaded, Mapped, Row, Suggestions};
 use crate::settings::Settings;
+use crate::sync::{Compared, Question, ServerState};
 use crate::worker::{Command, Event, Worker};
 
 /// How often the drives are searched again.
@@ -32,6 +37,12 @@ enum Action {
   Map { id: String, title: String },
   /// Ask before removing the mapping with `key`.
   Unmap { key: String, title: String },
+  /// Push the books with these ids.
+  Push(Vec<String>),
+  /// Take the server's positions for the books with these ids (Tolino).
+  Pull(Vec<String>),
+  /// Ask before pushing a book without a reference EPUB.
+  PushUnreferenced { id: String, title: String },
 }
 
 /// The library's candidates, while they are being compared and after.
@@ -61,6 +72,12 @@ struct UnmapDialog {
   title: String,
 }
 
+/// The `confirm` questions of a push or pull: send the device's position,
+/// or take the server's (`true`), or leave both as they are.
+struct AskDialog {
+  questions: Vec<(Question, bool)>,
+}
+
 pub struct App {
   worker: Worker,
   settings: Settings,
@@ -77,8 +94,18 @@ pub struct App {
   kindle_path: String,
   map_dialog: Option<MapDialog>,
   unmap_dialog: Option<UnmapDialog>,
-  /// What the last mapping change did, shown above the books.
+  /// What the last mapping change or push did, shown above the books.
   notice: Option<Result<String, String>>,
+  /// The server's positions for the shown device; `None` while asking.
+  server: Option<ServerState>,
+  /// A push or pull was sent and not answered yet.
+  busy: bool,
+  ask_dialog: Option<AskDialog>,
+  /// A book without a reference EPUB, to send only after a yes.
+  unreferenced: Option<(String, String)>,
+  /// The history window: open, and its entries once read.
+  history_open: bool,
+  history: Option<Result<Vec<Entry>, String>>,
 }
 
 impl App {
@@ -108,6 +135,12 @@ impl App {
       map_dialog: None,
       unmap_dialog: None,
       notice: None,
+      server: None,
+      busy: false,
+      ask_dialog: None,
+      unreferenced: None,
+      history_open: false,
+      history: None,
     }
   }
 
@@ -133,6 +166,7 @@ impl App {
 
   fn select(&mut self, found: Found) {
     self.notice = None;
+    self.server = None;
     self.view = View::Loading { done: 0, total: 0 };
     self.worker.send(Command::Load {
       root: found.root.clone(),
@@ -211,8 +245,33 @@ impl App {
             Err(e) => View::Failed(e),
           };
         }
+        Event::Compared { root, state } if current(&root) => self.server = Some(state),
+        Event::Synced { root, result } if current(&root) => {
+          let lang = self.lang();
+          self.busy = false;
+          self.server = None;
+          match result {
+            Ok(mut report) => {
+              self.notice = Some(Ok(i18n::report(lang, &report)));
+              let questions = std::mem::take(&mut report.questions);
+              if !questions.is_empty() {
+                self.ask_dialog = Some(AskDialog {
+                  questions: questions.into_iter().map(|q| (q, false)).collect(),
+                });
+              }
+            }
+            Err(e) => self.notice = Some(Err(e)),
+          }
+          if self.history_open {
+            self.worker.send(Command::History);
+          }
+        }
+        Event::History(entries) => self.history = Some(entries),
         // For a device no longer shown.
-        Event::Progress { .. } | Event::Loaded { .. } => {}
+        Event::Progress { .. }
+        | Event::Loaded { .. }
+        | Event::Compared { .. }
+        | Event::Synced { .. } => {}
         Event::Suggestions { id, result } => {
           if let Some(dialog) = self.map_dialog.as_mut().filter(|d| d.id == id) {
             dialog.chosen = match &result {
@@ -279,6 +338,10 @@ impl App {
         ui.label(t.language);
         if self.settings.language != before {
           self.save_settings();
+        }
+        if ui.button(t.history).clicked() {
+          self.history_open = true;
+          self.worker.send(Command::History);
         }
       });
     });
@@ -390,13 +453,209 @@ impl App {
       View::Failed(e) => {
         ui.colored_label(ui.visuals().error_fg_color, format!("{}: {e}", t.failed));
       }
-      View::Loaded(loaded) => action = loaded_view(ui, t, lang, loaded),
+      View::Loaded(loaded) => {
+        action = loaded_view(ui, t, lang, loaded, self.server.as_ref(), self.busy)
+      }
     }
     match action {
       Some(Action::Map { id, title }) => self.open_map_dialog(id, title),
       Some(Action::Unmap { key, title }) => self.unmap_dialog = Some(UnmapDialog { key, title }),
+      Some(Action::Push(ids)) => self.push(ids),
+      Some(Action::Pull(ids)) => self.pull(ids),
+      Some(Action::PushUnreferenced { id, title }) => self.unreferenced = Some((id, title)),
       None => {}
     }
+  }
+
+  fn push(&mut self, ids: Vec<String>) {
+    let Some(selected) = &self.selected else {
+      return;
+    };
+    self.busy = true;
+    self.notice = None;
+    self.worker.send(Command::Push {
+      root: selected.root.clone(),
+      kind: selected.kind,
+      ids,
+    });
+  }
+
+  fn pull(&mut self, ids: Vec<String>) {
+    let Some(selected) = &self.selected else {
+      return;
+    };
+    self.busy = true;
+    self.notice = None;
+    self.worker.send(Command::Pull {
+      root: selected.root.clone(),
+      ids,
+    });
+  }
+
+  fn ask_dialog(&mut self, ctx: &egui::Context, t: &Texts) {
+    let Some(dialog) = &mut self.ask_dialog else {
+      return;
+    };
+    let mut answer = None;
+    egui::Modal::new(egui::Id::unique("ask")).show(ctx, |ui| {
+      ui.set_max_width(640.0);
+      ui.heading(t.ask_title);
+      egui::ScrollArea::vertical()
+        .max_height(400.0)
+        .show(ui, |ui| {
+          for (i, (q, send)) in dialog.questions.iter_mut().enumerate() {
+            ui.add_space(6.0);
+            ui.strong(&q.title);
+            let read = q
+              .local_time
+              .as_deref()
+              .map(|time| format!(", {} {time}", t.last_read))
+              .unwrap_or_default();
+            ui.label(format!(
+              "{}: {:.0} %{read}",
+              t.device,
+              q.local_percent * 100.0
+            ))
+            .on_hover_text(&q.local_xpointer);
+            ui.label(format!(
+              "{}: {:.0} % ({}, {})",
+              t.server,
+              q.remote.percent * 100.0,
+              q.remote.device,
+              q.remote.time
+            ))
+            .on_hover_text(&q.remote.xpointer);
+            let pulls = q.pulls();
+            ui.weak(match (q.backwards, pulls) {
+              (false, _) => t.positions_differ,
+              (true, false) => t.device_behind,
+              (true, true) => t.server_behind,
+            });
+            // Unchanged comes first and is chosen until changed.
+            let (keep, change) = if pulls {
+              (t.keep_device, t.take_server)
+            } else {
+              (t.keep_server, t.send_device)
+            };
+            ui.horizontal(|ui| {
+              ui.push_id(i, |ui| {
+                ui.radio_value(send, false, keep);
+                ui.radio_value(send, true, change);
+              });
+            });
+          }
+        });
+      ui.add_space(6.0);
+      ui.horizontal(|ui| {
+        if ui.button(t.apply).clicked() {
+          answer = Some(true);
+        }
+        if ui.button(t.cancel).clicked() {
+          answer = Some(false);
+        }
+      });
+    });
+    match answer {
+      Some(true) => {
+        let questions: Vec<Question> = self
+          .ask_dialog
+          .take()
+          .map(|d| d.questions)
+          .unwrap_or_default()
+          .into_iter()
+          .filter(|(_, send)| *send)
+          .map(|(q, _)| q)
+          .collect();
+        if let (Some(selected), false) = (&self.selected, questions.is_empty()) {
+          self.busy = true;
+          self.worker.send(Command::Answer {
+            root: selected.root.clone(),
+            kind: selected.kind,
+            questions,
+          });
+        }
+      }
+      Some(false) => self.ask_dialog = None,
+      None => {}
+    }
+  }
+
+  fn unreferenced_dialog(&mut self, ctx: &egui::Context, t: &Texts) {
+    let lang = self.lang();
+    let Some((id, title)) = &self.unreferenced else {
+      return;
+    };
+    let mut answer = None;
+    let modal = egui::Modal::new(egui::Id::unique("unreferenced")).show(ctx, |ui| {
+      ui.set_max_width(480.0);
+      ui.label(i18n::unreferenced_question(lang, title));
+      ui.add_space(4.0);
+      ui.horizontal(|ui| {
+        if ui.button(t.send_anyway).clicked() {
+          answer = Some(true);
+        }
+        if ui.button(t.cancel).clicked() {
+          answer = Some(false);
+        }
+      });
+    });
+    match answer {
+      Some(true) => {
+        let id = id.clone();
+        self.unreferenced = None;
+        self.push(vec![id]);
+      }
+      Some(false) => self.unreferenced = None,
+      None if modal.should_close() => self.unreferenced = None,
+      None => {}
+    }
+  }
+
+  fn history_window(&mut self, ctx: &egui::Context, t: &Texts) {
+    let mut open = self.history_open;
+    egui::Window::new(t.history)
+      .open(&mut open)
+      .default_size([720.0, 400.0])
+      .show(ctx, |ui| match &self.history {
+        None => {
+          ui.spinner();
+        }
+        Some(Err(e)) => {
+          ui.colored_label(ui.visuals().error_fg_color, e);
+        }
+        Some(Ok(entries)) if entries.is_empty() => {
+          ui.weak(t.history_empty);
+        }
+        Some(Ok(entries)) => {
+          egui::ScrollArea::both().show(ui, |ui| {
+            egui::Grid::new("history")
+              .striped(true)
+              .num_columns(6)
+              .spacing([16.0, 4.0])
+              .show(ui, |ui| {
+                for head in [t.time, t.direction, t.device, t.title, t.position, t.by] {
+                  ui.strong(head);
+                }
+                ui.end_row();
+                for e in entries {
+                  ui.label(format_timestamp(e.time));
+                  ui.label(match e.direction {
+                    history::Direction::Push => t.to_server,
+                    history::Direction::Pull => t.to_device,
+                  });
+                  ui.label(&e.device);
+                  ui.label(e.title.as_deref().unwrap_or("–"))
+                    .on_hover_text(&e.document);
+                  ui.label(format!("{:.0} %", e.percentage * 100.0))
+                    .on_hover_text(&e.position);
+                  ui.label(&e.by);
+                  ui.end_row();
+                }
+              });
+          });
+        }
+      });
+    self.history_open = open;
   }
 
   fn open_map_dialog(&mut self, id: String, title: String) {
@@ -588,7 +847,14 @@ fn epub_picker(ui: &mut egui::Ui, t: &Texts, dialog: &mut MapDialog) {
   }
 }
 
-fn loaded_view(ui: &mut egui::Ui, t: &Texts, lang: Lang, loaded: &Loaded) -> Option<Action> {
+fn loaded_view(
+  ui: &mut egui::Ui,
+  t: &Texts,
+  lang: Lang,
+  loaded: &Loaded,
+  server: Option<&ServerState>,
+  busy: bool,
+) -> Option<Action> {
   ui.heading(&loaded.device);
   match &loaded.library {
     Some((path, kind, n)) => {
@@ -608,11 +874,63 @@ fn loaded_view(ui: &mut egui::Ui, t: &Texts, lang: Lang, loaded: &Loaded) -> Opt
     }
   }
   ui.label(format!("{}: {}", t.mappings, loaded.mappings));
-  ui.weak(t.read_only);
+  ui.weak(if loaded.writable {
+    t.writes_tolino
+  } else {
+    t.read_only
+  });
+  let mut action = None;
+  let compared = match server {
+    Some(ServerState::Compared(compared)) => Some(compared),
+    _ => None,
+  };
+  ui.horizontal(|ui| match server {
+    None => {
+      ui.spinner();
+      ui.label(t.server_comparing);
+    }
+    Some(ServerState::NotConfigured) => {
+      ui.colored_label(ui.visuals().warn_fg_color, t.server_not_configured);
+    }
+    Some(ServerState::Failed(e)) => {
+      ui.colored_label(
+        ui.visuals().error_fg_color,
+        format!("{}: {e}", t.server_failed),
+      );
+    }
+    Some(ServerState::Compared(compared)) => {
+      // Books without a reference EPUB are sent one by one, after a yes;
+      // books already in sync are left out.
+      let ids: Vec<String> = loaded
+        .rows
+        .iter()
+        .filter(|r| matches!(r.group, Group::Mapped { .. } | Group::Same { .. }))
+        .filter(|r| !in_sync(compared.get(&r.id)))
+        .map(|r| r.id.clone())
+        .collect();
+      let enabled = !busy && !ids.is_empty();
+      if ui
+        .add_enabled(enabled, egui::Button::new(t.send_all))
+        .clicked()
+      {
+        action = Some(Action::Push(ids.clone()));
+      }
+      if loaded.writable
+        && ui
+          .add_enabled(enabled, egui::Button::new(t.pull_all))
+          .clicked()
+      {
+        action = Some(Action::Pull(ids));
+      }
+      if busy {
+        ui.spinner();
+      }
+    }
+  });
   ui.add_space(8.0);
   if loaded.rows.is_empty() {
     ui.label(t.no_books);
-    return None;
+    return action;
   }
   let pick =
     |f: fn(&Group) -> bool| -> Vec<&Row> { loaded.rows.iter().filter(|r| f(&r.group)).collect() };
@@ -650,7 +968,7 @@ fn loaded_view(ui: &mut egui::Ui, t: &Texts, lang: Lang, loaded: &Loaded) -> Opt
       false,
     ),
   ];
-  let mut action = None;
+  let can_send = compared.is_some() && !busy;
   egui::ScrollArea::both().show(ui, |ui| {
     for (i, (name, hint, rows, shown_empty)) in sections.iter().enumerate() {
       let warning = !shown_empty;
@@ -670,7 +988,7 @@ fn loaded_view(ui: &mut egui::Ui, t: &Texts, lang: Lang, loaded: &Loaded) -> Opt
             ui.weak(t.none);
             return;
           }
-          if let Some(a) = book_table(ui, t, i, rows) {
+          if let Some(a) = book_table(ui, t, i, rows, compared, can_send, loaded.writable) {
             action = Some(a);
           }
         });
@@ -685,16 +1003,54 @@ fn file_name(path: &str) -> &str {
   path.rsplit(['/', '\\']).next().unwrap_or(path)
 }
 
-fn book_table(ui: &mut egui::Ui, t: &Texts, id: usize, rows: &[&Row]) -> Option<Action> {
+/// Device and server hold the same position.
+fn in_sync(compared: Option<&Compared>) -> bool {
+  compared.is_some_and(|c| c.outlook == Some(Outlook::InSync))
+}
+
+/// The server's side of a book: "57 % · KOReader · server newer".
+fn server_cell(t: &Texts, compared: Option<&Compared>) -> (String, Option<String>) {
+  let Some(c) = compared else {
+    return ("–".into(), None);
+  };
+  let outlook = c.outlook.map(|o| match o {
+    Outlook::InSync => t.outlook_same,
+    Outlook::Push => t.outlook_device,
+    Outlook::Pull => t.outlook_server,
+    Outlook::Asks { .. } => t.outlook_asks,
+  });
+  let (text, hover) = match &c.remote {
+    Some(r) => (
+      format!("{:.0} % · {}", r.percent * 100.0, r.device),
+      Some(format!("{}\n{}", r.time, r.xpointer)),
+    ),
+    None => (t.nothing_stored.to_string(), None),
+  };
+  match outlook {
+    Some(o) => (format!("{text} · {o}"), hover),
+    None => (text, hover),
+  }
+}
+
+fn book_table(
+  ui: &mut egui::Ui,
+  t: &Texts,
+  id: usize,
+  rows: &[&Row],
+  compared: Option<&HashMap<String, Compared>>,
+  can_send: bool,
+  writable: bool,
+) -> Option<Action> {
   let mut action = None;
   egui::Grid::new(("books", id))
     .striped(true)
-    .num_columns(5)
+    .num_columns(6)
     .spacing([16.0, 4.0])
     .show(ui, |ui| {
       ui.strong(t.title);
       ui.label("");
       ui.strong(t.position);
+      ui.strong(t.server);
       ui.strong(t.last_read);
       ui.strong(match rows[0].group {
         Group::Mapped { .. } => t.original,
@@ -736,6 +1092,32 @@ fn book_table(ui: &mut egui::Ui, t: &Texts, id: usize, rows: &[&Row]) -> Option<
               });
             }
           }
+          let sendable = matches!(
+            row.group,
+            Group::Mapped { .. } | Group::Same { .. } | Group::NoReference
+          );
+          // Nothing to send or get once both sides agree.
+          let can_send = can_send && !in_sync(compared.and_then(|c| c.get(&row.id)));
+          if sendable && compared.is_some() {
+            let send = ui.add_enabled(can_send, egui::Button::new(t.send_button).small());
+            if send.clicked() {
+              action = Some(match row.group {
+                Group::NoReference => Action::PushUnreferenced {
+                  id: row.id.clone(),
+                  title: row.title.clone(),
+                },
+                _ => Action::Push(vec![row.id.clone()]),
+              });
+            }
+          }
+          // Like "Get all", not for a book without a reference EPUB.
+          let pullable = matches!(row.group, Group::Mapped { .. } | Group::Same { .. });
+          if writable && pullable && compared.is_some() {
+            let pull = ui.add_enabled(can_send, egui::Button::new(t.pull_button).small());
+            if pull.clicked() {
+              action = Some(Action::Pull(vec![row.id.clone()]));
+            }
+          }
         });
         let position = match row.percent {
           Some(p) => format!("{:.0} %", p * 100.0),
@@ -750,6 +1132,11 @@ fn book_table(ui: &mut egui::Ui, t: &Texts, id: usize, rows: &[&Row]) -> Option<
             response.on_hover_text(e);
           }
           Err(_) => {}
+        }
+        let (text, hover) = server_cell(t, compared.and_then(|c| c.get(&row.id)));
+        let response = ui.label(text);
+        if let Some(hover) = hover {
+          response.on_hover_text(hover);
         }
         ui.label(row.last_read.as_deref().unwrap_or("–"));
         match &row.group {
@@ -787,6 +1174,9 @@ impl eframe::App for App {
     let ctx = ui.ctx().clone();
     self.map_dialog(&ctx, t);
     self.unmap_dialog(&ctx, t);
+    self.ask_dialog(&ctx, t);
+    self.unreferenced_dialog(&ctx, t);
+    self.history_window(&ctx, t);
   }
 }
 

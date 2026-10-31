@@ -50,8 +50,7 @@ Plugin, siehe unten).
 `pull --write` kopiert zuerst `.kobo/KoboReader.sqlite` nach
 `~/.local/share/nickelinksync/backups/KoboReader-<UTC-Zeit>.sqlite` (oder
 `backups` im Datenordner, siehe unten, oder `$NICKELINKSYNC_BACKUP_DIR`)
-und setzt dann die Position aller Bücher in einer Transaktion (auf einem
-Tolino mit Firmware 5.18 auch die zweite Kopie in `tolino_bookmark`). Es schreibt
+und setzt dann die Position aller Bücher in einer Transaktion. Es schreibt
 nicht ohne `.kobo/version` (kein eingehängtes Gerät) und nicht, solange
 SQLite-Journaldateien neben der Datenbank liegen. Wirf das Gerät aus, bevor
 du das Buch öffnest. Rückgängig machen: die Sicherung bei eingehängtem Gerät
@@ -159,8 +158,18 @@ synchronisiert werden (nicht zugeordnet, ohne Referenz-EPUB, zugeordnet,
 eigene Prüfsumme), mit der Stelle auf dem Gerät; ohne Bibliothek warnt es,
 dass es nicht prüfen kann, welche Bücher KOReader kennt. Dort ordnest du ein Buch auch zu: mit den
 Vorschlägen der Bibliothek samt Bewertung oder einer selbst gewählten
-EPUB; eine Zuordnung lässt sich ändern oder entfernen. Aufs Gerät
-schreibt es nichts, nur `mappings.json`. Beim Anstecken wird nichts
+EPUB; eine Zuordnung lässt sich ändern oder entfernen. Mit einem Server
+in `config.ini` zeigt es die Stelle auf dem Server neben der auf dem
+Gerät und sendet je Buch oder alle auf einmal; eine Rückfrage nach
+`confirm` kommt als Dialog (Server behalten oder Gerät senden). Am
+Tolino schreiben „Holen“ und „Alle holen“ die Stelle vom Server in die
+Gerätedatenbank, vorher legt es eine Sicherung im Datenordner an, wie
+`pull --write`; eine Rückfrage kommt im selben Dialog (Gerät behalten oder
+Server übernehmen), danach liest es das Gerät neu ein. Wirf den Tolino
+aus, bevor du das Buch öffnest. „Verlauf“ zeigt, was CLI und Fenster
+gesendet und geschrieben haben (`history.jsonl` im Datenordner). Auf einen
+Kobo oder Kindle schreibt es nichts, nur `mappings.json` und den
+Verlauf. Beim Anstecken wird nichts
 synchronisiert. Deutsch oder Englisch nach Systemsprache, umschaltbar.
 `config.ini` und `mappings.json` teilt es mit der CLI; seine eigenen
 Einstellungen (Sprache, Kindle-Ordner) liegen in `gui.json` im
@@ -259,10 +268,10 @@ Server-Position, auch wenn „zuletzt gelesen“ auf dem Tolino jetzt neuer
 aussieht.
 
 Jedes Ergebnis zeigt das Plugin als kurze Meldung unten auf dem Bildschirm
-(vorerst auf Deutsch), etwa „Fortschritt vom Server übernommen“ mit Prozent
-und dem Gerät, von dem die Position kam, oder „Fortschritt konnte nicht vom
-Server gelesen werden“ mit dem Grund (keine Verbindung, Zeitüberschreitung,
-Anmeldung abgelehnt). `notify` in `config.ini` legt fest, welche:
+(vorerst auf Deutsch), etwa „Fortschritt übernommen“ mit Prozent und dem
+Gerät, von dem die Position kam, oder „Laden fehlgeschlagen“ mit dem Grund
+(keine Verbindung, Zeitüberschreitung, Anmeldung abgelehnt). Die Texte sind
+kurz, weil der Tolino längere abschneidet. `notify` in `config.ini` legt fest, welche:
 
 | Wert | Zeigt |
 |---|---|
@@ -348,8 +357,8 @@ Die Tabelle mit Lizenzen und Links steht im [englischen README](README.md#credit
   (KOSync-Protokoll), beide AGPL-3.0;
   [BookOrbit](https://github.com/bookorbit/bookorbit) (AGPL-3.0, Zuordnung
   über die KOReader-Prüfsumme); [Kobalt](https://github.com/nicoverbruggen/kobalt)
-  von Nico Verbruggen (MIT, Nickels Buch-Cache, Schreiben über Nickel
-  selbst und die Felder der Tolino-Tabelle `tolino_bookmark`); die [Amazon-Ion-1.0-Spezifikation](https://amazon-ion.github.io/ion-docs/)
+  von Nico Verbruggen (MIT, Nickels Buch-Cache und Schreiben über Nickel
+  selbst); die [Amazon-Ion-1.0-Spezifikation](https://amazon-ion.github.io/ion-docs/)
   (KFX, Kindle-Machbarkeit).
 
 ## Lizenz

@@ -47,9 +47,7 @@ synced. The device is only read, never written, except by `pull --write`
 `pull --write` first copies `.kobo/KoboReader.sqlite` to
 `~/.local/share/nickelinksync/backups/KoboReader-<UTC time>.sqlite` (or
 `backups` in the data directory, see below, or `$NICKELINKSYNC_BACKUP_DIR`),
-then sets the position of all books in one transaction (on a Tolino with
-firmware 5.18 also the book's second copy in `tolino_bookmark`, see
-[docs/nickel-5.18-symbols.md](docs/nickel-5.18-symbols.md#firmware-518279364-the-second-bookmark-row)). It refuses to
+then sets the position of all books in one transaction. It refuses to
 write without `.kobo/version` (not a mounted device) or while SQLite
 journal files lie next to the database. Eject the device before you open
 the book. To undo, copy the backup back to `.kobo/KoboReader.sqlite` while
@@ -151,8 +149,17 @@ mapped, no reference EPUB, mapped, own checksum) with their position on
 the device; without a library it warns that it cannot check which books
 KOReader knows. A book is
 mapped from there: the library's suggestions with their scores, or an
-EPUB chosen by hand; a mapping can be changed or removed. It writes
-nothing to the device, only `mappings.json`.
+EPUB chosen by hand; a mapping can be changed or removed. With a server
+in `config.ini` it shows the server's position next to the device's and
+sends positions per book or all at once; a `confirm` question comes as a
+dialog (keep the server's, or send the device's). On a Tolino "Get" and
+"Get all" write the server's position into the device database, after a
+backup of it in the data directory, as `pull --write` does; a `confirm`
+question comes as the same dialog (keep the device's, or take the
+server's), and the device is read again afterwards. Eject the Tolino
+before you open the book. "History" lists what the CLI and the window
+sent and wrote (`history.jsonl` in the data directory). To a Kobo or a
+Kindle it writes nothing, only `mappings.json` and the history.
 Nothing is synced when a device is connected. German or English after the
 system language, switchable. It shares `config.ini` and `mappings.json`
 with the CLI; its own settings (language, Kindle folder) are in
@@ -279,10 +286,10 @@ USB, takes the server's position again, even though the Tolino's
 "last read" now looks newer.
 
 Each outcome shows as a short message at the bottom of the screen (in
-German for now), for example "Fortschritt vom Server übernommen" with the
-percentage and the device that sent it, or "Fortschritt konnte nicht vom
-Server gelesen werden" with the reason (no connection, timeout, login
-refused). `notify` in `config.ini` picks which:
+German for now), for example "Fortschritt übernommen" with the percentage
+and the device that sent it, or "Laden fehlgeschlagen" with the reason (no
+connection, timeout, login refused). The texts are short because the
+Tolino cuts longer ones off. `notify` in `config.ini` picks which:
 
 | Value | Shows |
 |---|---|
@@ -368,7 +375,7 @@ behavior; the AGPL-3.0 projects are references only, see
 | [KOReader](https://github.com/koreader/koreader) | the KOReader developers | AGPL-3.0 | The partial MD5 book hash, XPointers, the reading-progress sync |
 | [koreader-sync-server](https://github.com/koreader/koreader-sync-server) | the KOReader developers | AGPL-3.0 | The KOSync protocol |
 | [BookOrbit](https://github.com/bookorbit/bookorbit) | the BookOrbit developers | AGPL-3.0 | Matching books by the KOReader hash; the planned manual book mapping |
-| [Kobalt](https://github.com/nicoverbruggen/kobalt) | Nico Verbruggen | MIT | How Nickel caches books (`Cache<Volume>`), how to write progress through Nickel itself, and which fields of the Tolino's `tolino_bookmark` row go with a position (develop branch, commit 8b144d2) |
+| [Kobalt](https://github.com/nicoverbruggen/kobalt) | Nico Verbruggen | MIT | How Nickel caches books (`Cache<Volume>`) and how to write progress through Nickel itself |
 | [Amazon Ion 1.0](https://amazon-ion.github.io/ion-docs/) | Amazon | specification | Reading KFX books (Kindle feasibility check) |
 
 ## License

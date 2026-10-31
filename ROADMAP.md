@@ -144,7 +144,12 @@ fixtures only.
   read-only window (`gui/`, eframe) that finds connected devices and lists
   their books by how they sync; E2, mapping a book in the window
   (suggestions with their scores, or an EPUB chosen by hand; change and
-  remove), on the mapping code moved from the CLI into the library.
+  remove), on the mapping code moved from the CLI into the library; E3a,
+  the sync history (`history.jsonl`, written by the CLI and the window);
+  E3b, the server's position for each book and sending per book or all,
+  with the `confirm` questions in a dialog, and a history window; E3c,
+  taking the server's position into a Tolino per book or all (after a
+  backup of the database, the same dialog for `confirm`).
 
 - **Read-only device database layer** (S–M): reading the books and their
   positions is done (`status --device`); still to do: resolve
@@ -166,12 +171,17 @@ fixtures only.
   `config.ini` (`all`, `errors`, `none`). Verified on the Tolino, also
   opening within the chapter last read. Still to do: English texts (the
   plugin logs `QLocale()`, `de_DE` so far).
-- **Tolino 5.18.279364: open at the pulled place again** (S): since the
-  update of 2026-10-28 Nickel opened Book R at the place in
-  `tolino_bookmark` after a USB write. The CLI now writes that row too
-  (USB and plugin, fields as in Kobalt). The VM does not show the
-  failure, so the device test decides; PR #26 (Nickel's `Volume` cache)
-  waits for it.
+- **Reliable take on opening, Tolino plugin** (S): two of five device runs
+  opened at the chapter start, because Nickel's in-memory `Volume` cache
+  does not see the row the CLI writes. A draft (PR #26) drops that cache
+  and loads the book again before Nickel opens it; in a later device test
+  Nickel opened the pulled page in nine of nine runs. The plugin's check
+  after opening now waits until Nickel knows its place (it often does not
+  after 3 s; PR #44). **Paused (28.10.):** after the Tolino updated itself to
+  firmware 5.18.279364, Nickel opens at the chapter start even without
+  the plugin. Writing `tolino_bookmark` as well (PR #40) did not change
+  that on the device. Lead, not proven: Nickel's cache of rendered pages;
+  every failing point lay where no page of the book was cached.
 - **NickelHook plugin for the Kobo 6.0** (M–L): the Tolino plugin (Qt6)
   built and checked for Kobo 6.0 (symbols from its `libnickel.so`). The
   Qt5 plugin for 4.x is on hold: no 4.x device to test on.

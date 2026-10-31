@@ -77,6 +77,7 @@ pub struct Texts {
   pub never_opened: &'static str,
   pub no_books: &'static str,
   pub read_only: &'static str,
+  pub writes_tolino: &'static str,
   pub map_button: &'static str,
   pub remap_button: &'static str,
   pub unmap_button: &'static str,
@@ -94,6 +95,37 @@ pub struct Texts {
   pub map_confirm: &'static str,
   pub cancel: &'static str,
   pub map_failed: &'static str,
+  pub server_comparing: &'static str,
+  pub server_not_configured: &'static str,
+  pub server_failed: &'static str,
+  pub server: &'static str,
+  pub send_button: &'static str,
+  pub send_all: &'static str,
+  pub pull_button: &'static str,
+  pub pull_all: &'static str,
+  pub nothing_stored: &'static str,
+  pub outlook_same: &'static str,
+  pub outlook_device: &'static str,
+  pub outlook_server: &'static str,
+  pub outlook_asks: &'static str,
+  pub ask_title: &'static str,
+  pub device: &'static str,
+  pub device_behind: &'static str,
+  pub positions_differ: &'static str,
+  pub send_device: &'static str,
+  pub keep_server: &'static str,
+  pub server_behind: &'static str,
+  pub keep_device: &'static str,
+  pub take_server: &'static str,
+  pub apply: &'static str,
+  pub history: &'static str,
+  pub history_empty: &'static str,
+  pub to_server: &'static str,
+  pub to_device: &'static str,
+  pub send_anyway: &'static str,
+  pub time: &'static str,
+  pub direction: &'static str,
+  pub by: &'static str,
 }
 
 pub fn texts(lang: Lang) -> &'static Texts {
@@ -167,6 +199,111 @@ pub fn unmapped_notice(lang: Lang, title: &str) -> String {
   }
 }
 
+/// Asked before a book without a reference EPUB is sent.
+pub fn unreferenced_question(lang: Lang, title: &str) -> String {
+  match lang {
+    Lang::De => format!(
+      "Zu „{title}“ ist keine Referenz-EPUB bekannt: Es ist unklar, ob KOReader das Buch kennt. \
+       Trotzdem unter der Prüfsumme der Datei auf dem Gerät senden?"
+    ),
+    Lang::En => format!(
+      "No reference EPUB is known for “{title}”: it is unclear whether KOReader knows the book. \
+       Send it under the checksum of the file on the device anyway?"
+    ),
+  }
+}
+
+/// What a push or pull did, in one line: "2 gesendet, 1 aktuell, …", the
+/// titles of books that failed or were left out, and where the backup of
+/// the device database is.
+pub fn report(lang: Lang, report: &crate::sync::Report) -> String {
+  use crate::sync::Outcome;
+  let count = |f: fn(&Outcome) -> bool| report.books.iter().filter(|(_, s)| f(s)).count();
+  let parts: [(usize, &str, &str); 9] = [
+    (count(|s| *s == Outcome::Sent), "gesendet", "sent"),
+    (
+      count(|s| *s == Outcome::Written),
+      "aufs Gerät geschrieben",
+      "written to the device",
+    ),
+    (
+      count(|s| *s == Outcome::InSync),
+      "schon aktuell",
+      "already in sync",
+    ),
+    (
+      count(|s| *s == Outcome::ServerNewer),
+      "Server neuer, nicht gesendet",
+      "server newer, not sent",
+    ),
+    (
+      count(|s| *s == Outcome::DeviceNewer),
+      "Gerät neuer, nicht geholt",
+      "device newer, not taken",
+    ),
+    (
+      count(|s| *s == Outcome::NothingStored),
+      "nichts auf dem Server",
+      "nothing on the server",
+    ),
+    (
+      count(|s| *s == Outcome::NotInLine),
+      "vom Plugin gesperrt (nicht in Einklang)",
+      "held by the plugin (not in line)",
+    ),
+    (
+      count(|s| matches!(s, Outcome::Skipped(_))),
+      "übersprungen",
+      "skipped",
+    ),
+    (
+      count(|s| matches!(s, Outcome::Failed(_))),
+      "fehlgeschlagen",
+      "failed",
+    ),
+  ];
+  let mut text: Vec<String> = parts
+    .iter()
+    .filter(|(n, ..)| *n > 0)
+    .map(|(n, de, en)| match lang {
+      Lang::De => format!("{n} {de}"),
+      Lang::En => format!("{n} {en}"),
+    })
+    .collect();
+  if !report.questions.is_empty() {
+    let n = report.questions.len();
+    text.push(match lang {
+      Lang::De => format!("{n} mit Rückfrage"),
+      Lang::En => format!("{n} to answer"),
+    });
+  }
+  if text.is_empty() {
+    text.push(match lang {
+      Lang::De => "nichts zu tun".into(),
+      Lang::En => "nothing to do".into(),
+    });
+  }
+  let mut line = text.join(", ");
+  for (title, sent) in &report.books {
+    if let Outcome::Failed(e) | Outcome::Skipped(e) = sent {
+      line.push_str(&format!("\n{title}: {e}"));
+    }
+  }
+  if let Some(backup) = &report.backup {
+    line.push_str(&match lang {
+      Lang::De => format!(
+        "\nSicherung der Gerätedatenbank: {}\nGerät auswerfen, bevor du das Buch öffnest.",
+        backup.display()
+      ),
+      Lang::En => format!(
+        "\nBackup of the device database: {}\nEject the device before you open the book.",
+        backup.display()
+      ),
+    });
+  }
+  line
+}
+
 /// "12 EPUBs" after the library's path.
 pub fn epubs(lang: Lang, n: usize) -> String {
   match lang {
@@ -221,6 +358,9 @@ static DE: Texts = Texts {
   no_books: "Keine Bücher auf dem Gerät.",
   read_only: "Die App schreibt nichts aufs Gerät. Zuordnungen liegen auf diesem Rechner \
               (mappings.json), gemeinsam mit der CLI.",
+  writes_tolino: "„Holen“ schreibt die Stelle vom Server in die Datenbank des Tolino; vorher \
+                  legt die App eine Sicherung auf diesem Rechner an. Zuordnungen liegen auf \
+                  diesem Rechner (mappings.json), gemeinsam mit der CLI.",
   map_button: "Zuordnen …",
   remap_button: "Ändern …",
   unmap_button: "Entfernen",
@@ -239,6 +379,37 @@ static DE: Texts = Texts {
   map_confirm: "Zuordnen",
   cancel: "Abbrechen",
   map_failed: "Zuordnen fehlgeschlagen",
+  server_comparing: "Vergleiche mit dem Server …",
+  server_not_configured: "Kein Server eingerichtet (server, user, password in config.ini): Die Positionen werden nicht verglichen.",
+  server_failed: "Server nicht erreichbar",
+  server: "Server",
+  send_button: "Senden",
+  send_all: "Alle senden",
+  pull_button: "Holen",
+  pull_all: "Alle holen",
+  nothing_stored: "nichts gespeichert",
+  outlook_same: "gleich",
+  outlook_device: "Gerät neuer",
+  outlook_server: "Server neuer",
+  outlook_asks: "fragt vorher",
+  ask_title: "Rückfrage (confirm in config.ini)",
+  device: "Gerät",
+  device_behind: "Die Stelle auf dem Gerät liegt vor der auf dem Server.",
+  positions_differ: "Die Stellen weichen voneinander ab.",
+  send_device: "Gerät senden",
+  keep_server: "Server behalten",
+  server_behind: "Die Stelle auf dem Server liegt vor der auf dem Gerät.",
+  keep_device: "Gerät behalten",
+  take_server: "Server übernehmen",
+  apply: "Übernehmen",
+  history: "Verlauf",
+  history_empty: "Noch nichts synchronisiert.",
+  to_server: "zum Server",
+  to_device: "aufs Gerät",
+  send_anyway: "Trotzdem senden",
+  time: "Zeit",
+  direction: "Richtung",
+  by: "von",
 };
 
 static EN: Texts = Texts {
@@ -288,6 +459,9 @@ static EN: Texts = Texts {
   no_books: "No books on the device.",
   read_only: "The app writes nothing to the device. Mappings are kept on this computer \
               (mappings.json), shared with the CLI.",
+  writes_tolino: "“Get” writes the server’s position into the Tolino’s database, after a \
+                  backup of it on this computer. Mappings are kept on this computer \
+                  (mappings.json), shared with the CLI.",
   map_button: "Map …",
   remap_button: "Change …",
   unmap_button: "Remove",
@@ -305,6 +479,38 @@ static EN: Texts = Texts {
   map_confirm: "Map",
   cancel: "Cancel",
   map_failed: "Mapping failed",
+  server_comparing: "Comparing with the server …",
+  server_not_configured:
+    "No server set up (server, user, password in config.ini): positions are not compared.",
+  server_failed: "Server not reachable",
+  server: "Server",
+  send_button: "Send",
+  send_all: "Send all",
+  pull_button: "Get",
+  pull_all: "Get all",
+  nothing_stored: "nothing stored",
+  outlook_same: "same",
+  outlook_device: "device newer",
+  outlook_server: "server newer",
+  outlook_asks: "asks first",
+  ask_title: "Question (confirm in config.ini)",
+  device: "Device",
+  device_behind: "The position on the device lies before the one on the server.",
+  positions_differ: "The positions differ.",
+  send_device: "Send the device’s",
+  keep_server: "Keep the server’s",
+  server_behind: "The position on the server lies before the one on the device.",
+  keep_device: "Keep the device’s",
+  take_server: "Take the server’s",
+  apply: "Apply",
+  history: "History",
+  history_empty: "Nothing synced yet.",
+  to_server: "to the server",
+  to_device: "to the device",
+  send_anyway: "Send anyway",
+  time: "Time",
+  direction: "Direction",
+  by: "by",
 };
 
 #[cfg(test)]
