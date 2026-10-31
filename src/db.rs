@@ -8,7 +8,7 @@ use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use rusqlite::{Connection, OpenFlags};
+use rusqlite::{Connection, OpenFlags, OptionalExtension};
 
 /// `ContentID` prefix of sideloaded books; store books have UUIDs instead.
 pub const ONBOARD: &str = "file:///mnt/onboard/";
@@ -191,9 +191,18 @@ impl Device {
   }
 }
 
-/// Sets the position of each book in one transaction, all or nothing.
+/// Sets the position of each book in one transaction, all or nothing. On a
+/// Tolino also the book's `tolino_bookmark` row (see [`update_tolino_bookmark`]).
 fn update_rows(conn: &mut Connection, writes: &[Write]) -> Result<(), Error> {
   let tx = conn.transaction()?;
+  let tolino: bool = tx.query_row(
+    "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tolino_bookmark')",
+    [],
+    |row| row.get(0),
+  )?;
+  let now = std::time::SystemTime::now()
+    .duration_since(std::time::UNIX_EPOCH)
+    .map_or(0, |d| d.as_millis() as i64);
   for write in writes {
     let changed = tx.execute(
       "UPDATE content SET ChapterIDBookmarked = ?1, ___PercentRead = ?2,
@@ -213,9 +222,69 @@ fn update_rows(conn: &mut Connection, writes: &[Write]) -> Result<(), Error> {
         write.content_id
       )));
     }
+    if tolino {
+      update_tolino_bookmark(&tx, write, now)?;
+    }
   }
   tx.commit()?;
   Ok(())
+}
+
+/// Tolino firmware 5.18 keeps a second copy of the position in
+/// `tolino_bookmark` (`uuid` = ContentID), which Nickel writes together with
+/// the book row when a book is closed. The same fields are set here, as
+/// Kobalt does on a Tolino (concept from Kobalt, MIT, see README credits):
+/// the point, the page and the page count, `progress` = page / pages,
+/// `modified` (milliseconds since the epoch) and `deletedLocally` = 0. The
+/// page count is Nickel's own (`lastPosition`, else `___NumPages`); pages
+/// count from 1, as in Nickel's rows (page 1 of 5 at the start), and Nickel
+/// counts them again when it opens the book. `modifiedLocally` stays as it
+/// is: for sideloaded books it is 0 and `backendId` 0, the cloud never sees
+/// them. A book without a row gets none: Nickel then opens at the book row
+/// and adds its own when the book is closed.
+fn update_tolino_bookmark(
+  tx: &rusqlite::Transaction,
+  write: &Write,
+  now: i64,
+) -> Result<(), Error> {
+  let pages: Option<i64> = tx
+    .query_row(
+      "SELECT coalesce(nullif(CAST(b.lastPosition AS INTEGER), 0),
+                       nullif(c.___NumPages, 0), 100)
+       FROM tolino_bookmark b, content c
+       WHERE b.uuid = ?1 AND c.ContentID = ?1 AND c.ContentType = '6'
+       ORDER BY b.id DESC LIMIT 1",
+      [&write.content_id],
+      |row| row.get(0),
+    )
+    .optional()?;
+  let Some(pages) = pages.filter(|&p| p > 0) else {
+    return Ok(());
+  };
+  let page = tolino_page(write.percent, pages);
+  tx.execute(
+    "UPDATE tolino_bookmark SET position = ?1, currentPosition = ?2, lastPosition = ?3,
+            progress = ?4, modified = ?5, deletedLocally = 0
+     WHERE uuid = ?6",
+    rusqlite::params![
+      write.position,
+      page,
+      pages,
+      page as f64 / pages as f64,
+      now,
+      write.content_id
+    ],
+  )?;
+  Ok(())
+}
+
+/// The page in `tolino_bookmark` for a percentage: rounded up and at least 1,
+/// as Nickel shows page 1 of 5 at the start and 4 of 5 at 70 %. The last
+/// page only at 100 %, as Kobalt keeps it for a finished book.
+fn tolino_page(percent: i64, pages: i64) -> i64 {
+  let percent = percent.clamp(0, 100);
+  let last = if percent < 100 { pages - 1 } else { pages };
+  ((percent * pages + 99) / 100).min(last).max(1)
 }
 
 /// Keeps the `keep` newest `KoboReader-*.sqlite` in `dir` (by name, which
@@ -403,6 +472,33 @@ impl DeviceDb {
     )
   }
 
+  /// The position in a book's `tolino_bookmark` row (Tolino 5.18) with its
+  /// page and page count, or `None` without such a table or row. Nickel
+  /// opens at the book row's `ChapterIDBookmarked` and writes both the same
+  /// when a book is closed, so this is only shown when the two differ.
+  pub fn tolino_bookmark(
+    &self,
+    content_id: &str,
+  ) -> Result<Option<(String, String, String)>, rusqlite::Error> {
+    if !self.is_tolino()? {
+      return Ok(None);
+    }
+    self
+      .conn
+      .query_row(
+        "SELECT coalesce(position, ''), coalesce(currentPosition, ''), coalesce(lastPosition, '')
+         FROM tolino_bookmark WHERE uuid = ?1 ORDER BY id DESC LIMIT 1",
+        [content_id],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+      )
+      .optional()
+      .or_else(|e| match e {
+        // A Tolino without that table (older firmware).
+        rusqlite::Error::SqliteFailure(_, Some(m)) if m.contains("no such table") => Ok(None),
+        e => Err(e),
+      })
+  }
+
   /// Books with a `ContentID` under `file:///mnt/onboard/`, by path.
   pub fn sideloaded_books(&self) -> Result<Vec<Book>, rusqlite::Error> {
     let mut stmt = self.conn.prepare(
@@ -456,6 +552,21 @@ mod tests {
     assert_eq!(fw.version, "5.18.264769");
     assert_eq!(fw.model_name(), Some("Tolino Shine Color"));
     assert!(Firmware::parse("garbage").is_none());
+  }
+
+  #[test]
+  fn tolino_page_rounds_up_from_page_one() {
+    // As Nickel stores them for a book of 5 pages.
+    assert_eq!(tolino_page(0, 5), 1);
+    assert_eq!(tolino_page(20, 5), 1);
+    assert_eq!(tolino_page(60, 5), 3);
+    assert_eq!(tolino_page(70, 5), 4);
+    assert_eq!(tolino_page(90, 5), 4);
+    assert_eq!(tolino_page(99, 44), 43);
+    assert_eq!(tolino_page(100, 5), 5);
+    assert_eq!(tolino_page(50, 1), 1);
+    assert_eq!(tolino_page(5, 44), 3);
+    assert_eq!(tolino_page(150, 44), 44);
   }
 
   #[test]

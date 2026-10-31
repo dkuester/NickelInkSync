@@ -678,7 +678,29 @@ fertig, D2 läuft (E0, E1, E2 und E3a erledigt; als Nächstes E3b).
   - [ ] **ich:** Ursache des ersten Öffnens: Nickels `Volume`-Cache
     (`Repository::refreshCache<Volume>`), Vorbild Kobalt (MIT): Position
     über Nickel schreiben (`VolumeManager::updateBookmark`/`updateFields`)
-    oder den Cache nach dem Schreiben der CLI auffrischen.
+    oder den Cache nach dem Schreiben der CLI auffrischen. Entwurf dazu:
+    PR #26 (Volume-Cache), pausiert.
+  - [x] **du:** Der Tolino hat sich am 2026-10-28 auf 5.18.279364
+    aktualisiert. Danach öffnete Book R nach `pull --write` per USB auch
+    mit ausgeschaltetem Plugin (`config.ini.off`) am Anfang von Kapitel 1,
+    genau an der Stelle aus der Tabelle `tolino_bookmark`, die weder CLI
+    noch Plugin schreiben.
+  - [x] **ich:** `tolino_bookmark` wird jetzt mitgeschrieben (PR #TBD), per
+    USB und beim Öffnen durch das Plugin, in derselben Transaktion wie die
+    Buchzeile: Stelle, Seite und Seitenzahl, `progress`, `modified`;
+    Felder wie bei Kobalt (MIT, Commit 8b144d2). Ein Buch ohne Zeile
+    bekommt keine. `status` zeigt die Zeile, wenn sie von der Position
+    abweicht (`tolino    …`).
+  - [x] **ich:** VM-Test (5.18.279364): Die VM zeigt den Fehler **nicht**.
+    Schon vorher öffnete Nickel trotz alter `tolino_bookmark`-Zeile an der
+    geholten Stelle, über das Plugin, per USB mit Neustart und per USB
+    ohne Neustart. Nachher ebenso, und die Zeile stimmt. Ob
+    `tolino_bookmark` am Gerät die Ursache ist, entscheidet dein Test.
+  - [ ] **du:** Gerätetest mit Book R, per USB mit Plugin aus und beim
+    Öffnen mit Plugin an (Anleitung im PR).
+  - [ ] **ich (nach dem Test):** Klappt es, PR #26 schließen; klappt es
+    nicht, mit der `tolino`-Zeile aus `status` weitersuchen (dann wieder
+    Volume-Cache, PR #26).
   - [ ] **ich (nach dem Test):** Gerätesprache: Das Log zeigt `QLocale()`
     beim Start; folgt sie Nickels Spracheinstellung, kommen die Meldungen
     auch auf Englisch.

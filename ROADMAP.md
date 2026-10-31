@@ -166,6 +166,12 @@ fixtures only.
   `config.ini` (`all`, `errors`, `none`). Verified on the Tolino, also
   opening within the chapter last read. Still to do: English texts (the
   plugin logs `QLocale()`, `de_DE` so far).
+- **Tolino 5.18.279364: open at the pulled place again** (S): since the
+  update of 2026-10-28 Nickel opened Book R at the place in
+  `tolino_bookmark` after a USB write. The CLI now writes that row too
+  (USB and plugin, fields as in Kobalt). The VM does not show the
+  failure, so the device test decides; PR #26 (Nickel's `Volume` cache)
+  waits for it.
 - **NickelHook plugin for the Kobo 6.0** (M–L): the Tolino plugin (Qt6)
   built and checked for Kobo 6.0 (symbols from its `libnickel.so`). The
   Qt5 plugin for 4.x is on hold: no 4.x device to test on.

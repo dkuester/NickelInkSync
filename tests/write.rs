@@ -104,6 +104,51 @@ impl Drop for Setup {
   }
 }
 
+/// Nickel's `tolino_bookmark` row for a book, as on the Tolino after the
+/// book was closed: page 82 of 111 at the device's old place.
+fn add_tolino_bookmark(conn: &Connection, content_id: &str, last_position: Option<&str>) {
+  conn
+    .execute(
+      "INSERT INTO tolino_bookmark (uuid, currentPosition, lastPosition, modified, position,
+                                    progress, backendId, deletedLocally, modifiedLocally, isAudiobook)
+       VALUES (?1, '82', ?2, 1793199825654, 'OEBPS/xhtml/xhtml-0-81.xhtml#point(/1/2/1/1:0)',
+               0.7387, 0, 0, 0, 0)",
+      rusqlite::params![content_id, last_position],
+    )
+    .unwrap();
+}
+
+/// `position`, `currentPosition`, `lastPosition`, `progress`, `modified`
+/// and `deletedLocally` of a book's `tolino_bookmark` row. The pages are
+/// text, in Nickel's rows as in ours (the columns are `TEXT`).
+fn tolino_bookmark(conn: &Connection, content_id: &str) -> (String, i64, i64, f64, i64, i64) {
+  conn
+    .query_row(
+      "SELECT position, CAST(currentPosition AS INTEGER), CAST(lastPosition AS INTEGER),
+              progress, modified, deletedLocally
+       FROM tolino_bookmark WHERE uuid = ?1",
+      [content_id],
+      |r| {
+        Ok((
+          r.get(0)?,
+          r.get(1)?,
+          r.get(2)?,
+          r.get(3)?,
+          r.get(4)?,
+          r.get(5)?,
+        ))
+      },
+    )
+    .unwrap()
+}
+
+fn now_ms() -> i64 {
+  std::time::SystemTime::now()
+    .duration_since(std::time::UNIX_EPOCH)
+    .unwrap()
+    .as_millis() as i64
+}
+
 fn hash(file: &str) -> String {
   partial_md5(&fixtures().join("epub").join(file)).unwrap()
 }
@@ -159,6 +204,83 @@ fn pull_write_sets_the_position_after_a_backup() {
   let (_, out) = s.run(&["pull", "--book", "book-a.epub", "--write"]);
   assert!(out.contains("Nothing to write to the device."), "{out}");
   assert_eq!(s.backups().len(), 1);
+}
+
+/// Tolino 5.18 also keeps the position in `tolino_bookmark`: the write sets
+/// it there too, in the same transaction, and leaves other books' rows and
+/// books without a row alone.
+#[test]
+fn pull_write_also_sets_the_tolino_bookmark() {
+  let s = Setup::tolino("write-tolino-bookmark");
+  {
+    let conn = Connection::open(s.db()).unwrap();
+    add_tolino_bookmark(&conn, BOOK, Some("111"));
+    add_tolino_bookmark(&conn, "file:///mnt/onboard/Books/book-c.epub", Some("40"));
+  }
+  let before = fs::read(s.db()).unwrap();
+  s.server
+    .store(&hash("book-a.epub"), AHEAD, 0.9, LAST_READ + 60);
+  let start = now_ms();
+  let (output, out) = s.run(&["pull", "--book", "book-a.epub", "--write"]);
+  assert!(output.status.success(), "{out}");
+  let conn = Connection::open(s.db()).unwrap();
+  // 90 % of 111 pages is page 99.9, so page 100.
+  let (position, page, pages, progress, modified, deleted) = tolino_bookmark(&conn, BOOK);
+  assert_eq!(
+    (position.as_str(), page, pages),
+    (AHEAD_ON_DEVICE, 100, 111)
+  );
+  assert!((progress - 100.0 / 111.0).abs() < 1e-6, "{progress}");
+  assert!(modified >= start && modified <= now_ms(), "{modified}");
+  assert_eq!(deleted, 0);
+  // Not the other book, and no row for the kepub, which had none.
+  let other = tolino_bookmark(&conn, "file:///mnt/onboard/Books/book-c.epub");
+  assert_eq!((other.1, other.4), (82, 1793199825654));
+  let rows: i64 = conn
+    .query_row("SELECT count(*) FROM tolino_bookmark", [], |r| r.get(0))
+    .unwrap();
+  assert_eq!(rows, 2);
+  // The backup is from before both writes.
+  assert_eq!(fs::read(&s.backups()[0]).unwrap(), before);
+  assert!(s.journals().is_empty(), "{:?}", s.journals());
+}
+
+/// A row without a page count takes the book's `___NumPages` (111).
+#[test]
+fn tolino_bookmark_without_a_page_count_takes_num_pages() {
+  let s = Setup::tolino("write-tolino-pages");
+  add_tolino_bookmark(&Connection::open(s.db()).unwrap(), BOOK, None);
+  s.server
+    .store(&hash("book-a.epub"), AHEAD, 0.9, LAST_READ + 60);
+  let (output, out) = s.run(&["pull", "--book", "book-a.epub", "--write"]);
+  assert!(output.status.success(), "{out}");
+  let row = tolino_bookmark(&Connection::open(s.db()).unwrap(), BOOK);
+  assert_eq!((row.1, row.2), (100, 111));
+}
+
+/// `status` shows the `tolino_bookmark` row only when it differs from the
+/// book row.
+#[test]
+fn status_shows_a_differing_tolino_bookmark() {
+  let s = Setup::tolino("status-tolino-bookmark");
+  let conn = Connection::open(s.db()).unwrap();
+  add_tolino_bookmark(&conn, BOOK, Some("111"));
+  let (_, out) = s.run(&["status", "--content-id", BOOK]);
+  assert!(!out.contains("  tolino    "), "{out}");
+  conn
+    .execute(
+      "UPDATE tolino_bookmark SET position = ?1, currentPosition = '2' WHERE uuid = ?2",
+      ["OEBPS/xhtml/xhtml-0-1.xhtml#point(/1/2/1/1:0)", BOOK],
+    )
+    .unwrap();
+  let (_, out) = s.run(&["status", "--content-id", BOOK]);
+  assert!(
+    out.contains(
+      "  tolino    OEBPS/xhtml/xhtml-0-1.xhtml#point(/1/2/1/1:0) (page 2 of 111; \
+       tolino_bookmark differs from the position)\n"
+    ),
+    "{out}"
+  );
 }
 
 /// Nickel keeps the database in WAL mode: the change must end up in the
@@ -377,6 +499,7 @@ fn live_pull_emits_the_position_and_never_writes() {
 fn live_write_for_one_book_while_nickel_runs() {
   let s = Setup::tolino("live-write");
   let nickel = nickel_running(&s, "OEBPS/xhtml/xhtml-0-81.xhtml#point(/1/2/1/1:0)");
+  add_tolino_bookmark(&nickel, BOOK, Some("111"));
   s.server
     .store(&hash("book-a.epub"), AHEAD, 0.9, LAST_READ + 60);
   // Never for all books at once.
@@ -403,6 +526,12 @@ fn live_write_for_one_book_while_nickel_runs() {
     )
     .unwrap();
   assert_eq!((position.as_str(), percent), (AHEAD_ON_DEVICE, 90));
+  // And the Tolino's second copy, in the same transaction.
+  let bookmark = tolino_bookmark(&nickel, BOOK);
+  assert_eq!(
+    (bookmark.0.as_str(), bookmark.1, bookmark.2),
+    (AHEAD_ON_DEVICE, 100, 111)
+  );
   // Its WAL files stay, and so does the WAL mode.
   assert!(s.journals().iter().any(|j| j.ends_with("-wal")));
   let backups = s.backups();

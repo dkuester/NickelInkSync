@@ -259,7 +259,77 @@ Meanwhile a book Nickel opened elsewhere goes on
 pushed, and the next pull takes the server's position regardless of the
 `DateLastRead` Nickel saved.
 
-## The push path
+### Firmware 5.18.279364: the second bookmark row
+
+The Tolino updated itself to 5.18.279364 on 2026-10-28. Afterwards Nickel
+opened Book R at `OEBPS/text/chapter1.xhtml#point(/1/4/2/1:0)` after a
+`pull --write` over USB, with the plugin off. That place is what the
+book's row in `tolino_bookmark` held: a second copy of the position that
+Nickel writes together with the book row when a book is closed, and that
+neither the CLI nor the plugin wrote.
+
+```sql
+CREATE TABLE tolino_bookmark (id INTEGER PRIMARY KEY AUTOINCREMENT,
+  uuid TEXT NOT NULL, currentPosition TEXT, lastPosition TEXT,
+  modified INTEGER, position TEXT, progress FLOAT, revision TEXT,
+  backendId INTEGER, deletedLocally INTEGER, modifiedLocally INTEGER,
+  isAudiobook BOOL)
+```
+
+What Nickel stores, seen in the 5.18.279364 VM and in a backup of the
+Tolino's database (2026-10-28):
+
+| Column | Sideloaded book |
+|---|---|
+| `uuid` | the ContentID, `file:///mnt/onboard/…` |
+| `position` | the same point as `ChapterIDBookmarked` |
+| `currentPosition`, `lastPosition` | page and page count as text (`'3'`, `'5'`); `lastPosition` equals `___NumPages` (Book R: 44) |
+| `progress` | `currentPosition / lastPosition`; `___PercentRead` follows it (3 of 5: 0.6 and 60) |
+| `modified` | milliseconds since the epoch |
+| `revision`, `backendId`, `modifiedLocally`, `deletedLocally` | NULL, 0, 0, 0: the cloud never sees sideloaded books (on the Tolino 113 of 117 rows have a `backendId`, none of the sideloaded ones) |
+
+Pages count from 1: the start of a 5-page book is page 1 of 5.
+
+Kobalt (MIT, develop branch, commit 8b144d2 "Support Tolino reading
+progress and protected-book handoff") writes both rows on a Tolino,
+through Nickel: `Content::setNumPages`, `VolumeManager::updateBookmark`
+with the page, then `VolumeManager::updateFields`; then it checks the row
+(`tolino_progress.h`: position equal to `ChapterIDBookmarked`, page and
+page count as written, `progress` = page / pages, `modified` > 0,
+`deletedLocally` false). The page is below the page count unless the book
+is finished.
+
+**What the CLI does now** (`src/db.rs`, `update_tolino_bookmark`), in the
+same transaction as the book row, for `pull --write` over USB and for
+`pull --live --write`, which the plugin runs just before Nickel opens the
+book: if the book has a `tolino_bookmark` row, it sets `position`,
+`currentPosition` (the percentage of the page count, rounded up, at least
+1, at most the page count minus one below 100 %), `lastPosition` (the
+row's own, else `___NumPages`), `progress`, `modified` (now) and
+`deletedLocally` = 0. `modifiedLocally` stays. A book without a row gets
+none; Nickel opens it at the book row and adds the row when it is closed.
+`status` shows the row when its position differs from
+`ChapterIDBookmarked` (`tolino    …`).
+
+**Reading.** `status` and `pull` keep reading `ChapterIDBookmarked`:
+in every VM run Nickel wrote both rows with the same point when a book was
+closed, and it opened at `ChapterIDBookmarked` when they differed.
+
+**VM, 2026-10-31** (5.18.279364, test book "VM Book T", 5 chapters, no
+Tolino cloud account). Before the change, with a `tolino_bookmark` row
+left at an older place, Nickel still opened at the pulled place in all
+three ways tried: the plugin's live write (chapter 3, paragraph 20; row
+at chapter 1), `pull --write` with Nickel stopped and started again
+(chapter 5, paragraph 10; row at chapter 3), and `pull --write` during a
+USB connection with Nickel running on (chapter 4, paragraph 10; row at
+chapter 2). A book row older than the `tolino_bookmark` row (by
+`DateLastRead` against `modified`) also won. So the VM does **not** show
+the device's failure; the cause on the device is not proven. After the
+change, the USB way (chapter 2, paragraph 20, row 2 of 5 at the same
+point) and the live way (chapter 5, paragraph 10, row written before
+opening) opened at the pulled place, and Nickel's own rows on closing
+matched ours. The device test decides.
+
 
 After the original `leavingReadingExperience()` the position is saved,
 so the hook runs `nickelinksync push` for that book (in the background,

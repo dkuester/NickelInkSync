@@ -47,7 +47,9 @@ synced. The device is only read, never written, except by `pull --write`
 `pull --write` first copies `.kobo/KoboReader.sqlite` to
 `~/.local/share/nickelinksync/backups/KoboReader-<UTC time>.sqlite` (or
 `backups` in the data directory, see below, or `$NICKELINKSYNC_BACKUP_DIR`),
-then sets the position of all books in one transaction. It refuses to
+then sets the position of all books in one transaction (on a Tolino with
+firmware 5.18 also the book's second copy in `tolino_bookmark`, see
+[docs/nickel-5.18-symbols.md](docs/nickel-5.18-symbols.md#firmware-518279364-the-second-bookmark-row)). It refuses to
 write without `.kobo/version` (not a mounted device) or while SQLite
 journal files lie next to the database. Eject the device before you open
 the book. To undo, copy the backup back to `.kobo/KoboReader.sqlite` while
@@ -366,7 +368,7 @@ behavior; the AGPL-3.0 projects are references only, see
 | [KOReader](https://github.com/koreader/koreader) | the KOReader developers | AGPL-3.0 | The partial MD5 book hash, XPointers, the reading-progress sync |
 | [koreader-sync-server](https://github.com/koreader/koreader-sync-server) | the KOReader developers | AGPL-3.0 | The KOSync protocol |
 | [BookOrbit](https://github.com/bookorbit/bookorbit) | the BookOrbit developers | AGPL-3.0 | Matching books by the KOReader hash; the planned manual book mapping |
-| [Kobalt](https://github.com/nicoverbruggen/kobalt) | Nico Verbruggen | MIT | How Nickel caches books (`Cache<Volume>`) and how to write progress through Nickel itself |
+| [Kobalt](https://github.com/nicoverbruggen/kobalt) | Nico Verbruggen | MIT | How Nickel caches books (`Cache<Volume>`), how to write progress through Nickel itself, and which fields of the Tolino's `tolino_bookmark` row go with a position (develop branch, commit 8b144d2) |
 | [Amazon Ion 1.0](https://amazon-ion.github.io/ion-docs/) | Amazon | specification | Reading KFX books (Kindle feasibility check) |
 
 ## License

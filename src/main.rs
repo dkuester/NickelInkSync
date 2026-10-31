@@ -340,6 +340,13 @@ fn status(target: &Target) -> Result<bool> {
       "  position  {}",
       book.position.as_deref().unwrap_or("(never opened)")
     );
+    if let Some((at, page, pages)) = session.device.db.tolino_bookmark(&book.content_id)? {
+      if book.position.as_deref() != Some(at.as_str()) {
+        println!(
+          "  tolino    {at} (page {page} of {pages}; tolino_bookmark differs from the position)"
+        );
+      }
+    }
     let local = session.local(book, &identity);
     if book.position.is_some() {
       let koreader = match &local {

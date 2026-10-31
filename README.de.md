@@ -50,7 +50,8 @@ Plugin, siehe unten).
 `pull --write` kopiert zuerst `.kobo/KoboReader.sqlite` nach
 `~/.local/share/nickelinksync/backups/KoboReader-<UTC-Zeit>.sqlite` (oder
 `backups` im Datenordner, siehe unten, oder `$NICKELINKSYNC_BACKUP_DIR`)
-und setzt dann die Position aller Bücher in einer Transaktion. Es schreibt
+und setzt dann die Position aller Bücher in einer Transaktion (auf einem
+Tolino mit Firmware 5.18 auch die zweite Kopie in `tolino_bookmark`). Es schreibt
 nicht ohne `.kobo/version` (kein eingehängtes Gerät) und nicht, solange
 SQLite-Journaldateien neben der Datenbank liegen. Wirf das Gerät aus, bevor
 du das Buch öffnest. Rückgängig machen: die Sicherung bei eingehängtem Gerät
@@ -347,8 +348,8 @@ Die Tabelle mit Lizenzen und Links steht im [englischen README](README.md#credit
   (KOSync-Protokoll), beide AGPL-3.0;
   [BookOrbit](https://github.com/bookorbit/bookorbit) (AGPL-3.0, Zuordnung
   über die KOReader-Prüfsumme); [Kobalt](https://github.com/nicoverbruggen/kobalt)
-  von Nico Verbruggen (MIT, Nickels Buch-Cache und Schreiben über Nickel
-  selbst); die [Amazon-Ion-1.0-Spezifikation](https://amazon-ion.github.io/ion-docs/)
+  von Nico Verbruggen (MIT, Nickels Buch-Cache, Schreiben über Nickel
+  selbst und die Felder der Tolino-Tabelle `tolino_bookmark`); die [Amazon-Ion-1.0-Spezifikation](https://amazon-ion.github.io/ion-docs/)
   (KFX, Kindle-Machbarkeit).
 
 ## Lizenz
