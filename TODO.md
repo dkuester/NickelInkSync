@@ -289,8 +289,10 @@ fertig, D2 läuft (E0 bis E3c erledigt; als Nächstes E4).
     holen“ lassen solche Bücher aus.
   - [ ] **ich:** Geräteansicht nebeneinander (O5): aus E3c herausgenommen,
     die Gestaltung ist noch offen (siehe Frage im PR).
-  - [ ] **du:** E3c: Book R vom Server auf den Tolino holen, auswerfen,
-    öffnen.
+  - [x] **du:** E3c: Book R vom Server auf den Tolino holen, auswerfen,
+    öffnen (2026-10-31): Holen schreibt die richtige Stelle, danach „gleich“
+    und ausgegraute Knöpfe. Nickel öffnet nur am Kapitelanfang (R2-1 statt
+    R2-19), das ist N5 (PR #40), nicht E3c.
   - [ ] **ich:** **E4** Einstellungen; Schlüssel im Schlüsselbund bzw. in
     der Anmeldeinformationsverwaltung (`keyring`, nur für macOS und
     Windows, nicht im Gerätebau). Die CLI sucht `password`/`key` in der
