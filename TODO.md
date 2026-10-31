@@ -32,7 +32,7 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0 bis E4 und O5 erledigt; als Nächstes E5). **Danach
+fertig, D2 läuft (E0 bis E5a und O5 erledigt; als Nächstes E5b). **Danach
 der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
 
 ## Grundlagen
@@ -314,12 +314,31 @@ der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
     ändern sich Server oder Benutzer, zieht der Schlüssel mit. `keyring`
     3.6.3 nur für macOS und Windows. Tests mit einem Ordner statt des
     Schlüsselbunds (`NICKELINKSYNC_KEYCHAIN_DIR`).
-  - [ ] **du:** E4: Einstellungen öffnen, „In den Schlüsselbund
-    verschieben“, danach `status` in der CLI.
-  - [ ] **ich:** **E5** Bücher aus Calibre auf Tolino oder Kobo kopieren,
-    beim Kobo auf Wunsch mit kepubify, Zuordnung entsteht dabei;
-    Sicherungskopie der Gerätedatenbank zurückspielen (Bibliothek und
-    CLI). Nichts auf dem Gerät überschreiben.
+  - [x] **du:** E4: Einstellungen öffnen, „In den Schlüsselbund
+    verschieben“, danach `status` in der CLI (2026-10-31, PR #49).
+  - [x] **ich:** **E5a** Bücher aus Calibre auf Tolino oder Kobo kopieren,
+    beim Kobo auf Wunsch mit kepubify, Zuordnung entsteht dabei. Nichts
+    auf dem Gerät überschreiben. Umgesetzt: Knopf „Aus Bibliothek
+    hinzufügen …“ (Suche nach Titel, Autor, Datei; Auswahl per Haken);
+    Ziel `Books/`; eine Datei gleichen Namens oder dieselbe EPUB (gleiche
+    Prüfsumme) in `Books/` bleibt und wird gemeldet; geschrieben wird mit
+    `create_new`. kepubify (bis E6 nicht mitgeliefert) wird im `PATH`, in
+    `/opt/homebrew/bin`, `/usr/local/bin`, `~/go/bin` oder über
+    `NICKELINKSYNC_KEPUBIFY` gesucht; die kepub wird gleich der EPUB
+    zugeordnet. Bibliothek: `nickelinksync::copy`.
+    Beim Test gefunden: Der Kobo mit Firmware 6.0 hat auch die
+    `tolino_*`-Tabellen und galt deshalb als Tolino (kein kepub-Haken,
+    dafür „Holen“ am Kobo). Jetzt entscheidet das Modell in
+    `.kobo/version`, dann der Händler in `.kobo/affiliate.conf` (`Kobo`
+    oder z. B. `Thalia.de`), erst zuletzt die Tabellen.
+    Entscheidung (2026-10-31): „Holen“ auch am Kobo wie am Tolino, vorerst
+    nur für EPUBs; kepubs folgen mit der Rückübersetzung (K4, eigene
+    Session).
+  - [x] **du:** E5a: ein Buch auf den Tolino kopieren, eins als kepub auf
+    den Kobo (2026-10-31): Tolino als EPUB, Kobo als kepub und gleich
+    zugeordnet; am Kobo „Holen“ bei EPUBs, bei kepubs nur „Senden“.
+  - [ ] **ich:** **E5b** Sicherungskopie der Gerätedatenbank zurückspielen
+    (Bibliothek, CLI `restore`, Dialog im Fenster).
   - [ ] **ich:** **E6** macOS: `.app` als `.dmg` aus der CI (macOS-Runner,
     eigener Job, kein Pflicht-Check), kepubify-Binaries (feste Version,
     SHA-256 gegen das Release geprüft) mit Lizenzhinweis in „Über“ und

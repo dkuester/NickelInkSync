@@ -172,7 +172,9 @@ fixtures only.
   all connected devices side by side, one column per device (O5); E4,
   the settings dialog on `config.ini` (edited line by line, with a backup)
   and the key in the system keychain on macOS and Windows, which the CLI
-  reads too.
+  reads too; E5a, copying books of the library to a Kobo or Tolino
+  without overwriting anything, on a Kobo optionally as kepubs (kepubify)
+  mapped to their EPUB.
 
 - **Read-only device database layer** (S–M): reading the books and their
   positions is done (`status --device`); still to do: resolve
