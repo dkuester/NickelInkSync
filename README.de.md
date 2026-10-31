@@ -53,7 +53,14 @@ Plugin, siehe unten).
 und setzt dann die Position aller Bücher in einer Transaktion. Es schreibt
 nicht ohne `.kobo/version` (kein eingehängtes Gerät) und nicht, solange
 SQLite-Journaldateien neben der Datenbank liegen. Wirf das Gerät aus, bevor
-du das Buch öffnest. Rückgängig machen: die Sicherung bei eingehängtem Gerät
+du das Buch öffnest. Auf dem Kobo 6.0 und dem Tolino 5.18.279364 öffnet
+Nickel ein Buch aus seinem Zwischenspeicher fertig gezeichneter Seiten und,
+wenn keine gespeicherte Seite die geschriebene Stelle enthält, auf der
+ersten gespeicherten Seite dieses Kapitels. Deshalb verwirft das Schreiben
+auch die gespeicherten Seiten dieses Kapitels (nur dieses Kapitels und nur,
+wenn keine die Stelle enthält); es meldet das, und dann musst du das Gerät
+neu starten, nicht nur auswerfen, weil Nickel diese Seiten im Speicher
+hält. Rückgängig machen: die Sicherung bei eingehängtem Gerät
 zurück nach `.kobo/KoboReader.sqlite` kopieren.
 
 ### Buchzuordnung (im Aufbau)

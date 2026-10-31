@@ -188,7 +188,7 @@ fn pull_step_take_and_write() {
   assert_eq!(take.write.position, AHEAD_ON_DEVICE);
   assert_eq!(take.write.percent, 90);
   assert_eq!(take.note, None);
-  let Written::Mounted { backup } = session.write(&[take.write]).unwrap() else {
+  let Written::Mounted { backup, .. } = session.write(&[take.write]).unwrap() else {
     panic!("not a mounted device")
   };
   assert!(backup.starts_with(data_dir().join("backups")), "{backup:?}");

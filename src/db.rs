@@ -102,7 +102,10 @@ impl Device {
   /// connection takes an exclusive lock first, so SQLite needs no `-shm`
   /// file, and after the commit a checkpoint moves the change from the
   /// `-wal` file into the database, so the device holds one file again.
-  pub fn write_positions(&self, writes: &[Write], backup: &Path) -> Result<(), Error> {
+  ///
+  /// Returns how many of Nickel's cached pages it dropped (see
+  /// [`drop_stale_pages`]); Nickel only lets go of them after a restart.
+  pub fn write_positions(&self, writes: &[Write], backup: &Path) -> Result<usize, Error> {
     if self.live {
       return Err(Error::Refused(
         "the database is in use by Nickel; write only to a device mounted over USB".into(),
@@ -125,7 +128,7 @@ impl Device {
     let mut conn = Connection::open_with_flags(&db_path, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
     // Before the first access, so WAL never sets up shared memory.
     conn.pragma_update(None, "locking_mode", "EXCLUSIVE")?;
-    update_rows(&mut conn, writes)?;
+    let dropped = update_rows(&mut conn, writes)?;
     let wal: String = conn.query_row("PRAGMA journal_mode", [], |row| row.get(0))?;
     if wal.eq_ignore_ascii_case("wal") {
       // (busy, frames in the WAL, frames checkpointed)
@@ -147,7 +150,7 @@ impl Device {
         io::Error::other("left over after writing; do not eject yet, run again"),
       ));
     }
-    Ok(())
+    Ok(dropped)
   }
 }
 
@@ -159,13 +162,14 @@ impl Device {
   /// database with Nickel through SQLite's normal locking, leaves its WAL
   /// files alone and keeps one backup per day in `backups` (the two newest
   /// stay), made with SQLite's backup API, which is consistent while Nickel
-  /// writes. `today` names it (`20261024`).
+  /// writes. `today` names it (`20261024`). Returns the backup it made, if
+  /// any, and how many cached pages it dropped.
   pub fn write_live(
     &self,
     writes: &[Write],
     backups: &Path,
     today: &str,
-  ) -> Result<Option<PathBuf>, Error> {
+  ) -> Result<(Option<PathBuf>, usize), Error> {
     if !self.live {
       return Err(Error::Refused(
         "use write_positions for a device mounted over USB".into(),
@@ -185,15 +189,18 @@ impl Device {
       prune_backups(backups, 2)?;
       Some(backup)
     };
-    update_rows(&mut conn, writes)?;
+    let dropped = update_rows(&mut conn, writes)?;
     conn.close().map_err(|(_, e)| e)?;
-    Ok(made)
+    Ok((made, dropped))
   }
 }
 
-/// Sets the position of each book in one transaction, all or nothing.
-fn update_rows(conn: &mut Connection, writes: &[Write]) -> Result<(), Error> {
+/// Sets the position of each book in one transaction, all or nothing, and
+/// drops the cached pages that would make Nickel open elsewhere. Returns how
+/// many pages it dropped.
+fn update_rows(conn: &mut Connection, writes: &[Write]) -> Result<usize, Error> {
   let tx = conn.transaction()?;
+  let mut dropped = 0;
   for write in writes {
     let changed = tx.execute(
       "UPDATE content SET ChapterIDBookmarked = ?1, ___PercentRead = ?2,
@@ -213,9 +220,89 @@ fn update_rows(conn: &mut Connection, writes: &[Write]) -> Result<(), Error> {
         write.content_id
       )));
     }
+    dropped += drop_stale_pages(&tx, &write.content_id, &write.position)?;
   }
   tx.commit()?;
-  Ok(())
+  Ok(dropped)
+}
+
+/// Since Kobo 6.0 and Tolino 5.18.279364 Nickel opens a book from its cache
+/// of rendered pages (`CachePersistence*` tables, see
+/// docs/nickel-5.18-symbols.md): if no cached page holds the bookmarked
+/// place, it takes the first cached page of that chapter
+/// (`getByChapterInPersistence` in the log), which is the chapter start in
+/// practice. So when no cached page holds `position`, this drops the cached
+/// pages of its chapter, and Nickel renders the page at the place. The other
+/// chapters keep theirs. Returns how many pages it dropped; 0 without those
+/// tables (older firmware).
+fn drop_stale_pages(tx: &Connection, content_id: &str, position: &str) -> Result<usize, Error> {
+  let has_cache: bool = tx.query_row(
+    "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table'
+                    AND name = 'CachePersistenceRenderedPageData')",
+    [],
+    |row| row.get(0),
+  )?;
+  let Some((file, target)) = split_location(position) else {
+    return Ok(0);
+  };
+  if !has_cache {
+    return Ok(0);
+  }
+  let mut stmt = tx.prepare(
+    "SELECT id, pageStartLocation, pageEndLocation FROM CachePersistenceRenderedPageData
+     WHERE contentId = ?1",
+  )?;
+  let mut chapter = Vec::new();
+  for row in stmt.query_map([content_id], |row| {
+    Ok((
+      row.get::<_, String>(0)?,
+      row.get::<_, String>(1)?,
+      row.get::<_, String>(2)?,
+    ))
+  })? {
+    let (id, start, end) = row?;
+    let (Some((start_file, start)), Some((_, end))) =
+      (split_location(&start), split_location(&end))
+    else {
+      continue;
+    };
+    if start_file != file {
+      continue;
+    }
+    if start <= target && target <= end {
+      // Nickel finds this page by the place itself.
+      return Ok(0);
+    }
+    chapter.push(id);
+  }
+  for id in &chapter {
+    tx.execute(
+      "DELETE FROM CachePersistenceRenderedPageChapterData WHERE cachePersistenceRenderedPageDataId = ?1",
+      [id],
+    )?;
+    tx.execute(
+      "DELETE FROM CachePersistenceRenderedPageData WHERE id = ?1",
+      [id],
+    )?;
+  }
+  Ok(chapter.len())
+}
+
+/// A location's chapter file and the numbers after it, to compare places in
+/// one chapter: `OEBPS/text/c2.xhtml#point(/1/4/128/1:0)` gives
+/// `OEBPS/text/c2.xhtml` and `[1, 4, 128, 1, 0]`, a kepub span
+/// `…#kobo.17.1:204` gives `[17, 1, 204]`.
+fn split_location(location: &str) -> Option<(&str, Vec<i64>)> {
+  let (file, fragment) = location.split_once('#')?;
+  let numbers: Vec<i64> = fragment
+    .split(|c: char| !c.is_ascii_digit())
+    .filter(|part| !part.is_empty())
+    .map(|part| part.parse().ok())
+    .collect::<Option<_>>()?;
+  if numbers.is_empty() {
+    return None;
+  }
+  Some((file, numbers))
 }
 
 /// Keeps the `keep` newest `KoboReader-*.sqlite` in `dir` (by name, which

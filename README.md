@@ -50,7 +50,12 @@ synced. The device is only read, never written, except by `pull --write`
 then sets the position of all books in one transaction. It refuses to
 write without `.kobo/version` (not a mounted device) or while SQLite
 journal files lie next to the database. Eject the device before you open
-the book. To undo, copy the backup back to `.kobo/KoboReader.sqlite` while
+the book. On Kobo 6.0 and Tolino 5.18.279364 Nickel opens a book from its
+cache of rendered pages and, when no cached page holds the written place,
+at the first cached page of that chapter. So the write also drops the
+cached pages of that chapter (only of that chapter, and only when none
+holds the place); it then says so, and the device has to be restarted, not
+only ejected, because Nickel keeps those pages in memory. To undo, copy the backup back to `.kobo/KoboReader.sqlite` while
 the device is mounted.
 
 ### Book mapping (in progress)

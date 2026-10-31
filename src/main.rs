@@ -811,19 +811,36 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
       record(&taken);
     }
     match written {
-      Written::Live { backup } => {
+      Written::Live {
+        backup,
+        pages_dropped,
+      } => {
         println!(
           "\nWrote {} position(s) to the device database while Nickel runs.",
           writes.len()
         );
+        if pages_dropped > 0 {
+          println!("Dropped {pages_dropped} of Nickel's cached pages that hid the place.");
+        }
         if let Some(backup) = backup {
           println!("Backup of the database (one a day): {}", backup.display());
         }
       }
-      Written::Mounted { backup } => {
+      Written::Mounted {
+        backup,
+        pages_dropped,
+      } => {
         println!("\nWrote {} position(s) to the device.", writes.len());
         println!("Backup of the database: {}", backup.display());
-        println!("Eject the device before you open the book.");
+        if pages_dropped > 0 {
+          println!(
+            "Dropped {pages_dropped} of Nickel's cached pages that hid the place. Eject the \
+             device and restart it before you open the book: Nickel keeps those pages in \
+             memory until then."
+          );
+        } else {
+          println!("Eject the device before you open the book.");
+        }
       }
     }
   }
