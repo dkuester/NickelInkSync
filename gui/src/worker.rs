@@ -12,6 +12,7 @@ use nickelinksync::library::Library;
 
 use crate::devices::{self, Found, Kind};
 use crate::model::{self, Loaded, Mapped, Suggestions};
+use crate::overview::{self, Overview};
 use crate::sync::{self, Question, Report, ServerState};
 
 pub enum Command {
@@ -37,6 +38,8 @@ pub enum Command {
   },
   /// The last entries of the sync history.
   History,
+  /// Every device's position of each book side by side, with the server's.
+  Overview { devices: Vec<Found> },
   /// The library's candidates for one book.
   Suggest { root: PathBuf, id: String },
   /// Map one book to an EPUB, then read the device again.
@@ -68,6 +71,7 @@ pub enum Event {
     result: Result<Report, String>,
   },
   History(Result<Vec<Entry>, String>),
+  Overview(Overview),
   Progress {
     root: PathBuf,
     done: usize,
@@ -181,6 +185,7 @@ fn run(inbox: &Receiver<Command>, outbox: &Sender<Event>, repaint: &dyn Fn()) {
         synced(root, kind, result);
       }
       Command::History => send(Event::History(sync::history(200))),
+      Command::Overview { devices } => send(Event::Overview(overview::build(&devices))),
       Command::Suggest { root, id } => {
         let result = match &library {
           Some(library) => Ok(library.as_ref()),

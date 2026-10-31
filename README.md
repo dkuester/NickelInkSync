@@ -158,7 +158,9 @@ backup of it in the data directory, as `pull --write` does; a `confirm`
 question comes as the same dialog (keep the device's, or take the
 server's), and the device is read again afterwards. Eject the Tolino
 before you open the book. "History" lists what the CLI and the window
-sent and wrote (`history.jsonl` in the data directory). To a Kobo or a
+sent and wrote (`history.jsonl` in the data directory). "Overview"
+shows all connected devices side by side: one line per book, one column
+per device with its position, and the server's. To a Kobo or a
 Kindle it writes nothing, only `mappings.json` and the history.
 Nothing is synced when a device is connected. German or English after the
 system language, switchable. It shares `config.ini` and `mappings.json`

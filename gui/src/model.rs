@@ -38,6 +38,8 @@ pub struct Row {
   pub id: String,
   /// The key of the book's mapping, if it has one (also a broken one).
   pub key: Option<String>,
+  /// The KOSync document it syncs under; `None` if it does not sync.
+  pub document: Option<String>,
   pub title: String,
   pub author: Option<String>,
   /// Path on the device (or in the Kindle copy).
@@ -142,6 +144,7 @@ fn load_nickel(
     rows.push(Row {
       id: book.content_id.clone(),
       key,
+      document: identity.document().map(str::to_string),
       title: book
         .title
         .clone()
@@ -182,15 +185,18 @@ fn load_kindle(
   let total = session.books.len();
   let mut rows = Vec::with_capacity(total);
   for (i, book) in session.books.iter().enumerate() {
-    let (group, local) = match session.mapping(book) {
+    let (group, local, document) = match session.mapping(book) {
       Ok(mapping) => (
         Group::Mapped {
           original: mapping.epub.path.clone(),
         },
         Some(session.local(book, mapping)),
+        Some(mapping.epub.hash.clone()),
       ),
-      Err(_) if session.store.for_kindle(&book.content_id).is_none() => (Group::NotMapped, None),
-      Err(message) => (Group::Problem { message }, None),
+      Err(_) if session.store.for_kindle(&book.content_id).is_none() => {
+        (Group::NotMapped, None, None)
+      }
+      Err(message) => (Group::Problem { message }, None, None),
     };
     let (percent, xpointer, last_read) = match local {
       Some(Ok((local, _, _))) => (
@@ -207,6 +213,7 @@ fn load_kindle(
         .store
         .for_kindle(&book.content_id)
         .map(|m| m.device.key().to_string()),
+      document,
       title: book
         .title
         .clone()
@@ -224,6 +231,7 @@ fn load_kindle(
     rows.push(Row {
       id: String::new(),
       key: None,
+      document: None,
       title: path
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
