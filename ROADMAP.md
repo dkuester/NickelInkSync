@@ -149,7 +149,9 @@ fixtures only.
   remove), on the mapping code moved from the CLI into the library; E3a,
   the sync history (`history.jsonl`, written by the CLI and the window);
   E3b, the server's position for each book and sending per book or all,
-  with the `confirm` questions in a dialog, and a history window.
+  with the `confirm` questions in a dialog, and a history window; E3c,
+  taking the server's position into a Tolino per book or all (after a
+  backup of the database, the same dialog for `confirm`).
 
 - **Read-only device database layer** (S–M): reading the books and their
   positions is done (`status --device`); still to do: resolve
@@ -192,6 +194,17 @@ fixtures only.
   opened from a NickelMenu entry (on 6.0 only NickelMenu's experimental
   Qt6 fork) and the book menu. Replaces the earlier items for the Kobo
   plugin (N2) and book mappings on the device (N6).
+- **Reliable take on opening, Tolino plugin** (S): two of five device runs
+  opened at the chapter start, because Nickel's in-memory `Volume` cache
+  does not see the row the CLI writes. A draft (PR #26) drops that cache
+  and loads the book again before Nickel opens it; in a later device test
+  Nickel opened the pulled page in nine of nine runs. The plugin's check
+  after opening now waits until Nickel knows its place (it often does not
+  after 3 s; PR #44). **Paused (28.10.):** after the Tolino updated itself to
+  firmware 5.18.279364, Nickel opens at the chapter start even without
+  the plugin. Writing `tolino_bookmark` as well (PR #40) did not change
+  that on the device. Lead, not proven: Nickel's cache of rendered pages;
+  every failing point lay where no page of the book was cached.
 - **Store and cloud books without DRM** (S–M): downloaded Tolino store
   books without encryption sit in `.kobo/kepub/<ContentID>` and store
   positions like sideloaded EPUBs, but only sideloaded books sync so far.

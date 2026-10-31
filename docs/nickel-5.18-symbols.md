@@ -31,7 +31,7 @@ moves to `r1`. A by-value return shows as `mov r4, r0` at entry and
 | Copy the book | `_ZN6VolumeC1ERKS_`, `_ZN6VolumeD1Ev` | `Volume::Volume(Volume const&)`, `Volume::~Volume()` |
 | Set the position | `_ZN7Content22setChapterIdBookmarkedERK8QVariant` | `void Content::setChapterIdBookmarked(QVariant const&)` (stored as `QByteArray`) |
 | Set the percentage | `_ZN7Content14setPercentReadERK8QVariant` | `void Content::setPercentRead(QVariant const&)` (stored as `int`) |
-| Book loaded again | `_ZN13VolumeManager7getByIdERK7QStringS2_` | `static Volume VolumeManager::getById(QString const& id, QString const&)` (by value: result pointer in `r0`, which it also returns; the arguments in `r1`, `r2`) |
+| Book loaded again | `_ZN13VolumeManager7getByIdERK7QStringS2_` | `static Volume VolumeManager::getById(QString const& id, QString const& db)` (by value: result pointer in `r0`, which it also returns; the arguments in `r1`, `r2`). Reads Nickel's `Volume` cache, not the database: see [Nickel's Volume cache](#step-5-nickels-volume-cache) |
 
 How they connect, from the call graph of the whole library:
 
@@ -40,8 +40,10 @@ How they connect, from the call graph of the whole library:
   context.bookmark)`. That passes both on to `ReadingView::setVolume`,
   which compares the bookmark with `HasNull<Bookmark>::null()` and calls
   `ReadingView::setupReader(QString const&)`. **`setupReader` loads the
-  book again from the database** (`VolumeManager::getById`, via the PLT)
-  and sets up the reader state from that. On the Tolino the chapter to
+  book again** (`VolumeManager::getById(id, QString())`, via the PLT; only
+  when the `Volume` it holds is not valid) and sets up the reader state
+  from that. `getById` answers from Nickel's `Volume` cache once that
+  exists, not from the database. On the Tolino the chapter to
   open comes from the `Volume` passed to `setVolume`, the place in the
   chapter from the one `getById` loads (device test below). A bookmark,
   if given (a link, a search result), takes precedence.
@@ -259,6 +261,173 @@ Meanwhile a book Nickel opened elsewhere goes on
 pushed, and the next pull takes the server's position regardless of the
 `DateLastRead` Nickel saved.
 
+### Step 5: Nickel's Volume cache
+
+The disassembly confirms the cache (2026-10-25). The draft PR #26 (not in
+`main`) builds on it: after the CLI has written the row, its plugin drops
+Nickel's `Volume` cache and loads the book again before it calls the
+original `setVolume`; the reloaded `Volume` (with the position set as
+well) is what Nickel opens from. `main` uses only `getById`, `isValid` and
+`getDbValues`, for the log.
+
+| Purpose | Symbol | Signature (checked) |
+|---|---|---|
+| Drop the cache | `_ZN12Qt6Migration19Qt6RepositoryAccessI6VolumeE10purgeCacheERK7QString` | `void Qt6Migration::Qt6RepositoryAccess<Volume>::purgeCache(QString const& db)`; `this` is never read (the first instruction overwrites `r0`), the plugin passes a zeroed object of its own |
+| Load the book again | `_ZN13VolumeManager7getByIdERK7QStringS2_` | as above; fills the cache again on a miss |
+| Found? | `_ZNK6Volume7isValidEv` | `bool Volume::isValid() const` (the ID is not empty) |
+| Row, for the log | `_ZNK7Content11getDbValuesEv` | `QMap<QString, QVariant> Content::getDbValues() const` (by value; keys are the column names, e.g. `ChapterIDBookmarked`) |
+| (not used) | `_ZN10Repository12refreshCacheI6VolumeEEP5CacheIT_ERK7QString` | `static Cache<Volume>* Repository::refreshCache<Volume>(QString const& db)` |
+| (not used) | `_ZNK6Device9getDbNameEv` | `QString const& Device::getDbName() const` (a reference, `d + 0x70`) |
+
+What the code does:
+
+- **`VolumeManager::getById(id, db)`** locks
+  `Repository::getMutex<Volume>()::mutex`, takes
+  `Repository::getCache<Volume>(db)` and only if there is none calls
+  `refreshCache<Volume>(db)`; then
+  `Cache<Volume>::retrieveOneVeryFast(Volume::cacheKey(id))` and copies
+  the `Volume` out (vtable, shared data with a reference added, flags). So
+  once the cache exists, `getById` never reads the database again, and a
+  row the CLI wrote stays invisible to Nickel.
+- **`refreshCache<Volume>(db)`** is static (the database name in `r0`;
+  a Qt 6 `QString` has its data pointer at `+4` and its size at `+8`). It
+  reads every row the `Volume` where clause selects
+  (`DatabaseAdapter::createRetrieveStatement`, `retrieve<Volume>`) into a
+  new `Cache<Volume>`, replaces the entry in the global
+  `QHash<uint, QObject*>` and `deleteLater()`s the old cache. It takes no
+  lock of its own. Its callers in Nickel are `getById`, `getByIdBytes`,
+  `find`, `forEach`, `retrieveFiltered`, `create<Volume>` and
+  `addTransient<Volume>`; `getById` (read in full) calls it only on a cache
+  miss, with the mutex held. Calling it from the plugin would bypass that
+  mutex, so the plugin does not.
+- **`Repository::purgeCache<Volume>(db)`** takes the cache out of the hash
+  under the mutex and `deleteLater()`s it. Nickel's migrations call it
+  after writing the content table with plain SQL
+  (`Qt6DbMigration::restoreSideloadedSyncTimes`,
+  `correctBackfilledAdobeDrmFlags`), the same situation as the CLI's
+  write. It is **not exported** by the Tolino build 5.18.264769.
+  `Qt6Migration::Qt6RepositoryAccess<Volume>::purgeCache(QString const&)`
+  is: an inlined copy, instruction for instruction (same mutex: both load
+  it from GOT slot `0x2bc2b58` in the Kobo build; same `cacheKey`,
+  `QHash::take`, `deleteLater`).
+- **The database name.** `Repository::cacheKey(table, db)` replaces a
+  `db` equal to `Device::getCurrentDevice().getDbName()` with an empty
+  string, so `QString()` and `getDbName()` give the same cache.
+  `ReadingView::setupReader` passes `QString()`; the plugin does too.
+
+The plugin's order: `getById` once for the log (the cached `Volume`'s
+shared data and `ChapterIDBookmarked`), `purgeCache`, `getById` again
+(which rebuilds the cache from the database, under the mutex, and logs
+how long it took), then the position on that `Volume` and on Nickel's,
+then the original `setVolume`. Three seconds later the log names where
+Nickel stands and whether the cache was reloaded. All four symbols are
+optional; without them the plugin hands Nickel a copy as in step 4.
+
+**Device test of step 5** (Shine Color 5.18, Book R, 2026-10-25): the
+cache is reloaded every time (90–270 ms), and the reloaded `Volume`
+always holds the pulled position, yet two of four takes opened at the
+chapter start:
+
+| Time | Before (cache) | Pulled | Nickel 3 s later |
+|---|---|---|---|
+| 14:50 | ch. 1 `/1/4/190/1:0` | ch. 1 `/1/4/216/1:53` | `/1/4/214/1:83`, right |
+| 14:54 (15 s after a restart) | ch. 1 `/1/4/224/1:132` | ch. 1 `/1/4/244/1:0` | `/1/4/240/1:45`, right |
+| 14:56 (17 s after a restart) | ch. 1 `/1/4/240/1:45` | ch. 2 `/1/4/38/1:161` | `/1/4/2/1:0`, chapter start |
+| 15:02 (17 s after a restart) | ch. 2 `/1/4/2/1:0` | ch. 2 `/1/4/82/1:225` | `/1/4/2/1:0`, chapter start |
+
+So the cache is not the whole cause. The pulled points are valid (each
+lies inside its paragraph). What the failures share, here and on
+25.10. 13:47: the book had last been left on the page it opened on,
+without turning a page; before the takes that worked, it had been read
+on and pushed. Since 15:02 failed after a restart, whatever carries this
+is stored. The CLI writes only `ChapterIDBookmarked`, `___PercentRead`
+and `DateLastRead`; Nickel's save writes more (the backups also differ in
+`CurrentChapterProgress`). The plugin now logs the row at opening, the
+columns the reload changed, and the columns Nickel changed by the time
+the book is left, to find the one that matters.
+
+The check after opening let the chapter start pass at 14:56
+(`/1/4/2` is 36 node steps before `/1/4/38`, the limit was 40); the
+pages that were right started 2 to 4 steps before the point, so the
+limit is now 12.
+
+**Second device test of step 5** (same day, 15:14–15:32, with the row
+diffs): turning pages or not makes no difference, and no column does
+either. Nickel opened at 15:18 (chapter start, failed) and 15:19 (right)
+with the same row, and leaving changes only `ChapterIDBookmarked`,
+`___PercentRead` and `DateLastRead`, the columns the CLI writes as well.
+What separates the outcomes since the cache reload is Wi-Fi: all 6 takes
+with Wi-Fi already on worked; of 5 where the plugin first waited for
+Wi-Fi (`wait_online`, a local `QEventLoop` inside the hooked `setVolume`),
+3 failed. The guess: Nickel's events keep running during that wait and
+prepare the opening from the old state. Not proven yet.
+
+**Third device test** (15:44–15:49): three takes right, two of them
+after a wait for Wi-Fi (7 s and 1 s). With the cache reload, 7 of 7 takes
+without a wait and 4 of 7 with one were right: suggestive, not proven.
+For a controlled test, a test build waited 10 s in a local event loop
+before the pull when the empty file `.adds/NickelInkSync/debug-open-wait`
+existed, with Wi-Fi already up.
+
+**Fourth device test** (28.10., 15:06–15:22, five runs with that wait,
+five without, one of them with nothing newer on the server): Nickel
+opened on the page with the pulled point in all nine takes, by the
+owner's notes and by the position Nickel saved on leaving (each 2 to 4
+node steps before the pulled point, in its chapter). Once, Nickel showed
+the page before it. The wait for Wi-Fi makes no difference. What failed
+was the plugin's check: 3 s after opening,
+`ReadingView::bookmarkForCurrentLocation` gave an empty location in eight
+of the nine takes (on 25.10. never), and the check took that for another
+chapter, so the book was not pushed on leaving. The same showed in the
+emulated Nickel VM (PR #27). The check now asks again every second
+for up to 8 s more (PR #44); still unknown, it behaves as before. In the
+draft #26, with the cache reloaded, an unknown place counts as taken. The
+test switch was removed again.
+
+**Firmware 5.18.279364** (28.10.): the Tolino had updated itself that
+day, before the fourth test; everything above was analysed on
+5.18.264769. All plugin symbols still resolve. In a fifth test the new
+check worked, but Nickel then opened Book R at the start of chapter 1
+every time, also a minute after leaving it, and also with the plugin
+switched off after `pull --write` over USB and a restart. So on this
+firmware Nickel does not take `ChapterIDBookmarked` alone. Lead, not
+proven: Nickel keeps a cache of rendered pages per book
+(`CachePersistenceRenderedPageData`: `pageStartLocation`,
+`pageEndLocation`, `contentId`, page and chapter index; files under
+`/mnt/aux/rendering`). The point that worked lay in a cached page; the
+three that failed (`/1/4/136`, `/1/4/224`, `/1/4/314` in chapter 1) lay
+in a stretch with no cached page, and on 25.10. the page with
+`/1/4/314` had been cached. `.kobo/BookReader.sqlite` is encrypted.
+
+**`tolino_bookmark`, ruled out.** The database has a table `tolino_bookmark`
+(`uuid`, `position`, `currentPosition`, `lastPosition`, `progress`,
+`modified`, `deletedLocally`, `modifiedLocally`, ...); for a sideloaded
+book `uuid` is the ContentID and `position` the same Adobe point as
+`ChapterIDBookmarked`. On 28.10. Book R's row held
+`OEBPS/text/chapter1.xhtml#point(/1/4/2/1:0)`, the chapter start Nickel
+kept opening at, because the CLI and the plugin write only `content`. In
+the Nickel VM on 5.18.279364 a freshly imported book, with no such row,
+opened at the pulled place. Kobalt (MIT) writes this row on the Tolino
+(develop commit 8b144d2, `platforms/kobo/common/tolino_progress.h`).
+The draft PR #40 makes the CLI write it as well. In a device test on
+31.10. (USB write with the plugin off, and opening with the plugin on)
+both `content` and `tolino_bookmark` held the pulled place, and Nickel
+still opened Book R at `/1/4/2`. So this row is not the cause. Both
+failing points (`/1/4/180`, `/1/4/358`) again lay where no page of the
+book was cached, so the page-cache lead stands.
+
+Not tried, in case this is not enough: writing the position through
+Nickel instead of the CLI, as Kobalt does on the Kobo (concept only):
+`VolumeManager::updateBookmark(Volume&, QString const&, int, QDateTime
+const&, int)` (`_ZN13VolumeManager14updateBookmarkER6VolumeRK7QStringiRK9QDateTimei`),
+`Content::setPercentRead`, `VolumeManager::updateFields(QString const&,
+QMap<QString, QVariant> const&, QMap<QString, QVariant> const&, QString
+const&)` (`_ZN13VolumeManager12updateFieldsERK7QStringRK4QMapIS0_8QVariantES7_S2_`)
+between `DatabaseAdapter::beginTransaction(QString)` and
+`endTransaction(QString, bool)` (`_ZN15DatabaseAdapter16beginTransactionE7QString`,
+`_ZN15DatabaseAdapter14endTransactionE7QStringb`). All are in the Tolino
+list; their signatures still need checking before use.
+
 ## The push path
 
 After the original `leavingReadingExperience()` the position is saved,
@@ -301,8 +470,11 @@ queue is full (`ApplicationSettings::numMaxToasts()`), shows it through
 both lines, places it in `uiGeometry()` and starts a `QTimer` with
 `QueuedToast::getDuration()`: the `int` is how long the toast stays, in
 milliseconds. Nickel's own `RatingControls::showFeedbackToast` passes
-1500. The plugin uses 3000 for results and 5000 for problems. Optional:
-without it the plugin works as before, silently.
+1500. The plugin uses 5000 for results and 8000 for problems (3000 and
+5000 were too short to read in a device test). The Tolino cuts the
+primary line after about 24 characters and the secondary after about 45,
+so the texts are short. Optional: without it the plugin works as before,
+silently.
 
 The texts are German only for now: no way was found yet to tell the
 device language with certainty. The plugin logs `QLocale()` and

@@ -161,9 +161,14 @@ Vorschlägen der Bibliothek samt Bewertung oder einer selbst gewählten
 EPUB; eine Zuordnung lässt sich ändern oder entfernen. Mit einem Server
 in `config.ini` zeigt es die Stelle auf dem Server neben der auf dem
 Gerät und sendet je Buch oder alle auf einmal; eine Rückfrage nach
-`confirm` kommt als Dialog (Server behalten oder Gerät senden). „Verlauf“
-zeigt, was CLI und Fenster gesendet haben (`history.jsonl` im
-Datenordner). Aufs Gerät schreibt es nichts, nur `mappings.json` und den
+`confirm` kommt als Dialog (Server behalten oder Gerät senden). Am
+Tolino schreiben „Holen“ und „Alle holen“ die Stelle vom Server in die
+Gerätedatenbank, vorher legt es eine Sicherung im Datenordner an, wie
+`pull --write`; eine Rückfrage kommt im selben Dialog (Gerät behalten oder
+Server übernehmen), danach liest es das Gerät neu ein. Wirf den Tolino
+aus, bevor du das Buch öffnest. „Verlauf“ zeigt, was CLI und Fenster
+gesendet und geschrieben haben (`history.jsonl` im Datenordner). Auf einen
+Kobo oder Kindle schreibt es nichts, nur `mappings.json` und den
 Verlauf. Beim Anstecken wird nichts
 synchronisiert. Deutsch oder Englisch nach Systemsprache, umschaltbar.
 `config.ini` und `mappings.json` teilt es mit der CLI; seine eigenen
@@ -263,10 +268,10 @@ Server-Position, auch wenn „zuletzt gelesen“ auf dem Tolino jetzt neuer
 aussieht.
 
 Jedes Ergebnis zeigt das Plugin als kurze Meldung unten auf dem Bildschirm
-(vorerst auf Deutsch), etwa „Fortschritt vom Server übernommen“ mit Prozent
-und dem Gerät, von dem die Position kam, oder „Fortschritt konnte nicht vom
-Server gelesen werden“ mit dem Grund (keine Verbindung, Zeitüberschreitung,
-Anmeldung abgelehnt). `notify` in `config.ini` legt fest, welche:
+(vorerst auf Deutsch), etwa „Fortschritt übernommen“ mit Prozent und dem
+Gerät, von dem die Position kam, oder „Laden fehlgeschlagen“ mit dem Grund
+(keine Verbindung, Zeitüberschreitung, Anmeldung abgelehnt). Die Texte sind
+kurz, weil der Tolino längere abschneidet. `notify` in `config.ini` legt fest, welche:
 
 | Wert | Zeigt |
 |---|---|
