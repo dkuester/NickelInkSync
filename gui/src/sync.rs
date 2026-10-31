@@ -359,8 +359,7 @@ pub fn push(options: &Options, kind: Kind, ids: &[String]) -> Result<Report, Str
   Ok(report)
 }
 
-/// Opens the Kobo or Tolino for writing. A kepub on a Kobo is not written
-/// into yet (K4): its step is skipped as not translated.
+/// Opens the Kobo or Tolino for writing.
 fn writable(options: &Options) -> Result<Session, String> {
   Session::open(options).map_err(|e| e.to_string())
 }
@@ -811,7 +810,7 @@ mod tests {
   }
 
   #[test]
-  fn a_kobo_takes_epubs_but_not_kepubs() {
+  fn a_kobo_takes_epubs_and_mapped_kepubs() {
     let _data = isolate();
     let root = fake_device(
       "gui-pull-kobo",
@@ -831,16 +830,30 @@ mod tests {
     server.store(&book_hash(), AHEAD, 0.9, LAST_READ + 60);
     let report = pull(&options, &[BOOK_A.to_string()]).unwrap();
     assert_eq!(report.books, [("Book A".to_string(), Outcome::Written)]);
-    // A kepub (here under its own checksum) is not translated back yet.
+    // A kepub never syncs under its own checksum: not mapped, skipped.
     let kepub = "file:///mnt/onboard/Books/book-a.kepub.epub";
     let kepub_hash = partial_md5(&root.join("Books/book-a.kepub.epub")).unwrap();
     server.store(&kepub_hash, AHEAD, 0.9, LAST_READ + 60);
     let report = pull(&options, &[kepub.to_string()]).unwrap();
     assert!(
-      matches!(&report.books[..], [(_, Outcome::Skipped(e))] if e.contains("kepub")),
+      matches!(&report.books[..], [(_, Outcome::Skipped(e))] if e.contains("not mapped")),
       "{report:?}"
     );
     assert_eq!(report.backup, None);
+    // Mapped to its EPUB, it takes the EPUB's position as a span.
+    crate::model::map_book(&root, kepub, &fixtures().join("epub/book-a.epub")).unwrap();
+    let report = pull(&options, &[kepub.to_string()]).unwrap();
+    assert_eq!(report.books, [("Book A".to_string(), Outcome::Written)]);
+    let stored: String = rusqlite::Connection::open(root.join(".kobo/KoboReader.sqlite"))
+      .unwrap()
+      .query_row(
+        "SELECT ChapterIDBookmarked FROM content WHERE ContentID = ?1",
+        [kepub],
+        |r| r.get(0),
+      )
+      .unwrap();
+    // The placeholder chapter has no spans: the chapter only.
+    assert_eq!(stored, "OEBPS/xhtml/xhtml-0-89.xhtml");
     let _ = fs::remove_dir_all(&root);
   }
 

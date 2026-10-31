@@ -163,7 +163,7 @@ EPUB chosen by hand; a mapping can be changed or removed. With a server
 in `config.ini` it shows the server's position next to the device's and
 sends positions per book or all at once; a `confirm` question comes as a
 dialog (keep the server's, or send the device's). On a Tolino or Kobo
-(not into kepubs yet, and not with Kobalt installed) "Get" and "Get all"
+(a kepub only once it is mapped, and not with Kobalt installed) "Get" and "Get all"
 write the server's position into the device database, after a
 backup of it in the data directory, as `pull --write` does; a `confirm`
 question comes as the same dialog (keep the device's, or take the

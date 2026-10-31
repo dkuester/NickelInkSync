@@ -196,8 +196,8 @@ fixtures only.
 - **USB write-back on the Kobo** (S–M): `pull --write` works on the
   Tolino and for EPUBs on the Kobo 6.0; into a mapped kepub it writes the
   span with offset (see "Recently completed"), the device test on the
-  Clara BW is open. The desktop client's "Get" still skips kepubs on the
-  Kobo until that restriction is lifted.
+  Clara BW is open. The desktop client's "Get" and "Get all" take mapped
+  kepubs too.
 - **Messages in the Tolino plugin** (S): each outcome of opening and
   leaving a book as one of Nickel's toasts, chosen by `notify` in
   `config.ini` (`all`, `errors`, `none`). Verified on the Tolino, also

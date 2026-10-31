@@ -333,7 +333,8 @@ der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
     oder z. B. `Thalia.de`), erst zuletzt die Tabellen.
     Entscheidung (2026-10-31): „Holen“ auch am Kobo wie am Tolino, vorerst
     nur für EPUBs; kepubs folgen mit der Rückübersetzung (K4, eigene
-    Session).
+    Session). Mit K4 (PR #55) holt der Desktop-Client auch zugeordnete
+    kepubs.
   - [x] **du:** E5a: ein Buch auf den Tolino kopieren, eins als kepub auf
     den Kobo (2026-10-31): Tolino als EPUB, Kobo als kepub und gleich
     zugeordnet; am Kobo „Holen“ bei EPUBs, bei kepubs nur „Senden“.
@@ -967,7 +968,8 @@ Auf dem Kobo ist das Plugin inaktiv.
     (`ActionProxyMixin::setupBookListMenu`).
 - [ ] **C1 kepub zurück** (K4-Rest): XPointer → `#kobo.N.M:offset`
   (UTF-16-Einheiten), Fixtures Book P/Q/R; `pull --write` am Kobo per USB.
-  - [ ] **ich:** Übersetzung, Tests, P2 für den Kobo.
+  - [x] **ich:** Übersetzung, Tests (PR #55; siehe K4).
+  - [ ] **ich:** P2 für den Kobo.
   - [ ] **du:** Book R vom Server per USB auf den Kobo schreiben, auswerfen,
     öffnen.
 - [ ] **C2 Basis-Stand und Vormerkliste** (nur Bibliothek und CLI)

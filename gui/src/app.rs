@@ -1087,11 +1087,7 @@ fn loaded_view(
       {
         action = Some(Action::Push(ids.clone()));
       }
-      // Not into a kepub yet (K4).
-      let pull_ids: Vec<String> = ids
-        .into_iter()
-        .filter(|id| !loaded.rows.iter().any(|r| &r.id == id && is_kepub(r)))
-        .collect();
+      let pull_ids = ids;
       if loaded.writable
         && ui
           .add_enabled(!busy && !pull_ids.is_empty(), egui::Button::new(t.pull_all))
@@ -1261,11 +1257,6 @@ fn file_name(path: &str) -> &str {
   path.rsplit(['/', '\\']).next().unwrap_or(path)
 }
 
-/// A kepub on a Kobo: positions are not translated back into it yet (K4).
-fn is_kepub(row: &Row) -> bool {
-  row.file.ends_with(".kepub.epub")
-}
-
 /// Device and server hold the same position.
 fn in_sync(compared: Option<&Compared>) -> bool {
   compared.is_some_and(|c| c.outlook == Some(Outlook::InSync))
@@ -1373,9 +1364,9 @@ fn book_table(
               });
             }
           }
-          // Like "Get all", not for a book without a reference EPUB.
-          let pullable =
-            matches!(row.group, Group::Mapped { .. } | Group::Same { .. }) && !is_kepub(row);
+          // Like "Get all", not for a book without a reference EPUB (an
+          // unmapped kepub is "not mapped").
+          let pullable = matches!(row.group, Group::Mapped { .. } | Group::Same { .. });
           if writable && pullable && compared.is_some() {
             let pull = ui.add_enabled(can_send, egui::Button::new(t.pull_button).small());
             if pull.clicked() {
