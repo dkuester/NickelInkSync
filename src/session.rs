@@ -22,7 +22,9 @@ use crate::kosync::{self, Client, Progress, Update};
 use crate::library::Library;
 use crate::mapping::{EpubState, Mapping, Store};
 use crate::not_in_line::NotInLine;
-use crate::position::{from_xpointer, to_xpointer, PointFlavor, Position, Translated, XPointer};
+use crate::position::{
+  from_xpointer, from_xpointer_kepub, to_xpointer, PointFlavor, Position, Translated, XPointer,
+};
 use crate::sync::{decide, iso_timestamp, parse_timestamp, Confirm, Decision, Direction, Local};
 use crate::transfer::{step_back, transfer, How};
 
@@ -144,8 +146,8 @@ pub enum Identity {
 /// Why a book syncs under its own checksum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Own {
-  /// No library is set up, so nothing was checked: a kepub or a converted
-  /// EPUB needs a mapping to reach KOReader.
+  /// No library is set up, so nothing was checked: a converted EPUB needs
+  /// a mapping to reach KOReader (a kepub always needs one).
   NoLibrary,
   /// The book is the original EPUB of a mapping.
   OriginalOfMapping,
@@ -449,6 +451,17 @@ impl Session {
         },
       };
     }
+    // A kepub never reaches the server under its own checksum: KOReader
+    // knows the book by its original EPUB, so only a mapping syncs it.
+    if book.is_kepub() || book.onboard_path().ends_with(".kepub.epub") {
+      return Identity::Skip {
+        hash: Some(hash),
+        kind: "not-mapped",
+        message: "not mapped: a kepub syncs only under its original EPUB; map it with \
+                  `nickelinksync map add` (see `map suggest`)"
+          .into(),
+      };
+    }
     let Some(library) = &self.library else {
       return Identity::Own {
         hash,
@@ -502,10 +515,6 @@ impl Session {
     xpointer: &str,
     percentage: f64,
   ) -> std::result::Result<(Translated, Option<String>), String> {
-    if book.is_kepub() {
-      // Nickel reads it as a kepub and expects a `#kobo.N.M` span.
-      return Err("positions back into a kepub are not translated yet".into());
-    }
     let mut device = Epub::open(&self.device.book_file(book)).map_err(|e| e.to_string())?;
     let (xpointer, how) = match identity {
       Identity::Mapped { mapping, .. } => {
@@ -516,8 +525,13 @@ impl Session {
       }
       _ => (xpointer.to_string(), None),
     };
-    let translated =
-      from_xpointer(&mut device, &xpointer, self.flavor).map_err(|e| e.to_string())?;
+    // Nickel reads a kepub as such and expects a `#kobo.N.M` span.
+    let translated = if book.is_kepub() {
+      from_xpointer_kepub(&mut device, &xpointer, self.flavor)
+    } else {
+      from_xpointer(&mut device, &xpointer, self.flavor)
+    }
+    .map_err(|e| e.to_string())?;
     let note = match how {
       Some(how) if how != How::SameText => Some(how.to_string()),
       _ if !translated.exact => Some("chapter only".to_string()),

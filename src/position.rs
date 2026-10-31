@@ -2,8 +2,9 @@
 //!
 //! Converts a Nickel position (kepub span or Adobe point inside a chapter) to
 //! a KOReader XPointer and back, using the EPUB itself. Back is done for the
-//! Tolino's Adobe point so far ([`from_xpointer`]); the Kobo's span and its
-//! 4.x point follow with the Kobo.
+//! Adobe point as the Tolino and Kobo 6.x count it ([`from_xpointer`]) and
+//! for the kepub span with offset of Kobo 6.x ([`from_xpointer_kepub`]); the
+//! 4.x point and span are not.
 //!
 //! The rules come from highlights of the same words on a Kobo 4.46, a Tolino
 //! 5.18 and in KOReader (probe books Book P and Book Q, see SCOPE.md):
@@ -263,6 +264,135 @@ pub fn from_xpointer(
     },
     exact,
   })
+}
+
+/// Converts a KOReader XPointer in a kepub to the span Nickel stores for a
+/// kepub on firmware 6.x, `#kobo.N.M:offset` (offset in UTF-16 units into
+/// the span's text), the inverse of [`to_xpointer`] for a `KoboSpan`.
+///
+/// A place outside any span (whitespace between paragraphs, text kepubify
+/// left unwrapped) moves to the start of the next span in the chapter, or
+/// the end of the last one. A path that does not resolve in the chapter
+/// falls back to the chapter's first span (not exact). Firmware 4.x
+/// ([`PointFlavor::JoinText`]) stores the span without the offset and is
+/// not translated, as there is no 4.x device left to check it on.
+pub fn from_xpointer_kepub(
+  epub: &mut Epub,
+  xpointer: &str,
+  flavor: PointFlavor,
+) -> Result<Translated, Error> {
+  if flavor != PointFlavor::AllNodes {
+    return Err(Error::Unsupported(
+      "positions back into a kepub on Kobo firmware 4.x are not translated yet",
+    ));
+  }
+  let (spine_index, below) = split_xpointer(xpointer)
+    .filter(|&(i, _)| i < epub.spine.len())
+    .ok_or_else(|| Error::BadXPointer(xpointer.to_string()))?;
+  let chapter = epub.spine[spine_index].clone();
+  let html = epub.chapter(spine_index)?;
+  let spans = kobo_spans(&html);
+  let resolved = Some(below)
+    .filter(|b| !b.is_empty())
+    .and_then(|b| node_for(&html, b))
+    .and_then(|(path, chars)| span_for(&html, &spans, &path, chars));
+  let (anchor, exact) = match resolved {
+    Some((id, offset)) => (Anchor::KoboSpan { id, offset }, true),
+    None => match spans.first() {
+      Some((_, id)) => (
+        Anchor::KoboSpan {
+          id: id.clone(),
+          offset: 0,
+        },
+        false,
+      ),
+      None => (Anchor::None, false),
+    },
+  };
+  Ok(Translated {
+    position: Position { chapter, anchor },
+    exact,
+  })
+}
+
+/// The `kobo.N.M` spans of a chapter in document order, with their paths.
+fn kobo_spans(html: &Element) -> Vec<(Vec<usize>, String)> {
+  fn walk(element: &Element, path: &mut Vec<usize>, out: &mut Vec<(Vec<usize>, String)>) {
+    for (i, child) in element.children.iter().enumerate() {
+      if let Node::Element(e) = child {
+        path.push(i);
+        match &e.id {
+          Some(id) if id.starts_with("kobo.") => out.push((path.clone(), id.clone())),
+          _ => walk(e, path, out),
+        }
+        path.pop();
+      }
+    }
+  }
+  let mut out = Vec::new();
+  walk(html, &mut Vec::new(), &mut out);
+  out
+}
+
+/// The span and the UTF-16 offset into its text for `chars` characters
+/// into the text node at `path`.
+fn span_for(
+  html: &Element,
+  spans: &[(Vec<usize>, String)],
+  path: &[usize],
+  chars: usize,
+) -> Option<(String, usize)> {
+  if let Some((span_path, id)) = spans.iter().find(|(p, _)| path.starts_with(p)) {
+    let span = html.element_at(span_path)?;
+    // The span's text before the node, then into the node.
+    let mut units = 0;
+    let found = for_each_text(span, &mut Vec::new(), &mut |p, text| {
+      if p == &path[span_path.len()..] {
+        units += text.chars().take(chars).map(char::len_utf16).sum::<usize>();
+        return true;
+      }
+      units += text.encode_utf16().count();
+      false
+    });
+    return found.then(|| (id.clone(), units));
+  }
+  // Not in a span: the next one, or the end of the last one.
+  if let Some((_, id)) = spans.iter().find(|(p, _)| p.as_slice() > path) {
+    return Some((id.clone(), 0));
+  }
+  let (span_path, id) = spans.last()?;
+  let mut units = 0;
+  for_each_text(
+    html.element_at(span_path)?,
+    &mut Vec::new(),
+    &mut |_, text| {
+      units += text.encode_utf16().count();
+      false
+    },
+  );
+  Some((id.clone(), units))
+}
+
+/// Calls `f` with each text and CDATA node below `element` in document
+/// order until it returns `true`; returns whether it did.
+fn for_each_text(
+  element: &Element,
+  path: &mut Vec<usize>,
+  f: &mut impl FnMut(&[usize], &str) -> bool,
+) -> bool {
+  for (i, child) in element.children.iter().enumerate() {
+    path.push(i);
+    let stop = match child {
+      Node::Text(t) | Node::CData(t) => f(path, t),
+      Node::Element(e) => for_each_text(e, path, f),
+      _ => false,
+    };
+    path.pop();
+    if stop {
+      return true;
+    }
+  }
+  false
 }
 
 /// The 0-based spine index of `/body[1]/DocFragment[n]…` and the part
