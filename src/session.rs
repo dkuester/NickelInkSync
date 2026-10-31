@@ -17,6 +17,7 @@ use crate::hash::partial_md5;
 use crate::kfx::Kfx;
 use crate::kindle;
 use crate::kindle_device::{self, KindleBook, Unreadable};
+use crate::kobalt::Kobalt;
 use crate::kosync::{self, Client, Progress, Update};
 use crate::library::Library;
 use crate::mapping::{EpubState, Mapping, Store};
@@ -351,12 +352,24 @@ pub struct Session {
   pub position: PushPosition,
   /// Books the plugin could not bring in line.
   pub not_in_line: NotInLine,
+  /// What was found of Kobalt: while it is installed, nothing is written
+  /// into the device database.
+  pub kobalt: Kobalt,
   /// Only the book with this ContentID (`--content-id`).
   content_id: Option<String>,
 }
 
 impl Session {
   pub fn open(options: &Options) -> Result<Self> {
+    // On the device itself, an installed Kobalt stops everything before
+    // the database is opened: the plugin neither writes nor sends.
+    let kobalt = match options.live {
+      true => Kobalt::detect_live(&options.device),
+      false => Kobalt::detect(&options.device, None),
+    };
+    if options.live {
+      kobalt.check()?;
+    }
     let device = Device::open(&options.device, options.live)?;
     let family = if device.db.is_tolino()? {
       "Tolino"
@@ -405,6 +418,7 @@ impl Session {
       library_hashes: OnceCell::new(),
       position: settings.position,
       not_in_line,
+      kobalt,
       content_id: options.content_id.clone(),
     })
   }
@@ -754,7 +768,9 @@ impl Session {
 
   /// Writes the positions into the device database after a backup of it,
   /// and clears their not-in-line entries.
+  /// Refused while Kobalt is installed ([`crate::kobalt::Active`]).
   pub fn write(&mut self, writes: &[Write]) -> Result<Written> {
+    self.kobalt.check()?;
     let dir = Config::backup_dir().ok_or("no directory for the backup (HOME is not set)")?;
     let now = std::time::SystemTime::now()
       .duration_since(std::time::UNIX_EPOCH)?

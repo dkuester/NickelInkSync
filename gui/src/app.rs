@@ -993,6 +993,9 @@ fn loaded_view(
   } else {
     t.read_only
   });
+  if loaded.kobalt {
+    ui.colored_label(ui.visuals().warn_fg_color, t.kobalt);
+  }
   let mut action = None;
   let compared = match server {
     Some(ServerState::Compared(compared)) => Some(compared),

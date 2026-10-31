@@ -78,6 +78,7 @@ pub struct Texts {
   pub no_books: &'static str,
   pub read_only: &'static str,
   pub writes_tolino: &'static str,
+  pub kobalt: &'static str,
   pub map_button: &'static str,
   pub remap_button: &'static str,
   pub unmap_button: &'static str,
@@ -400,6 +401,9 @@ static DE: Texts = Texts {
   writes_tolino: "„Holen“ schreibt die Stelle vom Server in die Datenbank des Tolino; vorher \
                   legt die App eine Sicherung auf diesem Rechner an. Zuordnungen liegen auf \
                   diesem Rechner (mappings.json), gemeinsam mit der CLI.",
+  kobalt: "Kobalt ist auf dem Gerät installiert und verwaltet die Lesepositionen selbst: \
+           „Holen“ ist gesperrt. „Senden“ geht, aber Kobalts eigener KOSync sendet \
+           vielleicht dieselben Bücher.",
   map_button: "Zuordnen …",
   remap_button: "Ändern …",
   unmap_button: "Entfernen",
@@ -528,6 +532,9 @@ static EN: Texts = Texts {
   writes_tolino: "“Get” writes the server’s position into the Tolino’s database, after a \
                   backup of it on this computer. Mappings are kept on this computer \
                   (mappings.json), shared with the CLI.",
+  kobalt: "Kobalt is installed on the device and manages its reading positions itself: \
+           “Get” is blocked. “Send” works, but Kobalt’s own KOSync may send the same \
+           books.",
   map_button: "Map …",
   remap_button: "Change …",
   unmap_button: "Remove",

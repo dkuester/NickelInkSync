@@ -824,6 +824,23 @@ der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
     8 s nach, und das Log zeigt die Buchzeile beim Öffnen und was Nickel
     bis zum Verlassen daran ändert. Das Neuladen von Nickels Buch-Cache
     bleibt in PR #26.
+- [~] **N7 Kobalt-Schutz** (von dir gewünscht, 2026-10-31) · Kobalt
+  schreibt die Lesepositionen selbst (über Nickel, auch auf dem Tolino) und
+  hat auf `develop` seit dem 25.10. einen eigenen KOSync. Erkennung wie
+  Kobalts eigene Deinstallation: `libkobalt.so` (oder `.failsafe`) da,
+  `.adds/kobalt/uninstall` da, kein `uninstall-now`; über USB nur die
+  beiden Dateien. Ein Ordner `.adds/kobalt` allein zählt nicht.
+  - [x] **ich:** Regel in `src/kobalt.rs` (Tests mit Fake-Gerätebaum),
+    CLI verweigert `--live` (`NICKELINKSYNC_ERROR kobalt`) und `--write`,
+    `push` per USB warnt; D2 sperrt „Holen“ und zeigt einen Hinweis;
+    Plugin reicht beide Hooks durch (Prüfung in `init` und bei jedem
+    Öffnen und Verlassen, bis zum Neustart), Toast einmal je Erkennung
+    (`kobalt-noticed`), Log bei jedem Start. Override
+    `.adds/NickelInkSync/ignore-kobalt`.
+  - [ ] **du:** Gerätetest am Tolino: Kobalt installieren, Buch öffnen
+    (Toast „NickelInkSync ist aus“, Log „inactive: Kobalt is installed“,
+    nichts gesendet); `ignore-kobalt` anlegen, Neustart, Sync läuft wieder;
+    Kobalt entfernen, Neustart, Sync läuft ohne Override.
 - [ ] **N6 Zuordnungen auf dem Gerät** · geht in **C3** (Abschnitt
   Kobo-Client) auf; Weg (a) gewählt, nie Original-EPUBs aufs Gerät ·
   Lücke, die du am 2026-10-29 bemerkt hast: Am Rechner sendet `push` ein
@@ -942,7 +959,9 @@ Auf dem Kobo ist das Plugin inaktiv.
   - [ ] **du:** Am Kobo: vorgemerkte Bücher senden, ein kepub zuordnen.
 - [ ] **C7 Tolino** (braucht C4 bis C6)
   - [ ] **ich:** Dasselbe Plugin auf dem Shine Color; Kobalts Schreibweg
-    dort prüfen (Kobalt selbst schreibt auf dem Tolino nicht zurück). Wenn
+    dort prüfen (Kobalt schreibt auf `develop` seit 8b144d2 auch auf dem
+    Tolino, mit `tolino_bookmark`; für den Vergleich mit Kobalt daneben
+    `ignore-kobalt` anlegen, N7). Wenn
     er geht, ersetzt er dort den heutigen Weg B (CLI schreibt, verwirft die
     Seiten im Cache, N5); sonst bleibt Weg B.
   - [ ] **du:** Dieselben Tests wie C4 bis C6 am Tolino.

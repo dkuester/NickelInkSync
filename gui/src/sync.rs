@@ -707,6 +707,23 @@ mod tests {
     assert_eq!(report.backup, None);
   }
 
+  /// With Kobalt installed, "Get" is refused and leaves the database as it
+  /// was; the device view shows why and offers no "Get".
+  #[test]
+  fn pull_is_refused_with_kobalt_installed() {
+    let s = Setup::new("pull-kobalt");
+    fs::create_dir_all(s.root.join(".adds/kobalt")).unwrap();
+    fs::write(s.root.join(".adds/kobalt/uninstall"), "").unwrap();
+    s.server.store(&book_hash(), AHEAD, 0.9, LAST_READ + 60);
+    let before = row(&s.root);
+    let e = pull(&s.options, &[BOOK_A.to_string()]).unwrap_err();
+    assert!(e.contains("Kobalt is installed"), "{e}");
+    assert_eq!(row(&s.root), before);
+    let loaded = crate::model::load(&s.root, Kind::Nickel, &mut |_, _| {}).unwrap();
+    assert!(loaded.kobalt);
+    assert!(!loaded.writable);
+  }
+
   /// Nickel's cached pages of the chapter hide the written place: they are
   /// dropped, and the report asks for a restart instead of only ejecting.
   #[test]
