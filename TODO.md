@@ -365,7 +365,10 @@ Entscheidungen des Besitzers (2026-10-31):
     `package-macos` (kein Pflicht-Check) lädt beide als Artefakt hoch.
     README: Gatekeeper (seit macOS 15 „Dennoch öffnen“ in den
     Systemeinstellungen), `xattr` für die CLI.
-  - [ ] **du:** Icon-Entwurf (SVG) ansehen; `.dmg` aus der CI installieren.
+  - [x] **du:** Icon ansehen; `.dmg` installieren (2026-10-31): Variante A
+    gewählt (zwei E-Reader und ein Smartphone im Sync-Kreis), bis 32 Pixel
+    das erste Icon mit einem E-Reader; Gatekeeper hat nichts verhindert;
+    das Icon stimmt auch bei laufender App.
   - [ ] **ich:** **E6b** Hinweis auf neue Releases (höchstens einmal am Tag
     über die GitHub-API, abschaltbar) und Fenster „Über“ mit Version und
     Lizenzen (NickelInkSync, kepubify).
