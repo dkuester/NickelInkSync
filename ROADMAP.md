@@ -144,7 +144,10 @@ fixtures only.
   read-only window (`gui/`, eframe) that finds connected devices and lists
   their books by how they sync; E2, mapping a book in the window
   (suggestions with their scores, or an EPUB chosen by hand; change and
-  remove), on the mapping code moved from the CLI into the library.
+  remove), on the mapping code moved from the CLI into the library; E3a,
+  the sync history (`history.jsonl`, written by the CLI and the window);
+  E3b, the server's position for each book and sending per book or all,
+  with the `confirm` questions in a dialog, and a history window.
 
 - **Read-only device database layer** (S–M): reading the books and their
   positions is done (`status --device`); still to do: resolve
