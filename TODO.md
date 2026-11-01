@@ -643,12 +643,12 @@ Entscheidungen des Besitzers (2026-10-31):
   - [ ] **du:** Firmware-Update 4.46 für den Clara BW besorgen (wegen `libnickel.so`).
   - [ ] **ich:** Symbole für „Buch geöffnet“, „Buch geschlossen“ und „an
     Position springen“ suchen.
-- [ ] **N2 Plugin für den Kobo 6.0** (statt Qt5 für 4.x) · geht in **C4**
-  (Abschnitt Kobo-Client) auf
-  - [ ] **ich:** Symbole aus `libnickel.so` von Kobo 6.0 prüfen (Vorbild
+- [x] **N2 Plugin für den Kobo 6.0** (statt Qt5 für 4.x) · in **C4**
+  (Abschnitt Kobo-Client) aufgegangen, PR #72; Gerätetest dort
+  - [x] **ich:** Symbole aus `libnickel.so` von Kobo 6.0 prüfen (Vorbild
     N3, Tolino 5.18) und das Tolino-Plugin (Qt6) für den Kobo bauen;
-    Paket `Kobo.tgz`.
-  - [ ] **du:** Test auf dem Clara BW (6.0).
+    Paket `Kobo.tgz` (C0, C4).
+  - [ ] **du:** Test auf dem Clara BW (6.0): der Gerätetest von C4.
 - [x] **N3 Symbole für Tolino 5.18 (Qt6)** · Ergebnis in
   [`docs/nickel-5.18-symbols.md`](docs/nickel-5.18-symbols.md)
   - [x] **du:** `libnickel.so` aus dem Kobo-Build 5.18.270971 und die
@@ -1068,9 +1068,9 @@ Auf dem Kobo ist das Plugin inaktiv.
     `tests/state.rs` (Mock-Server, auch der Übergang von
     `not-in-line.tsv`), `tests/kobalt.rs`. Format und Zeilen: Notiz
     `2026-11-01-kobo-c2-handover.md`.
-  - [ ] **ich (C4):** Plugin wertet `PENDING`/`CONFLICT` aus, ruft
+  - [x] **ich (C4):** Plugin wertet `PENDING`/`CONFLICT` aus, ruft
     `sync --pending` bei jedem WLAN auf und schreibt `not_in_line` selbst
-    in `state.json` statt in `not-in-line.tsv`.
+    in `state.json` statt in `not-in-line.tsv` (PR #72).
   - [x] **D2:** Der Desktop-Client schreibt die Basis bei „Holen“ (über
     `Session::write`) und jetzt auch beim Senden: nach einem gesendeten
     Update `Session::agreed_sent`, bei „gleich“ `Session::agreed`, am Ende
@@ -1101,16 +1101,41 @@ Auf dem Kobo ist das Plugin inaktiv.
     Calibre übertragen, der EPUB zugeordnet, `device prepare`, am Kobo
     gelesen, Fortschritt gesendet; KOReader lädt ihn in der Original-EPUB.
     Alle Schritte der Anleitung in PR #67 erfolgreich.
-- [ ] **C4 Plugin auf dem Kobo** (ersetzt N2; braucht C0, C2, C3)
-  - [ ] **ich:** Plugin auf dem Kobo aktiv; Öffnen und Schließen über
-    Nickels Schreibweg; offline vormerken, bei WLAN nachholen; kürzere
-    Wartezeit; Meldung ohne Index. Paket `Kobo.tgz` für beide Geräte.
-    Nach C0: Schreiben im `setVolume`-Hook über Nickel **und** die Seiten
-    des Zielkapitels in derselben Transaktion verwerfen; die CLI entscheidet
-    nur noch (`pull --live --emit` ohne `--write`, Tagessicherung bleibt;
-    den Basis-Stand in `state.json` erst nach Nickels Commit setzen);
-    `kobalt_blocks()` vor der Tolino-Prüfung und in jedem neuen Einstieg
-    (Empfehlung in `docs/nickel-6.0-symbols.md`).
+- [~] **C4 Plugin auf dem Kobo** (ersetzt N2; braucht C0, C2, C3) · PR #72
+  - [x] **ich:** Ein Plugin, ein `Kobo.tgz` für Kobo 6.0 und Tolino 5.18;
+    auf dem Kobo aktiv (die Tolino-Sperre in `init()` ist weg, inaktiv nur
+    ohne CLI, `config.ini` oder Nickels Schreibweg), Kobalt-Schutz in
+    jedem Einstieg. **Öffnen (Kobo):** neu `pull --live --nickel-writes
+    --emit`: die CLI entscheidet nur und macht die Tagessicherung, dann
+    `NICKELINKSYNC_LAST_READ`, `NICKELINKSYNC_STALE_PAGES` (die Seiten,
+    die `drop_stale_pages` verwerfen würde) und `NICKELINKSYNC_BASE`
+    (JSON); nichts in Datenbank oder `state.json`. Das Plugin schreibt in
+    einer Nickel-Transaktion (`getById`, `updateBookmark`,
+    `setPercentRead`, `updateFields` mit den geänderten Spalten), verwirft
+    die genannten Seiten auf Nickels Verbindung, bei Fehler Rollback und
+    `refreshCache<Volume>`, gibt Nickel ein frisches `getById`-Volume und
+    setzt erst danach die Basis in `state.json` (gleiche Atomik wie die
+    CLI). Tolino unverändert über `--write` bis C7. **Schließen:** Push
+    nach höchstens 15 s WLAN-Warten (kein WLAN-Dialog mehr), scheitert
+    er, merkt die CLI vor („Fortschritt vorgemerkt“); ein ohne Server
+    geöffnetes Buch nur, wenn die Seite beim Verlassen eine andere ist
+    als beim Öffnen. Vormerkliste (`sync --pending`) im Hintergrund,
+    sobald der Server antwortet (5 s nach dem Öffnen, nach jedem Push),
+    nur wenn `state.json` vorgemerkte Bücher hat. WLAN-Wartezeit beim
+    Öffnen 3 s. `CONFLICT` nur gemeldet, Buch bleibt liegen und wird
+    nicht gesendet. `NO_INDEX`: einmal pro Start „Gerät nicht
+    vorbereitet“. `not_in_line` schreibt das Plugin jetzt in
+    `state.json`. CI prüft die Symbole gegen 5.18 und 6.0 (die 6.0-Liste
+    macht `tools/libnickel_symbols.sh` aus Kobos Update, gecacht); das
+    CI-Artefakt heißt jetzt `NickelInkSync-device`. Test:
+    `tests/write.rs` (`--nickel-writes`). Kobo-VM (Book „C4 Alpha“ u. a.,
+    `NICKEL_VM_INSTANCE` für eine zweite VM neben einer anderen
+    Session): Server-Stand beim ersten Öffnen nach dem Start (5 Seiten
+    verworfen, öffnet auf der Seite), zweites Öffnen im selben Lauf,
+    offline lesen → vorgemerkt, offline öffnen ohne Lesen → nichts,
+    anderes Buch öffnen → nachgeholt (2 Bücher), Konflikt, ohne
+    `device prepare`, Kobalt-Schutz. Code bleibt Qt5/C++11-tauglich
+    (für C9/C10).
   - [ ] **du:** Am Clara BW: Buch mit WLAN öffnen (Stand vom Server),
     dann WLAN aus, lesen, schließen (vorgemerkt), WLAN an, ein anderes Buch
     öffnen (nachgeholt); in KOReader prüfen. Dazu der Fall, den die VM nur

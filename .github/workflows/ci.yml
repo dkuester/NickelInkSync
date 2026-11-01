@@ -73,7 +73,26 @@ jobs:
         run: |
           ref="$RUNNER_TEMP/libnickel-5.18.syms.gz"
           curl -fsSL -o "$ref" https://raw.githubusercontent.com/dkuester/NickelTolinoShopRedirect/5e4e2bf6fadbd3435b204c0282de00d02d297449/test/libnickel-5.18.syms.gz
-          python tools/check_plugin_symbols.py "$ref"
+          python tools/check_plugin_symbols.py --firmware 5.18 "$ref"
+      # The Kobo 6.0 list is made from Kobo's update (330 MB, the one the
+      # Nickel VM uses) and cached; neither is in this repository.
+      - name: Cache the libnickel 6.0 symbol list
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/nickelinksync/libnickel-6.0.279225.syms.gz
+          key: libnickel-6.0.279225-syms-v1
+      - name: Plugin symbols exist in libnickel 6.0
+        run: |
+          ref=~/.cache/nickelinksync/libnickel-6.0.279225.syms.gz
+          if [ ! -f "$ref" ]; then
+            fw="$RUNNER_TEMP/qt6-update-6.0.279225.zip"
+            curl -fsSL -o "$fw" https://ereaderfiles.kobo.com/firmwares/kobo12/Oct2026/qt6-update-6.0.279225.zip
+            echo "48b777179a79f68a5d1216e2a8ae20936f1bfacb6c5595351c9a6104b058f2ac  $fw" | sha256sum -c -
+            mkdir -p "$(dirname "$ref")"
+            tools/libnickel_symbols.sh "$fw" "$ref"
+            rm "$fw"
+          fi
+          python tools/check_plugin_symbols.py --firmware 6.0 "$ref"
       # Qt 6.5.2 toolchain (arm-kobo-linux-gnueabihf); the Qt 5 NickelTC
       # image cannot build a plugin for firmware 5.x.
       - name: Plugin build (Qt 6, Kobo.tgz)
@@ -88,7 +107,7 @@ jobs:
             grep -qE " T $h\$" plugin/nm.txt || { echo "::error::$h not exported"; exit 1; }
           done
           test "$(tar -tzf plugin/Kobo.tgz)" = "imageformats/libnickelinksync.so" || { echo "::error::Unexpected Kobo.tgz layout"; exit 1; }
-      - name: Package for the Tolino
+      - name: Package for Kobo and Tolino
         run: |
           d=dist/NickelInkSync
           mkdir -p "$d/.adds/NickelInkSync"
@@ -97,7 +116,7 @@ jobs:
           cp plugin/config.ini.example "$d/.adds/NickelInkSync/"
       - uses: actions/upload-artifact@v4
         with:
-          name: NickelInkSync-tolino
+          name: NickelInkSync-device
           path: dist/NickelInkSync/
           include-hidden-files: true
           if-no-files-found: error

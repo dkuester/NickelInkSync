@@ -39,14 +39,14 @@ check-device: build-device
 # firmware 5.x; amd64 only. The Qt 5 NickelTC image cannot build it.
 toolchain := "ghcr.io/dkuester/nickelstorygraph-toolchain:latest"
 
-# Build the plugin for firmware 5.x (plugin/Kobo.tgz), needs Docker
+# Build the plugin for Kobo 6.0 and Tolino 5.x (plugin/Kobo.tgz), needs Docker
 plugin:
   git submodule update --init plugin/NickelHook
   docker run --rm --platform linux/amd64 --volume="$PWD:$PWD" --workdir="$PWD" {{ toolchain }} 'make -C plugin && make -C plugin kobo'
   tar -tzvf plugin/Kobo.tgz
 
-# Everything for the Tolino in dist/NickelInkSync: Kobo.tgz for .kobo/ and
-# the folder for .adds/
+# Everything for the e-reader (Kobo 6.0 or Tolino) in dist/NickelInkSync:
+# Kobo.tgz for .kobo/ and the folder for .adds/
 package: build-device plugin
   rm -rf dist/NickelInkSync
   mkdir -p dist/NickelInkSync/.adds/NickelInkSync

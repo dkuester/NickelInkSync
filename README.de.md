@@ -308,7 +308,7 @@ es sie gibt. Standardort: `~/.config/nickelinksync/config.ini` (oder
 `$XDG_CONFIG_HOME/nickelinksync/config.ini`, oder der Pfad in
 `$NICKELINKSYNC_CONFIG`). Das Format steht im [englischen README](README.md#configuration):
 `server`, `user`, `password` (oder `key` = MD5 des Passworts), optional
-`device`, `device_id`, `confirm`, `notify` (nur für das Tolino-Plugin,
+`device`, `device_id`, `confirm`, `notify` (nur für das Plugin auf dem E-Reader,
 siehe unten), `library` (Ordner mit den Original-EPUBs für die
 Buchzuordnung) und `position`. Für die `map`-Befehle genügt eine Datei, die
 nur `library` (und `position`) enthält; `status` zeigt dann keinen Server.
@@ -360,55 +360,71 @@ weder `password` noch `key` in der Datei, sucht die CLI dort (Dienst
 Desktop-Clients legen ihn dort ab; auf dem Gerät und unter Linux bleibt er
 in der Datei.
 
-## Plugin für den Tolino (experimentell)
+## Plugin für Kobo und Tolino (experimentell)
 
-Auf einem Tolino mit Firmware 5.x gleicht ein NickelHook-Plugin ohne
-Rechner ab, per WLAN: Beim Öffnen eines seitengeladenen Buchs holt es eine
-neuere Position vom Server, und das Buch öffnet dort; beim Verlassen des
-Buchs sendet es deine. Es
-ruft dasselbe Programm `nickelinksync` auf dem Gerät auf und folgt derselben
-Regel `confirm`; fragen kann es noch nicht, eine Position, die eine Antwort
-bräuchte, bleibt deshalb unverändert und steht im Log. Zuordnungen kennt das
-Plugin nicht (sie liegen auf dem Rechner); ein kepub synchronisiert es
-deshalb nie, die Meldung sagt dann „kepub ohne Zuordnung“. Auf einem Kobo
-bleibt das Plugin vorerst inaktiv.
+Auf einem Kobo mit Firmware 6.0 oder einem Tolino ab Firmware 5.18 gleicht
+ein NickelHook-Plugin ohne Rechner ab, per WLAN: Beim Öffnen eines
+seitengeladenen Buchs holt es eine neuere Position vom Server, und das Buch
+öffnet dort; beim Verlassen des Buchs sendet es deine. Es ruft dasselbe
+Programm `nickelinksync` auf dem Gerät auf und folgt derselben Regel
+`confirm` und dem [zuletzt abgeglichenen Position](#zuletzt-abgeglichene-position).
+Fragen kann es noch nicht: Eine Position, die eine Antwort bräuchte, oder
+ein Buch, das seit dem letzten Abgleich auf beiden Seiten weitergelesen
+wurde (ein Konflikt), bleibt unverändert und steht im Log und in einer
+Meldung. Das Gerät muss vorher am Rechner
+[vorbereitet](#buchzuordnung-im-aufbau) sein (`device prepare`): Ohne das
+holt das Plugin weiterhin, sendet aber nichts und sagt das („Gerät nicht
+vorbereitet“). Ein kepub ohne Zuordnung synchronisiert nie.
 
-1. `NickelInkSync-tolino` aus dem letzten CI-Lauf holen (oder `just
-   package`, siehe [Bauen](#bauen)). Darin liegen `Kobo.tgz` und ein Ordner
-   `.adds/NickelInkSync/` mit dem Programm und `config.ini.example`.
-2. Tolino per USB verbinden. Den Ordner `NickelInkSync` in den versteckten
-   Ordner `.adds/` kopieren und dort `config.ini.example` als `config.ini`
-   mit deinem Konto speichern (Format wie [oben](#konfiguration)).
-3. `Kobo.tgz` in den versteckten Ordner `.kobo/` kopieren und auswerfen.
-   Der Tolino installiert das Plugin und startet neu.
+1. `NickelInkSync-device` aus dem letzten CI-Lauf holen (oder `just
+   package`, siehe [Bauen](#bauen)). Darin liegen `Kobo.tgz`, dasselbe für
+   Kobo und Tolino, und ein Ordner `.adds/NickelInkSync/` mit dem Programm
+   und `config.ini.example`.
+2. Den E-Reader per USB verbinden. Den Ordner `NickelInkSync` in den
+   versteckten Ordner `.adds/` kopieren und dort `config.ini.example` als
+   `config.ini` mit deinem Konto speichern (Format wie [oben](#konfiguration)).
+3. Am Rechner `nickelinksync device prepare --device <der eingehängte
+   E-Reader>` ausführen (wieder nach dem Zuordnen oder Hinzufügen von Büchern).
+4. `Kobo.tgz` in den versteckten Ordner `.kobo/` kopieren und auswerfen.
+   Der E-Reader installiert das Plugin und startet neu.
 
 Das Log steht in `.adds/NickelInkSync/NickelInkSync.log`. Das Plugin schaltet
-das WLAN selbst ein, wenn es es braucht; „Jetzt synchronisieren“ des Tolino
-ist nicht nötig (das ist die Tolino-Cloud). Beim Öffnen eines Buchs wartet es
-höchstens etwa 10 Sekunden auf das WLAN (ohne Dialog) und 15 Sekunden auf
-den Server. Damit das Buch an der Server-Position öffnet, schreibt das Plugin
-sie kurz vor dem Öffnen in die Zeile des Buchs in der Gerätedatenbank,
-während Nickel läuft; einmal am Tag sichert es die Datenbank nach
-`.adds/NickelInkSync/backups/` (die zwei neuesten bleiben). Ohne WLAN öffnet
-das Buch unverändert, und beim Verlassen wird dann nichts gesendet, damit eine
-ältere Tolino-Position nie eine neuere auf dem Server überschreibt. Beim
-Verlassen wartet es nie: Der Push folgt, sobald das WLAN da ist, nach 15
-Sekunden mit dem WLAN-Dialog des Tolino.
+das WLAN selbst ein, wenn es es braucht; „Jetzt synchronisieren“ des
+E-Readers ist nicht nötig (das ist die Kobo- bzw. Tolino-Cloud). Beim Öffnen
+eines Buchs wartet es höchstens etwa 3 Sekunden auf das WLAN (ohne Dialog)
+und 15 Sekunden auf den Server. Damit das Buch an der Server-Position
+öffnet, setzt das Plugin sie kurz vor dem Öffnen in die Zeile des Buchs in
+der Gerätedatenbank, während Nickel läuft: auf dem Kobo über Nickels eigene
+Datenbankfunktionen, wie es das Leseprogramm
+[Kobalt](https://github.com/nicoverbruggen/kobalt) tut, auf dem Tolino mit
+dem Programm `nickelinksync`. In beiden Fällen sichert es vorher einmal am
+Tag die Datenbank nach `.adds/NickelInkSync/backups/` (die zwei neuesten
+bleiben) und verwirft die von Nickel gespeicherten Seiten dieses Kapitels,
+wenn keine davon die Stelle enthält (sonst öffnete Nickel am
+Kapitelanfang).
+
+Beim Verlassen wartet es nie: Der Push folgt, sobald das WLAN da ist, sonst
+nach 15 Sekunden trotzdem. Erreicht er den Server nicht (kein WLAN, ein
+Serverfehler), kommt das Buch auf eine **Vormerkliste** in `state.json`
+(„Fortschritt vorgemerkt“), und das Plugin sendet die Liste im Hintergrund,
+sobald der Server das nächste Mal antwortet, beim Öffnen oder Verlassen
+eines beliebigen Buchs. Ein ohne WLAN geöffnetes Buch wird ebenso
+gesendet, wenn du darin weiterliest; sonst wird nichts gesendet, und weil
+es sich seit dem letzten Abgleich nicht bewegt hat, überschreibt eine
+ältere Geräteposition nie eine neuere auf dem Server.
 
 Öffnet Nickel ein Buch nicht an der Position, die das Plugin geschrieben
-hat (beobachtet beim ersten Öffnen nach dem Start des Tolino), vermerkt
-das Plugin es in `.adds/NickelInkSync/not-in-line.tsv`; die CLI übernimmt
-den Vermerk beim nächsten Speichern in `state.json` (`not_in_line`) und
-löscht die Datei. Ein solches Buch
-wird nie gesendet, weder vom Plugin noch mit `push` am Rechner (außer mit
-`--force`), weil die Stelle, die Nickel gespeichert hat, nicht deine ist;
-der nächste `pull`, beim Öffnen oder per USB, übernimmt wieder die
-Server-Position, auch wenn „zuletzt gelesen“ auf dem Tolino jetzt neuer
+hat, vermerkt das Plugin es in `state.json` (`not_in_line`). Ein solches
+Buch wird nie gesendet, weder vom Plugin noch mit `push` am Rechner (außer
+mit `--force`), weil die Stelle, die Nickel gespeichert hat, nicht deine
+ist; der nächste `pull`, beim Öffnen oder per USB, übernimmt wieder die
+Server-Position, auch wenn „zuletzt gelesen“ auf dem Gerät jetzt neuer
 aussieht.
 
 Jedes Ergebnis zeigt das Plugin als kurze Meldung unten auf dem Bildschirm
 (vorerst auf Deutsch), etwa „Fortschritt übernommen“ mit Prozent und dem
-Gerät, von dem die Position kam, oder „Laden fehlgeschlagen“ mit dem Grund
+Gerät, von dem die Position kam, „Fortschritt vorgemerkt“, wenn sie später
+gesendet wird, oder „Laden fehlgeschlagen“ mit dem Grund
 (keine Verbindung, Zeitüberschreitung, Anmeldung abgelehnt). Die Texte sind
 kurz, weil der Tolino längere abschneidet. `notify` in `config.ini` legt fest, welche:
 
@@ -423,20 +439,20 @@ Leseprogramm, das in Nickel läuft, schreibt die Lesepositionen selbst und
 bekommt einen eigenen KOSync. Solange Kobalt installiert ist, schaltet sich
 das Plugin ab: Es schreibt nichts in die Gerätedatenbank und sendet nichts,
 sagt das einmal per Meldung („NickelInkSync ist aus“, etwa 20 Sekunden
-nach dem Start des Tolino) und bei jedem Start im Log. Das Plugin bleibt installiert und arbeitet wieder, sobald Kobalt
+nach dem Start des E-Readers) und bei jedem Start im Log. Das Plugin bleibt installiert und arbeitet wieder, sobald Kobalt
 entfernt ist (nach dem nächsten Start). Am Rechner verweigern `pull
 --write` und „Holen“ im Desktop-Client ein Gerät mit Kobalt; `push` und
 „Senden“ warnen nur. Ein übrig gebliebener Ordner `.adds/kobalt` ohne
 seine Datei `uninstall` (so entfernt man Kobalt von Hand) zählt nicht.
 
 **Deinstallieren:** eine leere Datei `.adds/NickelInkSync/uninstall`
-anlegen, auswerfen und den Tolino aus- und wieder einschalten (die Datei
+anlegen, auswerfen und den E-Reader aus- und wieder einschalten (die Datei
 wird nur beim Start geprüft).
 
 ## Geräte und Bücher
 
-- Kobo mit Firmware 4.x sowie Tolino Shine 5, Shine Color und Vision Color mit
-  Firmware 5.x
+- Kobo mit Firmware 4.x und 6.0 sowie Tolino Shine 5, Shine Color und Vision
+  Color mit Firmware 5.x (das Plugin: Kobo 6.0, Tolino ab 5.18)
 - Seitengeladene kepub- und EPUB-Bücher ohne DRM
 - Vorerst muss auf jedem Gerät **dieselbe Datei** liegen. Der Sync-Server
   erkennt Bücher an einer Prüfsumme der Datei, ein kepub auf dem einen und das

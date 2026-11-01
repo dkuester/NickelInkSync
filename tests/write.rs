@@ -917,3 +917,107 @@ fn live_kepub_is_neither_sent_nor_taken() {
   );
   assert!(s.server.puts().is_empty());
 }
+
+/// The plugin on a Kobo writes the position through Nickel itself: the CLI
+/// only decides, makes the day's backup and names the cached pages to drop
+/// and the base to keep, and writes neither the database nor the base.
+#[test]
+fn live_pull_hands_the_write_to_nickel() {
+  let s = Setup::tolino("live-nickel-writes");
+  let device = "OEBPS/xhtml/xhtml-0-81.xhtml#point(/1/2/1/1:0)";
+  let nickel = nickel_running(&s, device);
+  // Two cached pages of the target chapter, neither holds the place, and
+  // one of another chapter.
+  nickel
+    .execute_batch(&format!(
+      "CREATE TABLE CachePersistenceRenderedPageData (id TEXT, contentId TEXT,
+         pageStartLocation TEXT, pageEndLocation TEXT);
+       INSERT INTO CachePersistenceRenderedPageData VALUES
+         ('p1', '{BOOK}', 'OEBPS/xhtml/xhtml-0-89.xhtml#point(/1/2/2/1:0)',
+          'OEBPS/xhtml/xhtml-0-89.xhtml#point(/1/2/5/1:0)'),
+         ('p2', '{BOOK}', 'OEBPS/xhtml/xhtml-0-89.xhtml#point(/1/2/6/1:0)',
+          'OEBPS/xhtml/xhtml-0-89.xhtml#point(/1/2/9/1:0)'),
+         ('p3', '{BOOK}', 'OEBPS/xhtml/xhtml-0-81.xhtml#point(/1/2/1/1:0)',
+          'OEBPS/xhtml/xhtml-0-81.xhtml#point(/1/2/9/1:0)');"
+    ))
+    .unwrap();
+  s.server
+    .store(&hash("book-a.epub"), AHEAD, 0.9, LAST_READ + 60);
+  let args = [
+    "pull",
+    "--live",
+    "--content-id",
+    BOOK,
+    "--nickel-writes",
+    "--emit",
+  ];
+  // Not without --emit, not with --write, not for all books.
+  assert!(!s.run(&args[..5]).0.status.success());
+  let write = [&args[..], &["--write"]].concat();
+  assert!(!s.run(&write).0.status.success());
+  let all = ["pull", "--live", "--nickel-writes", "--emit"];
+  let (output, _) = s.run(&all);
+  assert!(!output.status.success());
+  assert!(s.backups().is_empty());
+
+  let (output, out) = s.run(&args);
+  assert!(output.status.success(), "{out}");
+  assert!(
+    out.contains(&format!(
+      "\nNICKELINKSYNC_POSITION\t90\t{AHEAD_ON_DEVICE}\nNICKELINKSYNC_FROM\tKOReader\n"
+    )),
+    "{out}"
+  );
+  // The server is newer than DateLastRead: keep it.
+  assert!(out.contains("\nNICKELINKSYNC_LAST_READ\t\n"), "{out}");
+  assert!(
+    out.contains("\nNICKELINKSYNC_STALE_PAGES\tp1\tp2\n"),
+    "{out}"
+  );
+  let base = out
+    .lines()
+    .find_map(|l| l.strip_prefix("NICKELINKSYNC_BASE\t"))
+    .unwrap_or_else(|| panic!("{out}"));
+  let base: serde_json::Value = serde_json::from_str(base).unwrap();
+  assert_eq!(base["device"], AHEAD_ON_DEVICE);
+  assert_eq!(base["xpointer"], AHEAD);
+  assert_eq!(base["document"], hash("book-a.epub"));
+  assert_eq!(base["timestamp"], LAST_READ + 60);
+  // The backup is made, nothing is written: not the row, not the pages,
+  // not the base.
+  assert_eq!(s.backups().len(), 1);
+  let (stored, pages): (String, i64) = nickel
+    .query_row(
+      "SELECT ChapterIDBookmarked, (SELECT count(*) FROM CachePersistenceRenderedPageData)
+       FROM content WHERE ContentID = ?1",
+      [BOOK],
+      |r| Ok((r.get(0)?, r.get(1)?)),
+    )
+    .unwrap();
+  assert_eq!((stored.as_str(), pages), (device, 3));
+  let state = fs::read_to_string(s.root.join(".adds/NickelInkSync/state.json")).unwrap_or_default();
+  assert!(!state.contains("\"base\""), "{state}");
+
+  // Once Nickel holds the place on a cached page, none is dropped.
+  nickel
+    .execute(
+      "UPDATE CachePersistenceRenderedPageData SET pageStartLocation = ?1 WHERE id = 'p1'",
+      [AHEAD_ON_DEVICE],
+    )
+    .unwrap();
+  let (_, out) = s.run(&args);
+  assert!(out.contains("\nNICKELINKSYNC_STALE_PAGES\n"), "{out}");
+
+  // In sync: the CLI keeps the base itself, as with --write.
+  nickel
+    .execute(
+      "UPDATE content SET ChapterIDBookmarked = ?1 WHERE ContentID = ?2",
+      [AHEAD_ON_DEVICE, BOOK],
+    )
+    .unwrap();
+  let (output, out) = s.run(&args);
+  assert!(output.status.success(), "{out}");
+  assert!(!out.contains("NICKELINKSYNC_POSITION"), "{out}");
+  let state = fs::read_to_string(s.root.join(".adds/NickelInkSync/state.json")).unwrap();
+  assert!(state.contains(AHEAD), "{state}");
+}
