@@ -258,7 +258,11 @@ backup of it in the data directory, as `pull --write` does; a `confirm`
 question comes as the same dialog (keep the device's, or take the
 server's), and the device is read again afterwards. Eject the device
 before you open the book, and restart it when the notice says so. "History" lists what the CLI and the window
-sent and wrote (`history.jsonl` in the data directory). "Restore a backup …" puts back
+sent and wrote (`history.jsonl` in the data directory). "Prepare device" does what
+`device prepare` does, with its progress: the library's index, the mappings
+and their translation tables go onto a Kobo or Tolino, so the plugin can
+sync there without the computer; until then the window says the device is
+not prepared. "Restore a backup …" puts back
 one of the device's database backups (as `restore` does). "Add from
 library" copies books of the library to `Books/` on a Kobo or Tolino,
 never over a file that is there or an EPUB already on the device; on a

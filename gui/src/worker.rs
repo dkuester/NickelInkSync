@@ -57,6 +57,9 @@ pub enum Command {
   Restore { root: PathBuf, backup: PathBuf },
   /// Ask GitHub for a newer release.
   CheckRelease,
+  /// Prepare a Kobo or Tolino to sync on its own (index, mappings,
+  /// tables), then read it again.
+  Prepare { root: PathBuf },
   /// The settings in `config.ini`.
   ReadSettings,
   /// Write the settings; a typed password goes in as its key.
@@ -99,6 +102,17 @@ pub enum Event {
   History(Result<Vec<Entry>, String>),
   Overview(Overview),
   Settings(Result<Editable, String>),
+  /// How far preparing a device got.
+  Preparing {
+    root: PathBuf,
+    done: usize,
+    total: usize,
+  },
+  /// What preparing a device did, or why not; it is read again after it.
+  Prepared {
+    root: PathBuf,
+    result: Result<nickelinksync::prepare::Report, String>,
+  },
   /// A newer release, none, or why GitHub could not be asked.
   Release(Result<Option<crate::release::Release>, String>),
   Backups(Result<Vec<nickelinksync::restore::Backup>, String>),
@@ -279,6 +293,29 @@ fn run(inbox: &Receiver<Command>, outbox: &Sender<Event>, repaint: &dyn Fn()) {
         }
       }
       Command::CheckRelease => send(Event::Release(crate::release::check())),
+      Command::Prepare { root } => {
+        let result = match &library {
+          Some(library) => Ok(library.as_ref()),
+          None => model::library().map(|l| library.insert(l).as_ref()),
+        }
+        .and_then(|l| l.ok_or_else(|| "no library set up (library = in config.ini)".to_string()))
+        .and_then(|library| {
+          let mut store = nickelinksync::session::load_store().map_err(|e| e.to_string())?;
+          nickelinksync::prepare::prepare(&root, library, &mut store, &mut |done, total| {
+            send(Event::Preparing {
+              root: root.clone(),
+              done,
+              total,
+            })
+          })
+          .map_err(|e| e.to_string())
+        });
+        send(Event::Prepared {
+          root: root.clone(),
+          result,
+        });
+        load(root, Kind::Nickel);
+      }
       Command::ReadSettings => send(Event::Settings(
         config_path().and_then(|p| Editable::read(&p).map_err(|e| e.to_string())),
       )),

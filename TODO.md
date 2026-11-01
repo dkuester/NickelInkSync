@@ -32,8 +32,9 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0 bis E6b und O5 erledigt; als Nächstes E7). **Danach
-der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
+fertig, D2 läuft (E0 bis E6b und O5 erledigt; als Nächstes E7). **Der
+Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31) gehört
+seit 2026-11-01 ebenfalls zu **Release 0.1.0**.
 
 ## Release 0.1.0
 
@@ -42,11 +43,24 @@ Entscheidungen des Besitzers (2026-10-31):
 - Version **0.1.0**; Voraussetzung: D2 und die kepub-Rückübersetzung (PR #55)
   sind abgeschlossen.
 - **Release-Assets:** der Desktop-Client für macOS (`.dmg`) und Windows
-  (ZIP), dazu die CLI `nickelinksync` für macOS und Windows als eigene
-  Dateien, und `SHA256SUMS`. Das Tolino-Plugin-Paket und die ARM-Fassung
-  fürs Gerät gehören **nicht** ins Release, sie bleiben CI-Artefakte.
+  (App als ZIP), dazu die CLI `nickelinksync` für macOS und Windows als
+  eigene ZIPs, und `SHA256SUMS`. Dazu das **Gerätepaket** für Tolino und Kobo
+  (`Kobo.tgz` und `.adds/NickelInkSync/` mit dem ARM-Programm), als
+  **experimentell** gekennzeichnet (geändert am 2026-11-01); den Workflow
+  dafür baut die D2-Session.
 - **Kein Linux:** E8 (AppImage) kommt im Release danach.
-- **Kobo-Client** (C0–C7) kommt im Release danach.
+- **Kobo-Client** (C0–C7, Kobo und Tolino) gehört zu 0.1.0 (Plan geändert
+  am 2026-11-01).
+- **Kindle:** bleibt in 0.1.0 (lesen, senden), als **experimentell**
+  gekennzeichnet. Vor 0.1.0 keine weitere Kindle-Arbeit und kein
+  Kindle-Test; E3b „Kindle-Kopie senden“, „Kindle per MTP lesen“ und L1
+  ruhen, bis Kobo und Tolino stabil sind.
+- **kepub:** synchronisiert nur über eine gültige Zuordnung, unter der MD5
+  der zugeordneten EPUB, nie unter der eigenen Prüfsumme, mit oder ohne
+  Bibliothek (PRs #55, #60). Aufs Gerät kommen die Zuordnungen mit `device
+  prepare` (C3, PR #67); ohne sie sendet das Gerät nichts, auch der Tolino
+  (gehört in die Release-Notes). Beim Kindle gilt dasselbe (nur zugeordnete
+  KFX).
 - Release-Notes **englisch, darunter deutsch**, wie die READMEs.
 - Ein Workflow baut die Assets bei einem Tag `v*` und legt einen Entwurf an;
   den Tag setzt und das Release veröffentlicht nur der Besitzer.
@@ -961,7 +975,13 @@ Entscheidungen des Besitzers (2026-10-31):
 ## Kobo-Client
 
 Client auf dem Gerät (ein Plugin für Kobo 6.0 und Tolino 5.18), geplant
-am 2026-10-31 (deine Antworten auf meine Rückfragen). **Beginnt nach D2.**
+am 2026-10-31 (deine Antworten auf meine Rückfragen). **Teil von Release
+0.1.0** (geändert am 2026-11-01); C0 bis C3 sind erledigt (PRs #66, #55,
+#64, #67), C4 läuft. **Kobalt-Schutz (N7):** Jeder neue Einstieg des
+Plugins (Öffnen, Verlassen, Buchmenü, NickelMenu-Auslöser, Nachholen der
+Vormerkliste, Dialog) geht durch dieselbe Prüfung wie heute und bleibt
+untätig, solange Kobalt installiert ist; Gerätetests mit Kobalt daneben
+nur mit `.adds/NickelInkSync/ignore-kobalt`.
 Fasst N2 und N6, die Kobo-Teile von K4 und P2 sowie O3/O4 (Rückfrage,
 „Jetzt synchronisieren“) zusammen. Eine Etappe = eine eigene Session, ein
 Branch von `origin/main`, ein PR. Jede Etappe endet mit dem PR, diesem
@@ -1115,10 +1135,18 @@ Auf dem Kobo ist das Plugin inaktiv.
     er geht, ersetzt er dort den heutigen Weg B (CLI schreibt, verwirft die
     Seiten im Cache, N5); sonst bleibt Weg B.
   - [ ] **du:** Dieselben Tests wie C4 bis C6 am Tolino.
-- [ ] **(in D2, nach C3)** Knopf „Gerät vorbereiten“ in der GUI
+- [x] **(in D2, nach C3)** Knopf „Gerät vorbereiten“ in der GUI
   (`prepare::prepare` mit Fortschritt, `Prepared::load` für den Hinweis);
   beim Kopieren (E5) schreibt `copy::copy` Zuordnung und Tabelle schon
   selbst (`prepare::put_mapping`), wenn das Gerät vorbereitet ist.
+  Umgesetzt: Knopf neben „Aus Bibliothek hinzufügen …“ bei Kobo und
+  Tolino, Fortschritt „n von m“, Meldung mit Originalen, Zuordnungen,
+  Tabellen, übernommenen und entfernten Zuordnungen und allem, was nicht
+  ging; darunter „Vorbereitet: <Zeit>“ oder der Hinweis „Gerät nicht
+  vorbereitet“.
+  - [x] **du:** „Gerät vorbereiten“ am Tolino oder Kobo (2026-11-01):
+    Vorbereiten ist einfach, der Zeitpunkt der letzten Vorbereitung gut
+    lesbar.
 
 ## Optional (später)
 
