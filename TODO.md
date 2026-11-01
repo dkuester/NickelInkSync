@@ -1022,12 +1022,34 @@ Auf dem Kobo ist das Plugin inaktiv.
   - [x] **ich:** Übersetzung, Tests (PR #55; siehe K4).
   - [x] **du:** Book R vom Server per USB auf den Kobo schreiben, auswerfen,
     öffnen: geprüft 2026-10-31, öffnet an der Stelle (siehe K4).
-- [ ] **C2 Basis-Stand und Vormerkliste** (nur Bibliothek und CLI)
-  - [ ] **ich:** `.adds/NickelInkSync/state.json` (je Buch Basis-Stand,
-    vorgemerkt); Drei-Wege-Regel in `sync.rs` mit `confirm`; `not-in-line.tsv`
-    einmal übernehmen, dann entfällt sie; `sync --pending` sendet bzw. holt
-    alle vorgemerkten Bücher; Maschinenzeilen für das Plugin. Tests mit dem
-    Mock-Server, auch für den Wechsel vom heutigen Plugin.
+- [x] **C2 Basis-Stand und Vormerkliste** (nur Bibliothek und CLI) · PR #64
+  - [x] **ich:** `.adds/NickelInkSync/state.json` (`src/state.rs`): je Buch
+    Basis (Dokument, Nickels Stelle, XPointer, Prozent, Server-Zeit),
+    `not_in_line` und `pending`; geschrieben nach `push`, `pull --write`
+    und bei `IN_SYNC`, gemeinsam für `--live` und USB, atomar und nur mit
+    den Büchern des eigenen Laufs (zwei Läufe auf dem Gerät können sich
+    überschneiden). Drei-Wege-Regel (`sync::decide_since`, `Moved`): nur
+    der Server bewegt → Server gewinnt (Nickels `DateLastRead` beim Öffnen
+    zählt nicht mehr), nur das Gerät → Gerät gewinnt, auch rückwärts,
+    beide → die bisherige Regel mit `confirm`; `always` fragt weiter;
+    ohne Basis wie bisher. `not-in-line.tsv` wird beim Laden übernommen
+    und beim ersten Speichern gelöscht (auch später neu geschriebene
+    Zeilen des heutigen Plugins), gleiches Verhalten wie bisher.
+    `push --live` merkt bei `timeout`/`network`/`server` vor
+    (`NICKELINKSYNC_PENDING<tab>ID<tab>marked<tab>Art`); neu
+    `sync --pending` (`--live`, `--emit`) mit einer Zeile je Buch und
+    `NICKELINKSYNC_PENDING_LEFT`; neue Zeile `NICKELINKSYNC_CONFLICT` mit
+    beiden Ständen für C5. Kobalt-Schutz greift auch hier. Tests:
+    `tests/state.rs` (Mock-Server, auch der Übergang von
+    `not-in-line.tsv`), `tests/kobalt.rs`. Format und Zeilen: Notiz
+    `2026-11-01-kobo-c2-handover.md`.
+  - [ ] **ich (C4):** Plugin wertet `PENDING`/`CONFLICT` aus, ruft
+    `sync --pending` bei jedem WLAN auf und schreibt `not_in_line` selbst
+    in `state.json` statt in `not-in-line.tsv`.
+  - [ ] **D2:** Der Desktop-Client schreibt die Basis bei „Holen“ schon
+    (über `Session::write`), beim Senden noch nicht
+    (`Session::agreed_sent`, `save_state`); bis dahin fällt ein Buch nach
+    einem Senden aus der GUI auf die Regel „beide bewegt“ zurück.
 - [ ] **C3 Zuordnungen auf dem Gerät** (ersetzt N6; braucht C1)
   - [ ] **ich:** Am Rechner `device prepare`: Index und Übersetzungstabellen
     aufs Gerät, Zuordnungen in beide Richtungen abgleichen (eine am Gerät

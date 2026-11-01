@@ -134,6 +134,15 @@ drafts the release; only the owner tags and publishes.
       checksum, so the on-device plugin skips kepubs until mappings reach
       the device. Checked on the Clara BW (6.0) on 2026-10-31: kepub and
       EPUB open at KOReader's place after a restart, and back
+- [x] Last agreed position and pending list (stage C2 of the on-device
+      client, library and CLI, PR #64): `.adds/NickelInkSync/state.json` keeps
+      each book's base, shared by the plugin and USB; a side that did not
+      move since gives way (Nickel's `DateLastRead` on opening no longer
+      counts as reading), and only when both moved do the times and
+      `confirm` decide. A failed `push --live` is kept as pending and
+      `sync --pending` sends it later, with machine lines for the plugin
+      (including both positions of a conflict for the dialog). The
+      plugin's `not-in-line.tsv` moves into `state.json`
 
 ## Quick wins
 
