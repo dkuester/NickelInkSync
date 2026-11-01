@@ -70,6 +70,8 @@ pub enum Answer {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Question {
   pub title: String,
+  /// The book's ContentID (Kobo, Tolino) or `content_id` (Kindle).
+  pub id: String,
   pub local_percent: f64,
   pub local_xpointer: String,
   pub local_time: Option<String>,
@@ -207,15 +209,26 @@ pub fn remotes(
   Ok(Some(found))
 }
 
+/// What the device and the server agree on after a push step: sent now (the
+/// update and the server's time) or already in sync.
+enum Agreed<'a> {
+  Sent(&'a Update, Option<i64>),
+  InSync(&'a Progress),
+}
+
 /// One push step's outcome: sent at once, a question, or a report.
+/// `agreed` hears where device and server now agree (the base of the next
+/// run).
+#[allow(clippy::too_many_arguments)]
 fn settle(
   client: &Client,
-  title: String,
+  (id, title): (&str, String),
   document: &str,
   outcome: PushOutcome,
   (device, device_id): (&str, &str),
   report: &mut Report,
   sent: &mut Vec<Entry>,
+  agreed: &mut dyn FnMut(Agreed),
 ) -> Result<(), kosync::Error> {
   let (local, remote, action) = match outcome {
     PushOutcome::Skip { message, .. } => {
@@ -239,10 +252,16 @@ fn settle(
   };
   let update = session::update(document, &local, device, device_id);
   match (action, remote) {
-    (Action::InSync, _) => report.books.push((title, Outcome::InSync)),
+    (Action::InSync, remote) => {
+      if let Some(remote) = &remote {
+        agreed(Agreed::InSync(remote));
+      }
+      report.books.push((title, Outcome::InSync))
+    }
     (Action::Keep, _) => report.books.push((title, Outcome::ServerNewer)),
     (Action::Ask { backwards }, Some(remote)) => report.questions.push(Question {
       title,
+      id: id.to_string(),
       local_percent: local.percentage,
       local_xpointer: local.xpointer.clone(),
       local_time: local.last_read.map(format_timestamp),
@@ -251,21 +270,23 @@ fn settle(
       answer: Answer::Send(update),
     }),
     (Action::Apply | Action::Ask { .. }, _) => {
-      deliver(client, title, update, report, sent)?;
+      let time = deliver(client, title, &update, report, sent)?;
+      agreed(Agreed::Sent(&update, time));
     }
   }
   Ok(())
 }
 
-/// Sends one update and notes it for the report and the history.
+/// Sends one update and notes it for the report and the history; the
+/// server's time for it, if it sent one.
 fn deliver(
   client: &Client,
   title: String,
-  update: Update,
+  update: &Update,
   report: &mut Report,
   sent: &mut Vec<Entry>,
-) -> Result<(), kosync::Error> {
-  match client.update(&update) {
+) -> Result<Option<i64>, kosync::Error> {
+  match client.update(update) {
     Ok(time) => {
       sent.push(Entry {
         time: time.unwrap_or_else(history::now),
@@ -278,12 +299,22 @@ fn deliver(
         by: "gui".into(),
       });
       report.books.push((title, Outcome::Sent));
-      Ok(())
+      Ok(time)
     }
     Err(e) => {
       report.books.push((title, Outcome::Failed(e.to_string())));
       Err(e)
     }
+  }
+}
+
+/// Writes the bases of this run into `state.json` on the device; a failure
+/// only shows in the report.
+fn save_state(session: &Session, report: &mut Report) {
+  if let Err(e) = session.save_state() {
+    report
+      .books
+      .push(("state.json".into(), Outcome::Failed(e.to_string())));
   }
 }
 
@@ -317,18 +348,25 @@ pub fn push(options: &Options, kind: Kind, ids: &[String]) -> Result<Report, Str
           .unwrap_or_else(|| book.content_id.clone());
         let document = step.identity.document().unwrap_or_default().to_string();
         let to = (device.as_str(), device_id.as_str());
+        // The base for the next run, in state.json on the device.
+        let mut agreed = |a: Agreed| match a {
+          Agreed::Sent(update, time) => session.agreed_sent(book, update, time),
+          Agreed::InSync(remote) => session.agreed(book, &document, remote),
+        };
         if let Err(kosync::Error::Unauthorized) = settle(
           &server.client,
-          title,
+          (&book.content_id, title),
           &document,
           step.outcome,
           to,
           &mut report,
           &mut sent,
+          &mut agreed,
         ) {
           break;
         }
       }
+      save_state(&session, &mut report);
     }
     Kind::Kindle => {
       let session = KindleSession::open(options).map_err(|e| e.to_string())?;
@@ -341,14 +379,16 @@ pub fn push(options: &Options, kind: Kind, ids: &[String]) -> Result<Report, Str
           .unwrap_or_else(|| book.content_id.clone());
         let document = step.mapping.map(|m| m.epub.hash).unwrap_or_default();
         let to = (device.as_str(), device_id.as_str());
+        // A Kindle keeps no base.
         if let Err(kosync::Error::Unauthorized) = settle(
           &server.client,
-          title,
+          (&book.content_id, title),
           &document,
           step.outcome,
           to,
           &mut report,
           &mut sent,
+          &mut |_| {},
         ) {
           break;
         }
@@ -470,6 +510,7 @@ pub fn pull(options: &Options, ids: &[String]) -> Result<Report, String> {
     match (action, local) {
       (Action::Ask { backwards }, Some(local)) => report.questions.push(Question {
         title,
+        id: book.content_id.clone(),
         local_percent: local.percentage,
         local_xpointer: local.xpointer.clone(),
         local_time: local.last_read.map(format_timestamp),
@@ -489,22 +530,37 @@ pub fn pull(options: &Options, ids: &[String]) -> Result<Report, String> {
 
 /// Does what the questions answered with yes ask for: sends the device's
 /// positions, or writes the server's into the device.
-pub fn answer(options: &Options, questions: Vec<Question>) -> Result<Report, String> {
+pub fn answer(options: &Options, kind: Kind, questions: Vec<Question>) -> Result<Report, String> {
   let mut report = Report::default();
   let (pulls, pushes): (Vec<Question>, Vec<Question>) =
     questions.into_iter().partition(Question::pulls);
   if !pushes.is_empty() {
     let server = server(options)?.ok_or("no server set up in config.ini")?;
+    // A Kobo or Tolino keeps the base of what was sent; a Kindle none.
+    let session = match kind {
+      Kind::Nickel => Some(Session::open(options).map_err(|e| e.to_string())?),
+      Kind::Kindle => None,
+    };
     let mut sent = Vec::new();
     for q in pushes {
       let Answer::Send(update) = q.answer else {
         unreachable!("partitioned")
       };
-      if let Err(kosync::Error::Unauthorized) =
-        deliver(&server.client, q.title, update, &mut report, &mut sent)
-      {
-        break;
+      match deliver(&server.client, q.title, &update, &mut report, &mut sent) {
+        Ok(time) => {
+          let book = session
+            .as_ref()
+            .and_then(|s| Some((s, s.books.iter().find(|b| b.content_id == q.id)?)));
+          if let Some((session, book)) = book {
+            session.agreed_sent(book, &update, time);
+          }
+        }
+        Err(kosync::Error::Unauthorized) => break,
+        Err(_) => {}
       }
+    }
+    if let Some(session) = &session {
+      save_state(session, &mut report);
     }
     record(&sent, &mut report);
   }
@@ -599,6 +655,13 @@ mod tests {
     }
   }
 
+  /// The server position `state.json` on the device keeps as the base of
+  /// book A.
+  fn base(options: &Options) -> Option<String> {
+    let session = Session::open(options).unwrap();
+    session.entry(BOOK_A)?.base.map(|b| b.xpointer)
+  }
+
   #[test]
   fn push_sends_and_compare_shows_it() {
     let s = Setup::new("push");
@@ -608,10 +671,13 @@ mod tests {
     assert_eq!(before[BOOK_A].remote, None);
     assert_eq!(before[BOOK_A].outlook, Some(Outlook::Push));
 
+    assert_eq!(base(&s.options), None);
     let report = push(&s.options, Kind::Nickel, &[BOOK_A.to_string()]).unwrap();
     assert_eq!(report.books, [("Book A".to_string(), Outcome::Sent)]);
     assert!(report.questions.is_empty());
     assert_eq!(s.server.puts().len(), 1);
+    // What was sent is the base of the next run.
+    assert_eq!(base(&s.options).as_deref(), Some(XPOINTER));
     assert_eq!(
       s.server.document(&book_hash()).unwrap()["progress"],
       XPOINTER
@@ -649,12 +715,19 @@ mod tests {
     assert_eq!(q.local_xpointer, XPOINTER);
     assert!(s.server.puts().is_empty());
 
-    let report = answer(&s.options, std::mem::take(&mut report.questions)).unwrap();
+    let report = answer(
+      &s.options,
+      Kind::Nickel,
+      std::mem::take(&mut report.questions),
+    )
+    .unwrap();
     assert_eq!(report.books, [("Book A".to_string(), Outcome::Sent)]);
     assert_eq!(
       s.server.document(&book_hash()).unwrap()["progress"],
       XPOINTER
     );
+    // Sent after the answer: the base too.
+    assert_eq!(base(&s.options).as_deref(), Some(XPOINTER));
   }
 
   /// `ChapterIDBookmarked` and `___PercentRead` of book-a.epub.
@@ -802,7 +875,12 @@ mod tests {
     assert!(q.pulls() && q.backwards);
     assert_eq!(row(&s.root), before);
 
-    let report = answer(&s.options, std::mem::take(&mut report.questions)).unwrap();
+    let report = answer(
+      &s.options,
+      Kind::Nickel,
+      std::mem::take(&mut report.questions),
+    )
+    .unwrap();
     assert_eq!(report.books, [("Book A".to_string(), Outcome::Written)]);
     assert!(report.backup.is_some());
     assert_ne!(row(&s.root), before);

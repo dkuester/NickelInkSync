@@ -1053,10 +1053,11 @@ Auf dem Kobo ist das Plugin inaktiv.
   - [ ] **ich (C4):** Plugin wertet `PENDING`/`CONFLICT` aus, ruft
     `sync --pending` bei jedem WLAN auf und schreibt `not_in_line` selbst
     in `state.json` statt in `not-in-line.tsv`.
-  - [ ] **D2:** Der Desktop-Client schreibt die Basis bei „Holen“ schon
-    (über `Session::write`), beim Senden noch nicht
-    (`Session::agreed_sent`, `save_state`); bis dahin fällt ein Buch nach
-    einem Senden aus der GUI auf die Regel „beide bewegt“ zurück.
+  - [x] **D2:** Der Desktop-Client schreibt die Basis bei „Holen“ (über
+    `Session::write`) und jetzt auch beim Senden: nach einem gesendeten
+    Update `Session::agreed_sent`, bei „gleich“ `Session::agreed`, am Ende
+    `save_state`; auch nach einer beantworteten Rückfrage. Der Kindle
+    führt keine Basis.
 - [ ] **C3 Zuordnungen auf dem Gerät** (ersetzt N6; braucht C1)
   - [ ] **ich:** Am Rechner `device prepare`: Index und Übersetzungstabellen
     aufs Gerät, Zuordnungen in beide Richtungen abgleichen (eine am Gerät
