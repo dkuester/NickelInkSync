@@ -1076,14 +1076,14 @@ static void start_cli(const QString &what, const QStringList &args, F done)
 {
     QProcess *p = new QProcess(qApp);
     p->setProcessChannelMode(QProcess::MergedChannels);
-    // Both signals named so they build with Qt 5 too (finished is
-    // overloaded there, errorOccurred came in 5.6).
+    // Both signals named so they build with Qt 5.2 (4.x) too: finished is
+    // overloaded there, and errorOccurred came only in 5.6.
     QObject::connect(p, static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished), p,
                      [p, done](int, QProcess::ExitStatus) {
                          done(p);
                          p->deleteLater();
                      });
-#if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     const auto failed = &QProcess::errorOccurred;
 #else
     const auto failed = static_cast<void (QProcess::*)(QProcess::ProcessError)>(&QProcess::error);
