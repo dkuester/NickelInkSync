@@ -276,21 +276,39 @@ impl Device {
     let db_path = self.db_path();
     let mut conn = Connection::open_with_flags(&db_path, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
     conn.busy_timeout(std::time::Duration::from_secs(5))?;
-    let backup = backups.join(format!("KoboReader-{today}.sqlite"));
-    let made = if backup.exists() {
-      None
-    } else {
-      std::fs::create_dir_all(backups).map_err(|e| Error::Io(backups.to_path_buf(), e))?;
-      let partial = backups.join(format!("KoboReader-{today}.sqlite.part"));
-      conn.backup(rusqlite::MAIN_DB, &partial, None)?;
-      std::fs::rename(&partial, &backup).map_err(|e| Error::Io(backup.clone(), e))?;
-      prune_backups(backups, 2)?;
-      Some(backup)
-    };
+    let made = daily_backup(&conn, backups, today)?;
     let dropped = update_rows(&mut conn, writes)?;
     conn.close().map_err(|(_, e)| e)?;
     Ok((made, dropped))
   }
+
+  /// The day's backup that [`Device::write_live`] makes, without writing:
+  /// for the plugin on a Kobo, which writes the position through Nickel
+  /// itself right after. Returns the backup if it made one.
+  pub fn backup_live(&self, backups: &Path, today: &str) -> Result<Option<PathBuf>, Error> {
+    if !self.live {
+      return Err(Error::Refused(
+        "only while Nickel runs (--live)".into(),
+      ));
+    }
+    daily_backup(&self.db.conn, backups, today)
+  }
+}
+
+/// Keeps one backup per day in `backups` (the two newest stay), made with
+/// SQLite's backup API, which is consistent while Nickel writes. `today`
+/// names it (`20261024`). Returns the backup if it made one.
+fn daily_backup(conn: &Connection, backups: &Path, today: &str) -> Result<Option<PathBuf>, Error> {
+  let backup = backups.join(format!("KoboReader-{today}.sqlite"));
+  if backup.exists() {
+    return Ok(None);
+  }
+  std::fs::create_dir_all(backups).map_err(|e| Error::Io(backups.to_path_buf(), e))?;
+  let partial = backups.join(format!("KoboReader-{today}.sqlite.part"));
+  conn.backup(rusqlite::MAIN_DB, &partial, None)?;
+  std::fs::rename(&partial, &backup).map_err(|e| Error::Io(backup.clone(), e))?;
+  prune_backups(backups, 2)?;
+  Ok(Some(backup))
 }
 
 /// Sets the position of each book in one transaction, all or nothing, and
@@ -334,19 +352,37 @@ fn update_rows(conn: &mut Connection, writes: &[Write]) -> Result<usize, Error> 
 /// chapters keep theirs. Returns how many pages it dropped; 0 without those
 /// tables (older firmware).
 fn drop_stale_pages(tx: &Connection, content_id: &str, position: &str) -> Result<usize, Error> {
-  let has_cache: bool = tx.query_row(
+  let chapter = stale_pages(tx, content_id, position)?;
+  for id in &chapter {
+    tx.execute(
+      "DELETE FROM CachePersistenceRenderedPageChapterData WHERE cachePersistenceRenderedPageDataId = ?1",
+      [id],
+    )?;
+    tx.execute(
+      "DELETE FROM CachePersistenceRenderedPageData WHERE id = ?1",
+      [id],
+    )?;
+  }
+  Ok(chapter.len())
+}
+
+/// The ids (`CachePersistenceRenderedPageData.id`) of the cached pages
+/// [`drop_stale_pages`] drops for `position`: those of its chapter if none
+/// of them holds it, else none.
+fn stale_pages(conn: &Connection, content_id: &str, position: &str) -> Result<Vec<String>, Error> {
+  let has_cache: bool = conn.query_row(
     "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table'
                     AND name = 'CachePersistenceRenderedPageData')",
     [],
     |row| row.get(0),
   )?;
   let Some((file, target)) = split_location(position) else {
-    return Ok(0);
+    return Ok(Vec::new());
   };
   if !has_cache {
-    return Ok(0);
+    return Ok(Vec::new());
   }
-  let mut stmt = tx.prepare(
+  let mut stmt = conn.prepare(
     "SELECT id, pageStartLocation, pageEndLocation FROM CachePersistenceRenderedPageData
      WHERE contentId = ?1",
   )?;
@@ -369,21 +405,11 @@ fn drop_stale_pages(tx: &Connection, content_id: &str, position: &str) -> Result
     }
     if start <= target && target <= end {
       // Nickel finds this page by the place itself.
-      return Ok(0);
+      return Ok(Vec::new());
     }
     chapter.push(id);
   }
-  for id in &chapter {
-    tx.execute(
-      "DELETE FROM CachePersistenceRenderedPageChapterData WHERE cachePersistenceRenderedPageDataId = ?1",
-      [id],
-    )?;
-    tx.execute(
-      "DELETE FROM CachePersistenceRenderedPageData WHERE id = ?1",
-      [id],
-    )?;
-  }
-  Ok(chapter.len())
+  Ok(chapter)
 }
 
 /// A location's chapter file and the numbers after it, to compare places in
@@ -616,6 +642,13 @@ impl DeviceDb {
     )?;
     conn.busy_timeout(std::time::Duration::from_secs(5))?;
     Ok(DeviceDb { conn })
+  }
+
+  /// The cached pages Nickel would open `content_id` from instead of at
+  /// `position` (see [`drop_stale_pages`]), for the plugin to drop inside
+  /// the transaction it writes the position in.
+  pub fn stale_pages(&self, content_id: &str, position: &str) -> Result<Vec<String>, Error> {
+    stale_pages(&self.conn, content_id, position)
   }
 
   /// Wraps an open connection, for tests with an in-memory database.

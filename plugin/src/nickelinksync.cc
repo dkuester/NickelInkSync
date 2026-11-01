@@ -1,66 +1,84 @@
 /*
  * NickelInkSync plugin: pull the reading position from a KOSync server when a
- * sideloaded book is opened, push it when the book is left (firmware 5.18+,
- * Qt 6.5.2; Tolino Shine Color 5.18.264769).
+ * sideloaded book is opened, push it when the book is left (Qt 6.5.2; Kobo
+ * firmware 6.0.279225 and Tolino Shine Color 5.18.264769).
  *
  * The plugin has no sync logic of its own. It calls the nickelinksync CLI in
  * /mnt/onboard/.adds/NickelInkSync/ with the configuration next to it, which
  * reads the device database (read-only while Nickel runs, `--live`), talks to
- * the server and applies the conflict rule.
+ * the server and applies the conflict rule, with the base each book last
+ * agreed with the server on and the pending list in state.json
+ * (src/state.rs).
  *
- * Opening (ReadingController::setVolume(Volume const&, Bookmark const&)):
- *   Before Nickel opens the book, the plugin switches Wi-Fi on (silently,
- *   at most kOpenWifiMs), asks the CLI (`pull --live --write --emit`), which
- *   writes a position to take into the book's row in the database Nickel
- *   holds open (SQLite locking, one backup a day), and hands Nickel a copy
- *   of the Volume with that position (Content::setChapterIdBookmarked,
- *   setPercentRead), and sets the same on the Volume Nickel passed in.
- *   Nickel takes the chapter from that Volume and the place in the chapter
- *   from the row it loads again (VolumeManager::getById in
- *   ReadingView::setupReader), so they have to agree; and within the chapter
- *   Nickel last saved it opens at the chapter start unless its own Volume
- *   has the new position as well. Only for sideloaded
- *   books opened without a bookmark (not a link or a search result).
+ * Opening (ReadingController::setVolume(Volume const&, Bookmark const&)),
+ * only for sideloaded books opened without a bookmark (not a link or a
+ * search result): before Nickel opens the book, the plugin switches Wi-Fi on
+ * (silently, at most kOpenWifiMs) and asks the CLI. How a position to take
+ * gets into the book differs:
  *
- *   Device tests showed the other ways fail on the Tolino: changing the
- *   loaded Volumes alone gets only the chapter across, and
- *   ReadingView::goToBookmark with a changed bookmark leaves Nickel where it
- *   is (docs/nickel-5.18-symbols.md).
+ *   Kobo: the CLI only decides (`pull --live --nickel-writes --emit`) and
+ *   makes the day's backup of the database; the plugin writes the position
+ *   through Nickel itself, as the reader Kobalt does (MIT,
+ *   github.com/nicoverbruggen/kobalt, platforms/kobo/qt6/native_progress.cpp;
+ *   the order of the calls, no code taken over): in one of Nickel's
+ *   transactions VolumeManager::getById, updateBookmark, setPercentRead and
+ *   updateFields with the changed columns, which also updates Nickel's
+ *   Volume cache. In the same transaction it drops the cached pages the CLI
+ *   names (NICKELINKSYNC_STALE_PAGES): when none of them holds the place,
+ *   Nickel would open at the chapter start on the first opening after a
+ *   start (docs/nickel-6.0-symbols.md). Nickel then gets a fresh Volume
+ *   from getById, and once the transaction committed the book's base goes
+ *   into state.json (NICKELINKSYNC_BASE).
+ *
+ *   Tolino (until stage C7 decides): the CLI writes the position into the
+ *   book's row in the database Nickel holds open (`pull --live --write
+ *   --emit`, SQLite locking, one backup a day) and drops those pages; the
+ *   plugin hands Nickel a copy of the Volume with that position
+ *   (Content::setChapterIdBookmarked, setPercentRead), and sets the same on
+ *   the Volume Nickel passed in. Nickel takes the chapter from that Volume
+ *   and the place in the chapter from the row it loads again, so they have
+ *   to agree (docs/nickel-5.18-symbols.md).
+ *
+ *   A conflict (both sides moved since the base, NICKELINKSYNC_CONFLICT) is
+ *   only reported for now and left alone; the book is not pushed on leaving.
  *
  * Leaving (ReadingView::leavingReadingExperience()):
  *   The original saves the position (saveProgress); after it returns, the CLI
  *   pushes that book in the background (`push --live --emit`, an
- *   asynchronous QProcess whose output goes to the log), once Wi-Fi is up.
- *   Leaving never waits for it. Not on the page the server's position was
- *   taken on: Nickel saves that page's start, which lies before the
- *   server's point, so the push would only ask. Not
- *   while the background pull of that book still runs: then the reading view
- *   was only covered (a dialog), and its position is about to change. And
- *   never a book on the not-in-line list (kNotInLine): Nickel opened it
- *   elsewhere than at the pulled position, which also survives a restart;
- *   the CLI refuses the push and takes the server's position on the next
- *   pull (src/not_in_line.rs). And
- *   not when the book was opened without a pull (no network), or Nickel did
- *   not open the pulled chapter: the device position would then overwrite a
- *   newer one on the server (device test).
+ *   asynchronous QProcess whose output goes to the log), once Wi-Fi is up
+ *   or kWifiLeaveWaitS passed. Without a network or on a server error the
+ *   CLI keeps the book on the pending list (NICKELINKSYNC_PENDING). A book
+ *   opened without asking the server (no network) is pushed the same way if
+ *   its position moved, else nothing is sent. Leaving never waits for it.
+ *   Not on the page the server's position was taken on: Nickel saves that
+ *   page's start, which lies before the server's point, so the push would
+ *   only ask. Not while the background pull of that book still runs. And a
+ *   book Nickel opened elsewhere than at the pulled position gets
+ *   `not_in_line` in state.json: the CLI does not push it and takes the
+ *   server's position on the next pull.
+ *
+ * Pending list: whenever the server answered (a pull on opening, a push on
+ * leaving) and state.json holds pending books, `sync --pending --live --emit`
+ * sends them in the background.
+ *
+ * Not prepared: without the library index from `nickelinksync device
+ * prepare` (on the computer) the CLI sends nothing (NICKELINKSYNC_NO_INDEX);
+ * the plugin says so once per start. A kepub without a mapping never syncs.
  *
  * Network: Nickel switches Wi-Fi off when idle. The plugin asks it to connect
  * without a dialog (WirelessWorkflowManager::connectWireless(false, true),
  * which is what connectWirelessSilently() calls). Opening waits for it in a
- * local event loop, so the UI keeps running. Leaving does not wait; if the
- * silent attempt brings no network within kSilentWifiS, it asks again with
- * Nickel's own Wi-Fi dialog (connectWireless(false, false)), where the
- * reader can pick a network.
+ * local event loop, so the UI keeps running; leaving does not wait.
  *
  * Messages: each outcome is shown as one of Nickel's toasts
  * (MainWindowController::toast), German only for now; `notify` in config.ini
  * picks which: `all` (default), `errors` (only what went wrong or was left
  * undone) or `none`. The CLI names the outcome in `NICKELINKSYNC_…` lines.
  *
- * Kobalt: while the reader Kobalt (github.com/nicoverbruggen/kobalt) is
- * installed, both hooks only call the originals: Kobalt writes the reading
- * positions into Nickel's database itself and may sync with KOSync itself.
- * Checked in init() and whenever a book is opened or left, as src/kobalt.rs
+ * Kobalt: while the reader Kobalt is installed, every entry point only calls
+ * the originals: Kobalt writes the reading positions into Nickel's database
+ * itself and may sync with KOSync itself. Checked in init() and whenever a
+ * book is opened or left or the pending list is sent, as src/kobalt.rs
  * decides on the device: its library in Nickel's plugin folder (or moved
  * aside by NickelHook for the first seconds after a start), its file
  * `uninstall` and no `uninstall-now`. Once found, it stays found until
@@ -69,11 +87,11 @@
  * Nickel's reader (with Kobalt as the default reader Nickel's own is not
  * used); `ignore-kobalt` next to the CLI syncs anyway (tests).
  *
- * Symbols and signatures: docs/nickel-5.18-symbols.md.
+ * Symbols and signatures: docs/nickel-6.0-symbols.md (Kobo 6.0, the write
+ * path) and docs/nickel-5.18-symbols.md (Tolino 5.18).
  *
- * Tolino only for now: init() leaves the plugin inactive on a Kobo (the
- * position formats differ, see SCOPE.md), and without the CLI or config.ini.
- * Log: NickelInkSync.log next to the CLI.
+ * Inactive without the CLI or config.ini, and on a Kobo without Nickel's
+ * write path. Log: NickelInkSync.log next to the CLI.
  */
 
 #include <NickelHook.h>
@@ -84,14 +102,22 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLocale>
 #include <QMap>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QSqlDatabase>
+#include <QSqlError>
+#include <QSqlQuery>
 #include <QString>
 #include <QVariant>
 #include <QStringList>
 #include <QTimer>
+
+#include <cstdio>
+#include <unistd.h>
 
 typedef void Device;
 typedef void Volume;
@@ -101,16 +127,19 @@ typedef void ReadingView;
 typedef void WirelessWorkflowManager;
 typedef void MainWindowController;
 typedef void ContentLocation;
+typedef void Repository;
 
 static const char kDir[]    = "/mnt/onboard/.adds/NickelInkSync";
 static const char kCli[]    = "/mnt/onboard/.adds/NickelInkSync/nickelinksync";
 static const char kConfig[] = "/mnt/onboard/.adds/NickelInkSync/config.ini";
 static const char kLog[]    = "/mnt/onboard/.adds/NickelInkSync/NickelInkSync.log";
 static const char kBackups[] = "/mnt/onboard/.adds/NickelInkSync/backups";
-// Books Nickel did not open at the pulled position (src/not_in_line.rs):
-// `ContentID<tab>where Nickel opened` per line. The CLI never pushes them
-// and takes the server's position on the next pull.
-static const char kNotInLine[] = "/mnt/onboard/.adds/NickelInkSync/not-in-line.tsv";
+// Per book its base, `not_in_line` (where Nickel opened instead of the
+// pulled position: never pushed, the next pull takes the server's) and
+// `pending` (src/state.rs). The CLI writes it too; both re-read it and
+// change only their own book, then replace it (tmp file and rename).
+static const char kState[] = "/mnt/onboard/.adds/NickelInkSync/state.json";
+static const int kStateVersion = 1;
 // Kobalt (src/kobalt.rs): installed while its library is in place and
 // `uninstall` exists without `uninstall-now`. With kIgnoreKobalt the plugin
 // syncs anyway; kKobaltNoticed marks that the toast about it was shown.
@@ -127,11 +156,11 @@ static const qint64 kLogMaxBytes = 128 * 1024;
 // whole (CLI start, database, backup, hash, two requests).
 static const char kPullTimeout[] = "5";
 static const int kPullWaitMs = 15000;
-// How long opening waits for Wi-Fi; how long leaving waits in the
-// background, the first kSilentWifiS without a dialog.
-static const int kOpenWifiMs = 10000;
-static const int kWifiLeaveWaitS = 60;
-static const int kSilentWifiS = 15;
+// How long opening waits for Wi-Fi (Nickel's own check is slow to report
+// it, so the CLI tries anyway); how long leaving waits in the background
+// before it pushes anyway, which keeps the book pending without a network.
+static const int kOpenWifiMs = 3000;
+static const int kWifiLeaveWaitS = 15;
 // A Volume is 12 bytes in 5.18 (vtable, shared data, flags; see the copy
 // constructor), a Bookmark 8 (vtable, shared data). Room to spare.
 static const size_t kVolumeBytes = 64;
@@ -153,9 +182,12 @@ static const int kOpenToastDelayMs = 1000;
 // How long after init() the toast about Kobalt is shown: Nickel's home
 // screen is up by then.
 static const int kKobaltToastDelayMs = 20000;
-// Seconds per request for push, and when the plugin gives up on it.
+// Seconds per request for push and the pending list, and when the plugin
+// gives up on them.
 static const char kPushTimeout[] = "15";
 static const int kPushWaitMs = 60000;
+// How long after opening the pending list is sent: the book is drawn by then.
+static const int kPendingDelayMs = 5000;
 
 // Originals, filled by NickelHook (.out).
 static void (*ReadingController__setVolume)(ReadingController *, const Volume *, const Bookmark *);
@@ -197,6 +229,22 @@ static void (*MainWindowController__toast)(MainWindowController *, const QString
 static void (*VolumeManager__getById)(Volume *result, const QString &id, const QString &db);
 static bool (*Volume__isValid)(const Volume *);
 static QMap<QString, QVariant> (*Content__getDbValues)(const Volume *);
+// Optional, required on a Kobo: Nickel's own write path
+// (docs/nickel-6.0-symbols.md, "Kobalt's write path"). getDbName returns a
+// reference; ContentLocation::create returns its 8 bytes by value (hidden
+// result pointer in r0) and takes both strings by value.
+static const QString &(*Device__getDbName)(const Device *);
+static bool (*DatabaseAdapter__beginTransaction)(QString);
+static bool (*DatabaseAdapter__endTransaction)(QString, bool);
+static QSqlDatabase (*DatabaseAdapter__dbConnection)(const QString &, bool);
+static QMap<QString, QVariant> (*Volume__getDbValues)(const Volume *);
+static void (*ContentLocation__create)(ContentLocation *result, QString position, QString spine);
+static bool (*ContentLocation__isValid)(const ContentLocation *);
+static void (*ContentLocation__dtor)(ContentLocation *);
+static void (*VolumeManager__updateBookmark)(Volume *, const QString &, int, const QDateTime &, int);
+static bool (*VolumeManager__updateFields)(const QString &, const QMap<QString, QVariant> &,
+                                           const QMap<QString, QVariant> &, const QString &);
+static Repository *(*Repository__refreshCache_Volume)(const QString &);
 
 // `notify` in config.ini.
 enum class Notify { All, Errors, None };
@@ -204,14 +252,22 @@ static Notify g_notify = Notify::All;
 
 // Set at the end of a successful init(); every hook passes through until then.
 static bool g_active = false;
+// A Kobo: positions are written through Nickel (a Tolino: by the CLI).
+static bool g_kobo = false;
 // Kobalt was found installed: every hook passes through until Nickel
 // restarts.
 static bool g_kobalt = false;
 // ContentID of the book opened last (GUI thread only).
 static QString g_open_id;
-// The book that was not brought in line with the server when it was
-// opened, or whose pulled chapter Nickel did not open: not pushed.
+// The book whose position needs an answer (a conflict) or cannot be taken
+// from the server, or that was not brought in line with it: not pushed.
 static QString g_not_synced;
+// The book opened without asking the server (no network, a server error)
+// and its position then: pushed on leaving only if that moved.
+static QString g_unasked_id;
+static QString g_unasked_at;
+// The toast about a device without `device prepare` was shown.
+static bool g_no_index_noticed = false;
 // The page Nickel opened a book on after taking the server's position
 // (its start, as Nickel saves it), and that book. Leaving on that page
 // sends nothing: the page start lies before the server's point, and the
@@ -330,10 +386,13 @@ static QString skip_reason(const QByteArray &reason)
     if (reason == "not-translated") {
         return QStringLiteral("Position passt nicht zum Buch");
     }
-    // On the device there are no mappings, so only a kepub is "not mapped":
-    // it syncs only through its original EPUB, from the computer.
+    // Only an original from the library index (`device prepare`) or a
+    // mapped book syncs; a kepub always needs a mapping.
     if (reason == "not-mapped") {
-        return QStringLiteral("kepub ohne Zuordnung");
+        return QStringLiteral("Buch nicht zugeordnet");
+    }
+    if (reason == "no-table") {
+        return QStringLiteral("Zuordnung nicht vorbereitet");
     }
     return QStringLiteral("Buch oder Position nicht lesbar");
 }
@@ -433,11 +492,10 @@ static bool wait_online(int ms)
 }
 
 // Runs `fn` once the network is there, polling once a second for at most
-// `seconds`, without waiting; `failed` if it never comes. Silently first,
-// after kSilentWifiS with Nickel's Wi-Fi dialog. Without the Wi-Fi symbols
-// it just tries.
-template <typename F, typename G>
-static void when_online(int seconds, F fn, G failed)
+// `seconds` without waiting, and then anyway: the CLI keeps the book
+// pending when it cannot reach the server. Connects silently, no dialog.
+template <typename F>
+static void when_online(int seconds, F fn)
 {
     if (online() || !connect_wifi(true)) {
         fn();
@@ -445,18 +503,15 @@ static void when_online(int seconds, F fn, G failed)
     }
     log_line(QStringLiteral("no network: switching Wi-Fi on, waiting up to %1 s").arg(seconds));
     QTimer *t = new QTimer(qApp);
-    QObject::connect(t, &QTimer::timeout, t, [t, fn, failed, seconds, n = 0]() mutable {
+    QObject::connect(t, &QTimer::timeout, t, [t, fn, seconds, n = 0]() mutable {
         if (online()) {
             t->deleteLater();
             log_line(QStringLiteral("network is there after %1 s").arg(n + 1));
             fn();
-        } else if (++n == kSilentWifiS) {
-            log_line(QStringLiteral("no network after %1 s: showing Nickel's Wi-Fi dialog").arg(n));
-            connect_wifi(false);
-        } else if (n >= seconds) {
+        } else if (++n >= seconds) {
             t->deleteLater();
-            log_line(QStringLiteral("still no network after %1 s").arg(seconds));
-            failed();
+            log_line(QStringLiteral("still no network after %1 s: trying anyway").arg(seconds));
+            fn();
         }
     });
     t->start(1000);
@@ -485,34 +540,111 @@ static QString chapter_of(const QString &position)
     return position.section(QLatin1Char('#'), 0, 0);
 }
 
+// Reads state.json; an empty object if it is missing. False if it cannot
+// be read or is newer than this plugin knows (the CLI refuses it too).
+static bool read_state(QJsonObject *root)
+{
+    QFile f(QString::fromLatin1(kState));
+    if (!f.exists()) {
+        *root = QJsonObject();
+        return true;
+    }
+    if (!f.open(QIODevice::ReadOnly)) {
+        log_line(QStringLiteral("could not read %1: %2").arg(QString::fromLatin1(kState), f.errorString()));
+        return false;
+    }
+    QJsonParseError error;
+    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &error);
+    if (error.error != QJsonParseError::NoError || !doc.isObject()) {
+        log_line(QStringLiteral("could not read %1: %2").arg(QString::fromLatin1(kState), error.errorString()));
+        return false;
+    }
+    *root = doc.object();
+    if (root->value(QStringLiteral("version")).toInt() > kStateVersion) {
+        log_line(QStringLiteral("%1 has a newer format: left alone").arg(QString::fromLatin1(kState)));
+        return false;
+    }
+    return true;
+}
+
+// Changes the entry of one book in state.json as the CLI does
+// (src/state.rs): read it again, change only this book (an entry without
+// base, not_in_line and pending goes), write a tmp file and rename it.
+template <typename F>
+static bool update_state(const QString &id, F change)
+{
+    QJsonObject root;
+    if (!read_state(&root)) {
+        return false;
+    }
+    QJsonObject books = root.value(QStringLiteral("books")).toObject();
+    QJsonObject entry = books.value(id).toObject();
+    change(entry);
+    if (entry.contains(QStringLiteral("base")) || entry.contains(QStringLiteral("not_in_line"))
+        || entry.contains(QStringLiteral("pending"))) {
+        books.insert(id, entry);
+    } else {
+        books.remove(id);
+    }
+    root.insert(QStringLiteral("version"), kStateVersion);
+    root.insert(QStringLiteral("books"), books);
+    const QString tmp = QStringLiteral("%1/.state.json.%2.tmp").arg(QString::fromLatin1(kDir)).arg(getpid());
+    QFile f(tmp);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)
+        || f.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0 || !f.flush()) {
+        log_line(QStringLiteral("could not write %1: %2").arg(tmp, f.errorString()));
+        f.remove();
+        return false;
+    }
+    fsync(f.handle());
+    f.close();
+    if (std::rename(QFile::encodeName(tmp).constData(), kState) != 0) {
+        log_line(QStringLiteral("could not replace %1").arg(QString::fromLatin1(kState)));
+        QFile::remove(tmp);
+        return false;
+    }
+    return true;
+}
+
 // Puts a book on the not-in-line list with the place Nickel opened it at,
 // or with an empty `at` takes it off.
 static void set_not_in_line(const QString &id, const QString &at)
 {
-    QFile f(QString::fromLatin1(kNotInLine));
-    QStringList lines;
-    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        for (const QString &line : QString::fromUtf8(f.readAll()).split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
-            if (line.section(QLatin1Char('\t'), 0, 0) != id) {
-                lines << line;
-            }
+    update_state(id, [&at](QJsonObject &entry) {
+        if (at.isEmpty()) {
+            entry.remove(QStringLiteral("not_in_line"));
+        } else {
+            entry.insert(QStringLiteral("not_in_line"), at);
         }
-        f.close();
+    });
+}
+
+// Nickel committed the position the CLI chose: its base (the CLI's
+// NICKELINKSYNC_BASE object) is what the book now agrees with the server
+// on. As in the CLI, that ends not_in_line and pending.
+static bool set_base(const QString &id, const QJsonObject &base)
+{
+    return update_state(id, [&base](QJsonObject &entry) {
+        entry.insert(QStringLiteral("base"), base);
+        entry.remove(QStringLiteral("not_in_line"));
+        entry.remove(QStringLiteral("pending"));
+    });
+}
+
+// Whether state.json holds a book to send.
+static bool has_pending()
+{
+    QJsonObject root;
+    if (!read_state(&root)) {
+        return false;
     }
-    if (!at.isEmpty()) {
-        lines << id + QLatin1Char('\t') + at;
-    }
-    if (lines.isEmpty()) {
-        if (f.exists()) {
-            f.remove();
+    const QJsonObject books = root.value(QStringLiteral("books")).toObject();
+    for (auto it = books.constBegin(); it != books.constEnd(); ++it) {
+        if (it.value().toObject().contains(QStringLiteral("pending"))) {
+            return true;
         }
-        return;
     }
-    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
-        f.write((lines.join(QLatin1Char('\n')) + QLatin1Char('\n')).toUtf8());
-    } else {
-        log_line(QStringLiteral("could not write %1: %2").arg(QString::fromLatin1(kNotInLine), f.errorString()));
-    }
+    return false;
 }
 
 // The node path of a position (`…#point(/1/4/100/1:101)` → 1, 4, 100, 1).
@@ -651,13 +783,41 @@ static QMap<QString, QVariant> g_open_row;
 // The common arguments for one book: device, configuration, book, live.
 static QStringList book_args(const char *command, const QString &id)
 {
-    return QStringList{
+    QStringList args{
         QString::fromLatin1(command),
         QStringLiteral("--live"),
         QStringLiteral("--device"), QString::fromLatin1(kOnboard),
         QStringLiteral("--config"), QString::fromLatin1(kConfig),
-        QStringLiteral("--content-id"), id,
     };
+    if (!id.isEmpty()) {
+        args << QStringLiteral("--content-id") << id;
+    }
+    return args;
+}
+
+// A device without `device prepare`: the CLI sends nothing. Said once per
+// start (the log has every time).
+static void notice_no_index(const QByteArray &out)
+{
+    const QList<QList<QByteArray>> lines = machine_lines(out, "NO_INDEX");
+    log_line(QStringLiteral("not prepared: %1").arg(QString::fromUtf8(lines.value(0).value(0))));
+    if (g_no_index_noticed) {
+        return;
+    }
+    g_no_index_noticed = true;
+    toast(true, QStringLiteral("Gerät nicht vorbereitet"), QStringLiteral("Am Rechner „Gerät vorbereiten“"));
+}
+
+// NICKELINKSYNC_CONFLICT (ContentID, why, device percent, time, position,
+// server percent, time, device, XPointer), for the log; the dialog that
+// answers it comes later (stage C5).
+static void log_conflicts(const QByteArray &out)
+{
+    for (const QList<QByteArray> &f : machine_lines(out, "CONFLICT")) {
+        log_line(QStringLiteral("conflict (%1), left alone: device %2 % at %3, server %4 % from %5")
+                     .arg(QString::fromUtf8(f.value(1)), QString::fromUtf8(f.value(2)), QString::fromUtf8(f.value(4)),
+                          QString::fromUtf8(f.value(5)), QString::fromUtf8(f.value(7))));
+    }
 }
 
 struct Pulled {
@@ -668,6 +828,8 @@ struct Pulled {
     QByteArray error_kind;
     // A position would need an answer the plugin cannot give.
     bool unanswered = false;
+    // Both sides moved since the base (NICKELINKSYNC_CONFLICT).
+    bool conflict = false;
     // The server's position cannot be taken (NICKELINKSYNC_NOT_TAKEN): why.
     QByteArray not_taken;
     bool found = false;
@@ -675,17 +837,23 @@ struct Pulled {
     QByteArray position;
     // Who stored it on the server.
     QString from;
+    // Kobo (--nickel-writes): DateLastRead to set (empty: keep), the cached
+    // pages to drop, and the base to keep once Nickel committed.
+    QString last_read;
+    QStringList stale_pages;
+    QJsonObject base;
 };
 
-// Runs `pull --live --write --emit` for one book and waits for it: the CLI
-// writes a position to take into the database and prints it as
-// `NICKELINKSYNC_POSITION<tab>percent<tab>position`. Found only if it also
-// wrote it (exit 0).
-static Pulled pull_and_write(const QString &id)
+// Runs the pull for one book and waits for it: on a Kobo `pull --live
+// --nickel-writes --emit`, which only decides and makes the day's backup,
+// on a Tolino `pull --live --write --emit`, which also writes. Both print
+// a position to take as `NICKELINKSYNC_POSITION<tab>percent<tab>position`.
+// Found only if the CLI finished with exit 0.
+static Pulled pull(const QString &id)
 {
     Pulled result;
     QStringList args = book_args("pull", id);
-    args << QStringLiteral("--write") << QStringLiteral("--emit")
+    args << (g_kobo ? QStringLiteral("--nickel-writes") : QStringLiteral("--write")) << QStringLiteral("--emit")
          << QStringLiteral("--timeout") << QString::fromLatin1(kPullTimeout);
     QProcess p;
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
@@ -718,6 +886,8 @@ static Pulled pull_and_write(const QString &id)
     }
     result.ok = true;
     result.unanswered = !machine_lines(out, "UNANSWERED").isEmpty();
+    result.conflict = !machine_lines(out, "CONFLICT").isEmpty();
+    log_conflicts(out);
     const QList<QList<QByteArray>> not_taken = machine_lines(out, "NOT_TAKEN");
     if (!not_taken.isEmpty()) {
         result.not_taken = not_taken[0].value(0);
@@ -735,7 +905,195 @@ static Pulled pull_and_write(const QString &id)
     if (!from.isEmpty()) {
         result.from = QString::fromUtf8(from[0].value(0));
     }
+    const QList<QList<QByteArray>> last_read = machine_lines(out, "LAST_READ");
+    if (!last_read.isEmpty()) {
+        result.last_read = QString::fromUtf8(last_read[0].value(0));
+    }
+    const QList<QList<QByteArray>> stale = machine_lines(out, "STALE_PAGES");
+    for (const QByteArray &page : stale.value(0)) {
+        if (!page.isEmpty()) {
+            result.stale_pages << QString::fromUtf8(page);
+        }
+    }
+    const QList<QList<QByteArray>> base = machine_lines(out, "BASE");
+    if (!base.isEmpty()) {
+        result.base = QJsonDocument::fromJson(base[0].value(0)).object();
+    }
+    if (g_kobo && result.found && stale.isEmpty()) {
+        // Nickel's write path needs the CLI's whole hand-over.
+        log_line(QStringLiteral("pull: the CLI named no cached pages (too old?): not taken"));
+        result.found = false;
+        result.not_taken = "other";
+    }
     return result;
+}
+
+// Kobo: whether Nickel's write path is there (all optional symbols).
+static bool can_write_through_nickel()
+{
+    return Device__getDbName && DatabaseAdapter__beginTransaction && DatabaseAdapter__endTransaction
+        && DatabaseAdapter__dbConnection && Volume__getDbValues && ContentLocation__create && ContentLocation__isValid
+        && ContentLocation__dtor && VolumeManager__updateBookmark && VolumeManager__updateFields
+        && Repository__refreshCache_Volume && VolumeManager__getById && Volume__isValid;
+}
+
+// Drops the cached pages `ids` on Nickel's connection, inside its open
+// transaction (the rule of drop_stale_pages in src/db.rs, applied by the
+// CLI). False on a database error.
+static bool drop_pages(const QString &db, const QStringList &ids)
+{
+    QSqlDatabase conn = DatabaseAdapter__dbConnection(db, false);
+    for (const QString &id : ids) {
+        for (const char *sql : {"DELETE FROM CachePersistenceRenderedPageChapterData WHERE cachePersistenceRenderedPageDataId = ?",
+                                "DELETE FROM CachePersistenceRenderedPageData WHERE id = ?"}) {
+            QSqlQuery q(conn);
+            q.prepare(QString::fromLatin1(sql));
+            q.addBindValue(id);
+            if (!q.exec()) {
+                log_line(QStringLiteral("dropping cached page %1: %2").arg(id, q.lastError().text()));
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+// Kobo: writes the pulled position into the book's row through Nickel, in
+// one of its transactions, and drops the cached pages that would hide it.
+// The order of the calls follows Kobalt (see the top of this file). Rolls
+// back and reloads Nickel's Volume cache on any failure; false then.
+static bool write_through_nickel(const QString &id, const Pulled &p)
+{
+    const QString db = Device__getDbName(Device__getCurrentDevice());
+    const QString position = QString::fromUtf8(p.position);
+    // Nickel has to read the place back as it is.
+    alignas(8) unsigned char location[kBookmarkBytes];
+    ContentLocation__create(location, position, QString());
+    const bool valid = ContentLocation__isValid(location);
+    const QString serialized = valid ? ContentLocation__toString(location) : QString();
+    ContentLocation__dtor(location);
+    if (!valid || serialized != position) {
+        log_line(QStringLiteral("write: Nickel does not take %1 as a place (%2)").arg(position, serialized));
+        return false;
+    }
+    if (!DatabaseAdapter__beginTransaction(db)) {
+        log_line(QStringLiteral("write: Nickel has a transaction open, nothing written"));
+        return false;
+    }
+    alignas(8) unsigned char volume[kVolumeBytes];
+    VolumeManager__getById(volume, id, db);
+    bool ok = Volume__isValid(volume);
+    QMap<QString, QVariant> changed;
+    if (ok) {
+        const QMap<QString, QVariant> before = Volume__getDbValues(volume);
+        QDateTime when = QDateTime::fromString(p.last_read, Qt::ISODate);
+        if (!when.isValid()) {
+            // Keep DateLastRead as it is, as the CLI's --write does.
+            when = QDateTime::fromString(before.value(QStringLiteral("DateLastRead")).toString(), Qt::ISODate);
+        }
+        if (!when.isValid()) {
+            when = QDateTime::currentDateTimeUtc();
+        }
+        VolumeManager__updateBookmark(volume, serialized, before.value(QStringLiteral("adobe_location")).toInt(), when,
+                                      0);
+        Content__setPercentRead(volume, QVariant(p.percent));
+        const QMap<QString, QVariant> after = Volume__getDbValues(volume);
+        for (auto it = after.constBegin(); it != after.constEnd(); ++it) {
+            if (it.value() != before.value(it.key())) {
+                changed.insert(it.key(), it.value());
+            }
+        }
+        log_line(QStringLiteral("write: changed %1").arg(row_diff(before, after)));
+    } else {
+        log_line(QStringLiteral("write: %1 is not in Nickel's database").arg(id));
+    }
+    Volume__dtor(volume);
+    ok = ok && VolumeManager__updateFields(id, changed, {{QStringLiteral("ContentID"), id}}, db);
+    ok = ok && drop_pages(db, p.stale_pages);
+    const bool committed = DatabaseAdapter__endTransaction(db, ok);
+    if (!ok || !committed) {
+        log_line(QStringLiteral("write: rolled back (written %1, committed %2)").arg(ok).arg(committed));
+        Repository__refreshCache_Volume(db);
+        return false;
+    }
+    log_line(QStringLiteral("write: %1 through Nickel, %2 cached page(s) dropped").arg(position).arg(p.stale_pages.size()));
+    return true;
+}
+
+// What a finished `sync --pending` means, for the log and the message.
+static void pending_finished(QProcess *p)
+{
+    const QByteArray out = p->readAll();
+    log_line(QStringLiteral("sync --pending (exit %1):\n%2").arg(p->exitCode()).arg(QString::fromUtf8(out).trimmed()));
+    if (!machine_lines(out, "NO_INDEX").isEmpty()) {
+        notice_no_index(out);
+        return;
+    }
+    log_conflicts(out);
+    int sent = 0, conflicts = 0;
+    for (const QList<QByteArray> &f : machine_lines(out, "PENDING")) {
+        if (f.value(1) == "sent") {
+            ++sent;
+        } else if (f.value(1) == "conflict") {
+            ++conflicts;
+        }
+    }
+    if (sent > 0) {
+        toast(false, QStringLiteral("Vorgemerktes gesendet"),
+              sent == 1 ? QStringLiteral("1 Buch") : QStringLiteral("%1 Bücher").arg(sent));
+    }
+    if (conflicts > 0) {
+        toast(true, QStringLiteral("Vorgemerkt: Konflikt"), QStringLiteral("Server und Gerät bewegt, bleibt liegen"));
+    }
+}
+
+// Runs a CLI command in the background and returns at once; `done` gets
+// it when it finished (also after kPushWaitMs, when it is ended).
+template <typename F>
+static void start_cli(const QString &what, const QStringList &args, F done)
+{
+    QProcess *p = new QProcess(qApp);
+    p->setProcessChannelMode(QProcess::MergedChannels);
+    QObject::connect(p, &QProcess::finished, p, [p, done](int, QProcess::ExitStatus) {
+        done(p);
+        p->deleteLater();
+    });
+    QObject::connect(p, &QProcess::errorOccurred, p, [p, what](QProcess::ProcessError error) {
+        if (error == QProcess::FailedToStart) {
+            log_line(QStringLiteral("%1: could not start the CLI: %2").arg(what, p->errorString()));
+            toast(true, QStringLiteral("NickelInkSync startet nicht"), QStringLiteral("Siehe NickelInkSync.log"));
+            p->deleteLater();
+        }
+    });
+    // A run that hangs is ended; finished() then reports it.
+    QTimer::singleShot(kPushWaitMs, p, [p, what] {
+        if (p->state() != QProcess::NotRunning) {
+            log_line(QStringLiteral("%1: no answer within %2 s, ended").arg(what).arg(kPushWaitMs / 1000));
+            p->kill();
+        }
+    });
+    p->start(QString::fromLatin1(kCli), args);
+}
+
+// One `sync --pending` at a time.
+static bool g_pending_running = false;
+
+// Sends the pending list in the background, if state.json has one; called
+// whenever the server answered.
+static void sync_pending()
+{
+    if (!g_active || kobalt_blocks() || g_pending_running || !has_pending()) {
+        return;
+    }
+    log_line(QStringLiteral("sync --pending"));
+    g_pending_running = true;
+    QStringList args = book_args("sync", QString());
+    args << QStringLiteral("--pending") << QStringLiteral("--emit") << QStringLiteral("--timeout")
+         << QString::fromLatin1(kPushTimeout);
+    start_cli(QStringLiteral("sync --pending"), args, [](QProcess *p) {
+        g_pending_running = false;
+        pending_finished(p);
+    });
 }
 
 extern "C" __attribute__((visibility("default")))
@@ -753,6 +1111,7 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     const QString id = Content__getId(volume, QString());
     g_open_id = id;
     g_not_synced.clear();
+    g_unasked_id.clear();
     g_taken_id.clear();
     g_taken_page.clear();
     if (!id.startsWith(QString::fromLatin1(kSideloaded))) {
@@ -768,8 +1127,6 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
         ReadingController__setVolume(self, volume, bookmark);
         return;
     }
-    // Until the server's position is known, this book is not in line with it.
-    g_not_synced = id;
     // isInternetAccessible() only reports Nickel's own connectivity check:
     // it stayed false for 10 s with Wi-Fi connected (device test). So it
     // only decides how long to wait; the CLI always tries, and fails fast
@@ -778,9 +1135,13 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     if (!wifi) {
         log_line(QStringLiteral("Nickel reports no internet; trying anyway"));
     }
-    const Pulled p = pull_and_write(id);
+    const Pulled p = pull(id);
     if (!p.ok) {
-        log_line(QStringLiteral("open %1 unchanged: the server could not be asked; leaving it will not push").arg(id));
+        // Pushed on leaving only if the position moved; without a network
+        // the CLI then keeps it pending.
+        g_unasked_id = id;
+        g_unasked_at = g_open_row.value(QStringLiteral("ChapterIDBookmarked")).toString();
+        log_line(QStringLiteral("open %1 unchanged: the server could not be asked").arg(id));
         ReadingController__setVolume(self, volume, bookmark);
         // Without Wi-Fi the CLI only sees a timeout or no route; Nickel's
         // check is not reliable either way, so the text names both.
@@ -789,13 +1150,25 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
               no_wifi ? QStringLiteral("Kein WLAN oder kein Server") : p.error, kOpenToastDelayMs);
         return;
     }
+    // The server answered: send what is pending once the book is up.
+    QTimer::singleShot(kPendingDelayMs, qApp, [] { sync_pending(); });
+    if (p.conflict) {
+        g_not_synced = id;
+        log_line(QStringLiteral("open %1 unchanged: a conflict, left alone; leaving it will not push").arg(id));
+        ReadingController__setVolume(self, volume, bookmark);
+        toast(true, QStringLiteral("Konflikt, nicht geladen"), QStringLiteral("Server und Gerät bewegt, bleibt liegen"),
+              kOpenToastDelayMs);
+        return;
+    }
     if (p.unanswered) {
+        g_not_synced = id;
         log_line(QStringLiteral("open %1 unchanged: the position needs an answer (confirm); leaving it will not push").arg(id));
         ReadingController__setVolume(self, volume, bookmark);
         toast(true, QStringLiteral("Nicht übernommen"), kUnansweredReason, kOpenToastDelayMs);
         return;
     }
     if (!p.not_taken.isEmpty()) {
+        g_not_synced = id;
         log_line(QStringLiteral("open %1 unchanged: the server's position cannot be taken; leaving it will not push").arg(id));
         ReadingController__setVolume(self, volume, bookmark);
         toast(true, QStringLiteral("Nicht übernommen"), skip_reason(p.not_taken), kOpenToastDelayMs);
@@ -803,50 +1176,86 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     }
     if (!p.found) {
         // The server holds nothing newer: the device is in line with it.
-        g_not_synced.clear();
         ReadingController__setVolume(self, volume, bookmark);
         toast(false, QStringLiteral("Fortschritt ist aktuell"),
               QStringLiteral("Server hat nichts Neueres"), kOpenToastDelayMs);
         return;
     }
     log_line(QStringLiteral("open %1 at %2 (%3 %)").arg(id, QString::fromUtf8(p.position)).arg(p.percent));
-    alignas(8) unsigned char copy[kVolumeBytes];
-    Volume__copy(copy, volume);
-    Content__setChapterIdBookmarked(copy, QVariant(p.position));
-    Content__setPercentRead(copy, QVariant(p.percent));
-    // The Volume Nickel passes in gets the position too: with only the copy
-    // changed, opening within the chapter Nickel last saved went to the
-    // chapter start; with both, Nickel opens at the point (device tests). The
-    // setter detaches Nickel's Volume from data it shares (the second word,
-    // logged), so nothing else in Nickel changes.
-    void *const shared_before = static_cast<void *const *>(volume)[1];
-    Volume *original = const_cast<Volume *>(volume);
-    Content__setChapterIdBookmarked(original, QVariant(p.position));
-    Content__setPercentRead(original, QVariant(p.percent));
-    g_open_row = row_of(copy);
-    log_line(QStringLiteral("volume data: Nickel's %1 -> %2, copy %3")
-                 .arg(reinterpret_cast<quintptr>(shared_before), 0, 16)
-                 .arg(reinterpret_cast<quintptr>(static_cast<void *const *>(volume)[1]), 0, 16)
-                 .arg(reinterpret_cast<quintptr>(reinterpret_cast<void *const *>(copy)[1]), 0, 16));
-    ReadingController__setVolume(self, copy, bookmark);
-    Volume__dtor(copy);
+    // Not in line with the server until check_open() finds Nickel at the
+    // pulled place.
+    g_not_synced = id;
+    if (g_kobo) {
+        if (!write_through_nickel(id, p)) {
+            g_not_synced = id;
+            ReadingController__setVolume(self, volume, bookmark);
+            toast(true, QStringLiteral("Nicht übernommen"), QStringLiteral("Nickel schreibt nicht, siehe Log"),
+                  kOpenToastDelayMs);
+            return;
+        }
+        if (p.base.isEmpty() || !set_base(id, p.base)) {
+            log_line(QStringLiteral("no base kept for %1: the next sync decides without it").arg(id));
+        }
+        // Nickel opens from the Volume it is handed; a fresh one from its
+        // cache holds the written row.
+        alignas(8) unsigned char fresh[kVolumeBytes];
+        VolumeManager__getById(fresh, id, Device__getDbName(Device__getCurrentDevice()));
+        g_open_row = row_of(fresh);
+        ReadingController__setVolume(self, fresh, bookmark);
+        Volume__dtor(fresh);
+    } else {
+        alignas(8) unsigned char copy[kVolumeBytes];
+        Volume__copy(copy, volume);
+        Content__setChapterIdBookmarked(copy, QVariant(p.position));
+        Content__setPercentRead(copy, QVariant(p.percent));
+        // The Volume Nickel passes in gets the position too: with only the
+        // copy changed, opening within the chapter Nickel last saved went
+        // to the chapter start; with both, Nickel opens at the point
+        // (device tests). The setter detaches Nickel's Volume from data it
+        // shares (the second word, logged), so nothing else in Nickel
+        // changes.
+        void *const shared_before = static_cast<void *const *>(volume)[1];
+        Volume *original = const_cast<Volume *>(volume);
+        Content__setChapterIdBookmarked(original, QVariant(p.position));
+        Content__setPercentRead(original, QVariant(p.percent));
+        g_open_row = row_of(copy);
+        log_line(QStringLiteral("volume data: Nickel's %1 -> %2, copy %3")
+                     .arg(reinterpret_cast<quintptr>(shared_before), 0, 16)
+                     .arg(reinterpret_cast<quintptr>(static_cast<void *const *>(volume)[1]), 0, 16)
+                     .arg(reinterpret_cast<quintptr>(reinterpret_cast<void *const *>(copy)[1]), 0, 16));
+        ReadingController__setVolume(self, copy, bookmark);
+        Volume__dtor(copy);
+    }
     const QString target = QString::fromUtf8(p.position);
     const QString taken = p.from.isEmpty() ? QStringLiteral("%1 %").arg(p.percent)
                                            : QStringLiteral("%1 %, von %2").arg(p.percent).arg(p.from);
     QTimer::singleShot(kCheckOpenMs, qApp, [id, target, taken] { check_open(id, target, taken, kCheckOpenTries); });
 }
 
-// What a finished push means, for the log and the message.
+// What a finished push means, for the log and the message; once the
+// server answered, the pending list follows.
 static void push_finished(const QString &id, QProcess *p)
 {
     const QByteArray out = p->readAll();
     log_line(QStringLiteral("push %1 (exit %2):\n%3").arg(id).arg(p->exitCode()).arg(QString::fromUtf8(out).trimmed()));
-    const QString failed = QStringLiteral("Senden fehlgeschlagen");
     const QString not_sent = QStringLiteral("Nicht gesendet");
-    if (p->exitStatus() != QProcess::NormalExit || p->exitCode() != 0) {
-        toast(true, failed, error_reason(out));
+    if (!machine_lines(out, "NO_INDEX").isEmpty()) {
+        notice_no_index(out);
         return;
     }
+    if (!machine_lines(out, "PENDING").isEmpty()) {
+        const QList<QList<QByteArray>> errors = machine_lines(out, "ERROR");
+        const QByteArray kind = errors.isEmpty() ? QByteArray() : errors[0].value(0);
+        toast(true, QStringLiteral("Fortschritt vorgemerkt"),
+              kind == "server" ? QStringLiteral("Serverfehler, wird nachgeholt")
+                               : QStringLiteral("Kein WLAN/Server, wird nachgeholt"));
+        return;
+    }
+    if (p->exitStatus() != QProcess::NormalExit || p->exitCode() != 0) {
+        toast(true, QStringLiteral("Senden fehlgeschlagen"), error_reason(out));
+        return;
+    }
+    log_conflicts(out);
     const QList<QList<QByteArray>> sent = machine_lines(out, "SENT");
     const QList<QList<QByteArray>> skipped = machine_lines(out, "NOT_SENT");
     if (!sent.isEmpty()) {
@@ -854,11 +1263,14 @@ static void push_finished(const QString &id, QProcess *p)
               QStringLiteral("%1 %").arg(QString::fromUtf8(sent[0].value(0))));
     } else if (!skipped.isEmpty()) {
         toast(true, not_sent, skip_reason(skipped[0].value(0)));
+    } else if (!machine_lines(out, "CONFLICT").isEmpty()) {
+        toast(true, not_sent, QStringLiteral("Konflikt: Server und Gerät bewegt"));
     } else if (!machine_lines(out, "UNANSWERED").isEmpty()) {
         toast(true, not_sent, kUnansweredReason);
     } else if (!machine_lines(out, "IN_SYNC").isEmpty()) {
         toast(false, QStringLiteral("Fortschritt ist aktuell"), QStringLiteral("Server hat schon diesen Stand"));
     }
+    sync_pending();
 }
 
 // Starts the push of one book and returns at once; its output goes to the
@@ -868,44 +1280,29 @@ static void start_push(const QString &id)
     log_line(QStringLiteral("push %1").arg(id));
     QStringList args = book_args("push", id);
     args << QStringLiteral("--emit") << QStringLiteral("--timeout") << QString::fromLatin1(kPushTimeout);
-    QProcess *p = new QProcess(qApp);
-    p->setProcessChannelMode(QProcess::MergedChannels);
-    QObject::connect(p, &QProcess::finished, p, [id, p](int, QProcess::ExitStatus) {
-        push_finished(id, p);
-        p->deleteLater();
-    });
-    QObject::connect(p, &QProcess::errorOccurred, p, [p](QProcess::ProcessError error) {
-        if (error == QProcess::FailedToStart) {
-            log_line(QStringLiteral("push: could not start the CLI: %1").arg(p->errorString()));
-            toast(true, QStringLiteral("Senden fehlgeschlagen"),
-                  QStringLiteral("NickelInkSync startet nicht"));
-            p->deleteLater();
-        }
-    });
-    // A push that hangs is ended; finished() then reports it.
-    QTimer::singleShot(kPushWaitMs, p, [p] {
-        if (p->state() != QProcess::NotRunning) {
-            log_line(QStringLiteral("push: no answer within %1 s, ended").arg(kPushWaitMs / 1000));
-            p->kill();
-        }
-    });
-    p->start(QString::fromLatin1(kCli), args);
+    start_cli(QStringLiteral("push"), args, [id](QProcess *p) { push_finished(id, p); });
 }
 
-// What Nickel changed in the book's row while it was open, as its Volume
-// cache holds it after saving (VolumeManager::updateBookmark keeps the
-// cache in step with the database).
-static void log_saved_row(const QString &id)
+// The book's row as Nickel's Volume cache holds it after saving
+// (VolumeManager::updateBookmark keeps the cache in step with the
+// database); logs what Nickel changed in it since opening. Empty without
+// the symbols.
+static QMap<QString, QVariant> saved_row(const QString &id)
 {
-    if (!VolumeManager__getById || !Volume__isValid || !Content__getDbValues || g_open_row.isEmpty()) {
-        return;
+    if (!VolumeManager__getById || !Volume__isValid || !Content__getDbValues) {
+        return QMap<QString, QVariant>();
     }
     alignas(8) unsigned char saved[kVolumeBytes];
     VolumeManager__getById(saved, id, QString());
+    QMap<QString, QVariant> row;
     if (Volume__isValid(saved)) {
-        log_line(QStringLiteral("row on leaving, changed since opening: %1").arg(row_diff(g_open_row, row_of(saved))));
+        row = row_of(saved);
+        if (!g_open_row.isEmpty()) {
+            log_line(QStringLiteral("row on leaving, changed since opening: %1").arg(row_diff(g_open_row, row)));
+        }
     }
     Volume__dtor(saved);
+    return row;
 }
 
 extern "C" __attribute__((visibility("default")))
@@ -924,32 +1321,37 @@ void _nh_ReadingView__leavingReadingExperience(ReadingView *self)
         return;
     }
     const QString id = g_open_id;
-    log_saved_row(id);
+    const QMap<QString, QVariant> row = saved_row(id);
     if (on_taken_page) {
         log_line(QStringLiteral("left %1 on the page taken from the server (%2): nothing to push").arg(id, g_taken_page));
         toast(false, QStringLiteral("Fortschritt ist aktuell"), QStringLiteral("Noch auf der Seite vom Server"));
+        if (online()) {
+            sync_pending();
+        }
         return;
     }
     if (g_not_synced == id) {
         log_line(QStringLiteral("left %1, which is not in line with the server: not pushed").arg(id));
         toast(true, QStringLiteral("Nicht gesendet"), QStringLiteral("Beim Öffnen nicht abgeglichen"));
+        if (online()) {
+            sync_pending();
+        }
         return;
     }
-    when_online(
-        kWifiLeaveWaitS,
-        [id] { start_push(id); },
-        [] {
-            log_line(QStringLiteral("push: nothing sent"));
-            toast(true, QStringLiteral("Senden fehlgeschlagen"), QStringLiteral("Kein WLAN"));
-        });
+    if (g_unasked_id == id && !row.isEmpty()
+        && row.value(QStringLiteral("ChapterIDBookmarked")).toString() == g_unasked_at) {
+        log_line(QStringLiteral("left %1, opened without the server and not moved: nothing to push").arg(id));
+        if (online()) {
+            sync_pending();
+        }
+        return;
+    }
+    when_online(kWifiLeaveWaitS, [id] { start_push(id); });
 }
 
 static int nickelinksync_init()
 {
-    if (!Device__isTolino(Device__getCurrentDevice())) {
-        log_line(QStringLiteral("inactive: not a Tolino (the Kobo follows later)"));
-        return 0;
-    }
+    g_kobo = !Device__isTolino(Device__getCurrentDevice());
     if (!QFileInfo(QString::fromLatin1(kCli)).isExecutable()) {
         log_line(QStringLiteral("inactive: %1 is missing or not executable").arg(QString::fromLatin1(kCli)));
         return 0;
@@ -974,9 +1376,14 @@ static int nickelinksync_init()
     if (!kobalt_installed()) {
         QFile::remove(QString::fromLatin1(kKobaltNoticed));
     }
+    if (g_kobo && !can_write_through_nickel()) {
+        log_line(QStringLiteral("inactive: Nickel's write path is missing on this Kobo (docs/nickel-6.0-symbols.md)"));
+        return 0;
+    }
     // The messages are German; the locale is logged to learn whether the
     // device language can be told from it.
-    log_line(QStringLiteral("active, CLI and configuration in %1; notify = %2, toasts %3, locale %4 (system %5)")
+    log_line(QStringLiteral("active on a %1, CLI and configuration in %2; notify = %3, toasts %4, locale %5 (system %6)")
+                 .arg(QLatin1String(g_kobo ? "Kobo" : "Tolino"))
                  .arg(QString::fromLatin1(kDir))
                  .arg(QLatin1String(g_notify == Notify::All ? "all" : g_notify == Notify::Errors ? "errors" : "none"))
                  .arg(QLatin1String(MainWindowController__toast ? "available" : "missing"))
@@ -987,7 +1394,7 @@ static int nickelinksync_init()
 
 static struct nh_info NickelInkSync = {
     .name = "NickelInkSync",
-    .desc = "Sync the reading position of sideloaded books with a KOSync server (Tolino 5.18+)",
+    .desc = "Sync the reading position of sideloaded books with a KOSync server (Kobo 6.0, Tolino 5.18+)",
     .uninstall_flag = "/mnt/onboard/.adds/NickelInkSync/uninstall",
 };
 
@@ -1010,8 +1417,8 @@ static struct nh_hook NickelInkSyncHook[] = {
 };
 
 static struct nh_dlsym NickelInkSyncDlsym[] = {
-    {.name = "_ZN6Device16getCurrentDeviceEv", .out = nh_symoutptr(Device__getCurrentDevice), .desc = "Tolino check"},
-    {.name = "_ZNK6Device8isTolinoEv", .out = nh_symoutptr(Device__isTolino), .desc = "Tolino check"},
+    {.name = "_ZN6Device16getCurrentDeviceEv", .out = nh_symoutptr(Device__getCurrentDevice), .desc = "Kobo or Tolino"},
+    {.name = "_ZNK6Device8isTolinoEv", .out = nh_symoutptr(Device__isTolino), .desc = "Kobo or Tolino"},
     {.name = "_ZNK7Content5getIdERK7QString", .out = nh_symoutptr(Content__getId), .desc = "Book ID"},
     {.name = "_ZNK8Bookmark6isNullEv", .out = nh_symoutptr(Bookmark__isNull), .desc = "Opened without a bookmark"},
     {.name = "_ZN6VolumeC1ERKS_", .out = nh_symoutptr(Volume__copy), .desc = "Copy of the book to open"},
@@ -1031,6 +1438,17 @@ static struct nh_dlsym NickelInkSyncDlsym[] = {
     {.name = "_ZN13VolumeManager7getByIdERK7QStringS2_", .out = nh_symoutptr(VolumeManager__getById), .desc = "Log", .optional = true},
     {.name = "_ZNK6Volume7isValidEv", .out = nh_symoutptr(Volume__isValid), .desc = "Log", .optional = true},
     {.name = "_ZNK7Content11getDbValuesEv", .out = nh_symoutptr(Content__getDbValues), .desc = "Log", .optional = true},
+    {.name = "_ZNK6Device9getDbNameEv", .out = nh_symoutptr(Device__getDbName), .desc = "Write (Kobo)", .optional = true},
+    {.name = "_ZN15DatabaseAdapter16beginTransactionE7QString", .out = nh_symoutptr(DatabaseAdapter__beginTransaction), .desc = "Write (Kobo)", .optional = true},
+    {.name = "_ZN15DatabaseAdapter14endTransactionE7QStringb", .out = nh_symoutptr(DatabaseAdapter__endTransaction), .desc = "Write (Kobo)", .optional = true},
+    {.name = "_ZN15DatabaseAdapter12dbConnectionERK7QStringb", .out = nh_symoutptr(DatabaseAdapter__dbConnection), .desc = "Write (Kobo)", .optional = true},
+    {.name = "_ZNK6Volume11getDbValuesEv", .out = nh_symoutptr(Volume__getDbValues), .desc = "Write (Kobo)", .optional = true},
+    {.name = "_ZN15ContentLocation6createE7QStringS0_", .out = nh_symoutptr(ContentLocation__create), .desc = "Write (Kobo)", .optional = true},
+    {.name = "_ZNK15ContentLocation7isValidEv", .out = nh_symoutptr(ContentLocation__isValid), .desc = "Write (Kobo)", .optional = true},
+    {.name = "_ZN15ContentLocationD1Ev", .out = nh_symoutptr(ContentLocation__dtor), .desc = "Write (Kobo)", .optional = true},
+    {.name = "_ZN13VolumeManager14updateBookmarkER6VolumeRK7QStringiRK9QDateTimei", .out = nh_symoutptr(VolumeManager__updateBookmark), .desc = "Write (Kobo)", .optional = true},
+    {.name = "_ZN13VolumeManager12updateFieldsERK7QStringRK4QMapIS0_8QVariantES7_S2_", .out = nh_symoutptr(VolumeManager__updateFields), .desc = "Write (Kobo)", .optional = true},
+    {.name = "_ZN10Repository12refreshCacheI6VolumeEEP5CacheIT_ERK7QString", .out = nh_symoutptr(Repository__refreshCache_Volume), .desc = "Write (Kobo)", .optional = true},
     {0},
 };
 
