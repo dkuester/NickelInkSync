@@ -1006,17 +1006,24 @@ gescheiterten Push (ohne WLAN nur ein Toast); ein ohne WLAN geöffnetes Buch
 wird beim Schließen gar nicht gesendet; der Zustand liegt nur im Speicher.
 Auf dem Kobo ist das Plugin inaktiv.
 
-- [ ] **C0 Erkundung in der Kobo-VM** (6.0.279225)
-  - [ ] **ich:** Symbole des Plugins und Kobalts Schreibweg gegen
-    `libnickel.so` von 6.0 prüfen (Signaturen per Disassembly); den
-    Schreibweg als Wegwerf-Plugin in der VM ausprobieren (Buch öffnet an
-    der geschriebenen Stelle, auch beim ersten Öffnen nach dem Start).
-    Nickel öffnet auch auf dem Kobo 6.0 aus seinem Cache gerenderter
-    Seiten (N5, 31.10.): prüfen, ob Kobalts Weg ihn umgeht oder die Seiten
-    des Kapitels weiter verworfen werden müssen (wie die CLI seit N5);
-    Ergebnis in `docs/nickel-6.0-symbols.md`. Zusätzlich die Symbole für
-    einen eigenen Dialog und den Buchmenü-Eintrag
-    (`ActionProxyMixin::setupBookListMenu`).
+- [x] **C0 Erkundung in der Kobo-VM** (6.0.279225) · PR #66 · Ergebnis in
+  [`docs/nickel-6.0-symbols.md`](docs/nickel-6.0-symbols.md)
+  - [x] **ich:** Alle 23 Symbole des Plugins gibt es in 6.0 unverändert,
+    ebenso Kobalts Schreibweg, Buchmenü (`setupBookListMenu`) und Dialog
+    (`ConfirmationDialogFactory::getConfirmationDialog`); Signaturen per
+    Disassembly geprüft. `updateBookmark` ändert nur das `Volume` im
+    Speicher, `updateFields` schreibt und zieht Nickels `Volume`-Cache nach.
+    In der VM (Wegwerf-Plugin, Book R als kepub und EPUB) öffnet Nickel an
+    der geschriebenen Stelle, auch beim ersten Öffnen nach dem Start, aber
+    **Kobalts Weg umgeht den Seiten-Cache nicht**: Ist der Anfang des
+    Zielkapitels gespeichert und keine Seite hält die Stelle, öffnet Nickel
+    beim ersten Öffnen nach dem Start am Kapitelanfang (kepub und EPUB).
+    Werden die Seiten des Kapitels in derselben Transaktion verworfen (wie
+    die CLI seit N5), öffnet es richtig, ohne Neustart. Buchmenü-Eintrag
+    und Dialog erscheinen und reagieren; ein eigener `QPushButton` im Dialog
+    bekommt keine Berührung. Kobalt-Schutz: die CLI verweigert in der
+    Kobo-VM richtig; im Plugin endet `init()` auf dem Kobo vor der Prüfung.
+    Die VM behält jetzt `/mnt/aux` (gezeichnete Seiten) über Neustarts.
 - [x] **C1 kepub zurück** (K4-Rest): XPointer → `#kobo.N.M:offset`
   (UTF-16-Einheiten), Fixtures Book P/Q/R; `pull --write` am Kobo per USB.
   - [x] **ich:** Übersetzung, Tests (PR #55; siehe K4).
@@ -1062,11 +1069,21 @@ Auf dem Kobo ist das Plugin inaktiv.
   - [ ] **ich:** Plugin auf dem Kobo aktiv; Öffnen und Schließen über
     Nickels Schreibweg; offline vormerken, bei WLAN nachholen; kürzere
     Wartezeit; Meldung ohne Index. Paket `Kobo.tgz` für beide Geräte.
+    Nach C0: Schreiben im `setVolume`-Hook über Nickel **und** die Seiten
+    des Zielkapitels in derselben Transaktion verwerfen; die CLI entscheidet
+    nur noch (`pull --live --emit` ohne `--write`, Tagessicherung bleibt;
+    den Basis-Stand in `state.json` erst nach Nickels Commit setzen);
+    `kobalt_blocks()` vor der Tolino-Prüfung und in jedem neuen Einstieg
+    (Empfehlung in `docs/nickel-6.0-symbols.md`).
   - [ ] **du:** Am Clara BW: Buch mit WLAN öffnen (Stand vom Server),
     dann WLAN aus, lesen, schließen (vorgemerkt), WLAN an, ein anderes Buch
-    öffnen (nachgeholt); in KOReader prüfen.
+    öffnen (nachgeholt); in KOReader prüfen. Dazu der Fall, den die VM nur
+    annähert: Anfang eines Kapitels lesen, verlassen, in KOReader weiter in
+    dasselbe Kapitel, Kobo neu starten, öffnen.
 - [ ] **C5 Dialog bei Konflikten** (braucht C4)
-  - [ ] **ich:** Qt-Dialog beim Öffnen mit beiden Ständen und drei Knöpfen.
+  - [ ] **ich:** Qt-Dialog beim Öffnen mit beiden Ständen und drei Knöpfen
+    (`ConfirmationDialog` hat zwei eigene; der dritte muss ein
+    Nickel-Widget sein, siehe C0).
   - [ ] **du:** Konflikt am Kobo nachstellen (KOReader und Kobo offline
     an verschiedenen Stellen), alle drei Knöpfe.
 - [ ] **C6 Oberfläche** (braucht C5)
