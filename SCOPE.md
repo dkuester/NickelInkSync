@@ -24,7 +24,7 @@ everything else is still an assumption.
 
 | | |
 |---|---|
-| Devices | Kobo on firmware 4.x (Qt5) and 6.x (Qt6, not checked yet), Tolino Shine 5, Shine Color and Vision Color on firmware 5.x (Qt6) |
+| Devices | Kobo on firmware 4.x (Qt5) and 6.x (Qt6), Tolino Shine 5, Shine Color and Vision Color on firmware 5.x (Qt6) |
 | Formats | kepub (`.kepub.epub`) and plain EPUB |
 | Books | Sideloaded only (`ContentID` starting with `file:///mnt/onboard/`) |
 | Server | Any KOSync-compatible server (koreader-sync-server, self-hosted forks) |
@@ -34,10 +34,10 @@ reference Tolino (Shine Color) runs 5.18. The Rust core is unaffected; the
 NickelHook plugin is built twice (Qt5 and Qt6).
 
 On 2026-10-28 the reference Clara BW updated itself to firmware
-**6.0.279225** (database version 222). There is no 4.x device left: the
-4.46 findings below stay verified, but 4.x-only behaviour can be checked
-against the fixtures only, and the Kobo pass targets 6.0 (see
-[Open technical questions](#open-technical-questions)).
+**6.0.279225** (database version 222). Since 2026-11-01 the 4.x line has a
+test device again, a **Kobo Libra 2 on 4.38.23852** (Qt5); the 4.46
+findings below come from the Clara BW before its update and are checked
+again on the Libra 2 (stage C8 in [TODO.md](TODO.md)).
 
 ## Book identity
 
@@ -350,8 +350,8 @@ does. A place outside every span (whitespace between paragraphs) moves to
 the next span. All 16 Kobo kepub highlights in Book P and Book Q come back
 unchanged, KOReader's highlights of the same words give exactly the
 Kobo's spans, and so do the Book R reading positions. Not done yet: the
-4.x point that joins text around comments, and the 4.x kepub span (no 4.x
-device left to check either).
+4.x point that joins text around comments, and the 4.x kepub span (stage
+C8, on the Libra 2).
 
 CDATA behaves like a comment in the Adobe point (skipped on Kobo 4.46, a
 node on Tolino 5.18), is a `text()` node of its own in KOReader's XPointer,
@@ -628,7 +628,8 @@ real books sent from the Calibre library:
    the plugin sets the pulled position in the `Volume` passed to
    `setVolume` and in the one `VolumeManager::getById` loads while opening
    ([docs/nickel-5.18-symbols.md](docs/nickel-5.18-symbols.md)). The Qt5
-   symbols for 4.46 are still open, and on hold without a 4.x device.
+   symbols for 4.x are still open; they are checked against 4.38.23852
+   for the Libra 2 (stage C9).
 4. **Kobo firmware 6.0.** Not checked yet: the position format (kepub
    span, and whether the Adobe point counts comments and CDATA as nodes
    like the Tolino; the CLI assumes so from firmware 5 on), the chapter
