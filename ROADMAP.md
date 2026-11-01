@@ -151,6 +151,17 @@ drafts the release; only the owner tags and publishes.
       start Nickel's page cache still wins when the chapter start is
       cached; dropping that chapter's pages in the same transaction fixes
       it ([docs/nickel-6.0-symbols.md](docs/nickel-6.0-symbols.md))
+- [x] Mappings on the device (stage C3 of the on-device client, library and
+      CLI, PR #67): `device prepare` puts a library index, the device's mappings and
+      a translation table per mapped book into `.adds/NickelInkSync/`
+      (never an EPUB), and takes mappings made or removed on the device
+      over into the desktop's store. On the device a mapped kepub or EPUB
+      syncs under its original's checksum, the sent paragraph start the
+      same as on the desktop; without the index nothing is sent
+      (`NICKELINKSYNC_NO_INDEX`), and only originals and mapped books are.
+      Checked on the Clara BW (6.0) on 2026-11-01: a Calibre kepub read on
+      the Kobo, its progress opens in KOReader in the original EPUB.
+      Replaces N6
 
 ## Quick wins
 

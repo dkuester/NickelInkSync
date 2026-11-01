@@ -661,7 +661,7 @@ pub(crate) fn koreader_path(html: &Element, path: &[usize], chars: usize) -> Opt
 
 /// Code points after collapsing runs of spaces, tabs and line breaks to one
 /// space (no-break spaces stay).
-fn collapsed_len(s: &str) -> usize {
+pub(crate) fn collapsed_len(s: &str) -> usize {
   let mut len = 0;
   let mut in_space = false;
   for c in s.chars() {

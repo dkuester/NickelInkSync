@@ -936,8 +936,8 @@ Entscheidungen des Besitzers (2026-10-31):
     erster Start nach der Kobalt-Installation wie erwartet nicht erkannt;
     beim nächsten Start erkannt, Toast „NickelInkSync ist aus“ nach etwa
     20 s; beim Start danach kein Toast mehr (`kobalt-noticed`).
-- [ ] **N6 Zuordnungen auf dem Gerät** · geht in **C3** (Abschnitt
-  Kobo-Client) auf; Weg (a) gewählt, nie Original-EPUBs aufs Gerät ·
+- [x] **N6 Zuordnungen auf dem Gerät** · in **C3** (Abschnitt
+  Kobo-Client) aufgegangen; Weg (a) gewählt, nie Original-EPUBs aufs Gerät ·
   Lücke, die du am 2026-10-29 bemerkt hast: Am Rechner sendet `push` ein
   zugeordnetes Buch (kepub, von Calibre verändertes EPUB) unter der
   Prüfsumme der Original-EPUB, mit der Stelle in sie übersetzt; KOReader
@@ -946,19 +946,17 @@ Entscheidungen des Besitzers (2026-10-31):
   eigenen Prüfsumme der Gerätedatei, mit der KOReader nichts anfangen
   kann; dasselbe beim Holen. Für die Übersetzung braucht die Bibliothek
   heute die Original-EPUB selbst, und die liegt nicht auf dem Gerät.
-  - [ ] **ich:** Weg wählen und vorschlagen: (a) beim Anlegen der
+  - [x] **ich:** Weg wählen und vorschlagen: (a) beim Anlegen der
     Zuordnung eine kleine Übersetzungstabelle erzeugen (Prüfsumme des
     Originals, Kapitelpfade, Textlängen bzw. Offsets je Kapitel kepub ↔
     Original) und nach `.adds/NickelInkSync/` aufs Gerät legen (die GUI
     beim Kopieren in E5 oder per Knopf, die CLI per Befehl); (b) die
     Original-EPUB verborgen mit aufs Gerät kopieren (einfacher, kostet
     Speicher). Beide Richtungen, Kobo und Tolino.
-  - [ ] **ich:** Umsetzen in Bibliothek und CLI (`--live` liest die
+  - [x] **ich:** Umsetzen in Bibliothek und CLI (`--live` liest die
     Tabelle), Tests mit Book A/R (kepub ↔ EPUB) und Calibre-artiger
-    Umwandlung.
-  - [ ] **du:** Am Gerät prüfen: ein Calibre-kepub auf dem Kobo bzw. ein
-    Calibre-EPUB auf dem Tolino lesen, Buch verlassen, in KOReader mit der
-    Original-EPUB öffnen.
+    Umwandlung: C3.
+  - [x] **du:** Am Gerät geprüft (2026-11-01, siehe C3).
 
 ## Kobo-Client
 
@@ -1058,14 +1056,31 @@ Auf dem Kobo ist das Plugin inaktiv.
     Update `Session::agreed_sent`, bei „gleich“ `Session::agreed`, am Ende
     `save_state`; auch nach einer beantworteten Rückfrage. Der Kindle
     führt keine Basis.
-- [ ] **C3 Zuordnungen auf dem Gerät** (ersetzt N6; braucht C1)
-  - [ ] **ich:** Am Rechner `device prepare`: Index und Übersetzungstabellen
-    aufs Gerät, Zuordnungen in beide Richtungen abgleichen (eine am Gerät
-    angelegte Zuordnung findet ihr Original über die Prüfsumme); `--live`
-    liest sie; Push ohne Index oder ohne Eintrag verweigert, mit eigener
-    Maschinenzeile für die Meldung.
-  - [ ] **du:** Calibre-kepub auf dem Kobo lesen, `push --live` per Plugin
-    oder CLI, in KOReader mit der Original-EPUB öffnen.
+- [x] **C3 Zuordnungen auf dem Gerät** (ersetzt N6; braucht C1) · PR #67
+  - [x] **ich:** `nickelinksync device prepare --device … [--library …]`
+    (`src/prepare.rs`) schreibt nach `.adds/NickelInkSync/`: `library.json`
+    (Index: Prüfsumme, Titel, Autoren je Original), `mappings.json` (die
+    Zuordnungen der Bücher auf dem Gerät, dazu `added`/`removed` für am
+    Gerät angelegte bzw. entfernte, die prepare über die Prüfsumme in der
+    Bibliothek in den Store übernimmt) und je zugeordnetem Buch
+    `tables/<Geräte-MD5>.json` (`src/table.rs`: Textknoten mit
+    KOReader-Pfad, Absatz- und Satzanfängen, keine Buchtexte; nie eine
+    EPUB). `--live` liest sie: zugeordnet mit Tabelle → unter der
+    Original-Prüfsumme, gesendeter Absatz-/Satzanfang genau wie am Rechner
+    (`tests/table.rs`: Book A, Book R, Calibre-artige Umwandlung, geänderter
+    Text; `tests/prepare.rs`); `exact` und der Rückweg zwischen zwei Ankern
+    anteilig. Ohne `library.json` senden `push --live` und
+    `sync --pending --live` nichts (`NICKELINKSYNC_NO_INDEX<tab>Meldung`);
+    gesendet wird nur ein Original aus dem Index oder ein Buch mit
+    Zuordnung und Tabelle (sonst `NOT_SENT not-mapped` bzw. `no-table`).
+    Holen bleibt erlaubt. Kobalt-Schutz unverändert. Ein kepub, das
+    `copy` auf ein vorbereitetes Gerät kopiert, bekommt Zuordnung und
+    Tabelle sofort (`prepare::put_mapping`). Format und Zeilen: Notiz
+    `2026-11-01-kobo-c3-handover.md`.
+  - [x] **du:** Am Kobo geprüft (2026-11-01, Clara BW 6.0): kepub mit
+    Calibre übertragen, der EPUB zugeordnet, `device prepare`, am Kobo
+    gelesen, Fortschritt gesendet; KOReader lädt ihn in der Original-EPUB.
+    Alle Schritte der Anleitung in PR #67 erfolgreich.
 - [ ] **C4 Plugin auf dem Kobo** (ersetzt N2; braucht C0, C2, C3)
   - [ ] **ich:** Plugin auf dem Kobo aktiv; Öffnen und Schließen über
     Nickels Schreibweg; offline vormerken, bei WLAN nachholen; kürzere
@@ -1100,8 +1115,10 @@ Auf dem Kobo ist das Plugin inaktiv.
     er geht, ersetzt er dort den heutigen Weg B (CLI schreibt, verwirft die
     Seiten im Cache, N5); sonst bleibt Weg B.
   - [ ] **du:** Dieselben Tests wie C4 bis C6 am Tolino.
-- [ ] **(in D2, nach C3)** Knopf „Gerät vorbereiten“ in der GUI; beim
-  Kopieren (E5) Index und Tabelle gleich mitschreiben.
+- [ ] **(in D2, nach C3)** Knopf „Gerät vorbereiten“ in der GUI
+  (`prepare::prepare` mit Fortschritt, `Prepared::load` für den Hinweis);
+  beim Kopieren (E5) schreibt `copy::copy` Zuordnung und Tabelle schon
+  selbst (`prepare::put_mapping`), wenn das Gerät vorbereitet ist.
 
 ## Optional (später)
 

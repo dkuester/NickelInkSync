@@ -8,6 +8,7 @@
 use std::cell::{OnceCell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::time::Duration;
 
 use crate::config::{self, Config, LocalSettings, PushPosition};
@@ -24,11 +25,13 @@ use crate::mapping::{EpubState, Mapping, Store};
 use crate::position::{
   from_xpointer, from_xpointer_kepub, to_xpointer, PointFlavor, Position, Translated, XPointer,
 };
+use crate::prepare::Prepared;
 use crate::restore;
 use crate::state::{Base, Entry, State};
 use crate::sync::{
   decide, decide_since, iso_timestamp, parse_timestamp, Confirm, Decision, Direction, Local, Moved,
 };
+use crate::table::Table;
 use crate::transfer::{step_back, transfer, How};
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -46,7 +49,8 @@ pub struct Options {
   /// Only the book with exactly this ContentID (Kindle: `content_id`).
   pub content_id: Option<String>,
   /// Nickel is running (on the device): read its database as it is being
-  /// written, never write it, no mappings.
+  /// written, never write it; mappings and the library index from
+  /// `.adds/NickelInkSync` ([`crate::prepare`]).
   pub live: bool,
   /// How long each request to the server may take.
   pub timeout: Duration,
@@ -357,8 +361,14 @@ pub struct Session {
   pub model: String,
   pub flavor: PointFlavor,
   pub books: Vec<Book>,
-  /// Book mappings; none on the device itself (`live`).
+  /// Book mappings; none on the device itself (`live`), which has
+  /// `prepared` instead.
   pub store: Store,
+  /// On the device itself: what the desktop prepared for it, `None` if it
+  /// was not prepared (then nothing is sent).
+  pub prepared: Option<Prepared>,
+  /// Translation tables loaded so far, by device checksum.
+  tables: RefCell<HashMap<String, Rc<Table>>>,
   /// The library of originals, if one is configured.
   pub library: Option<Library>,
   /// Checksums of the library's EPUBs, computed when first needed.
@@ -407,8 +417,12 @@ impl Session {
       options.content_id.as_deref(),
     );
     let settings = options.local_settings()?;
-    // The mappings and the library live on the desktop; the plugin syncs
-    // every book under its own checksum, as before.
+    // The mappings and the library live on the desktop; on the device the
+    // CLI has what `device prepare` left there.
+    let prepared = match options.live {
+      true => Prepared::load(&device.root)?,
+      false => None,
+    };
     let (store, library) = if options.live {
       (Store::default(), None)
     } else {
@@ -427,6 +441,8 @@ impl Session {
       flavor,
       books,
       store,
+      prepared,
+      tables: RefCell::default(),
       library,
       library_hashes: OnceCell::new(),
       position: settings.position,
@@ -451,6 +467,9 @@ impl Session {
         }
       }
     };
+    if self.device.live {
+      return self.identity_live(book, hash);
+    }
     if let Some(mapping) = self.store.for_file(&hash) {
       return match mapping.check() {
         EpubState::Ok => Identity::Mapped {
@@ -509,6 +528,106 @@ impl Session {
     }
   }
 
+  /// [`Session::identity`] on the device itself: by what the desktop
+  /// prepared. A mapping needs its table; a book that is not mapped syncs
+  /// only if the index has it as an original. Without an index every
+  /// EPUB syncs under its own checksum, but `push` sends nothing
+  /// ([`Session::push_blocked`]).
+  fn identity_live(&self, book: &Book, hash: String) -> Identity {
+    let mapping = self
+      .prepared
+      .as_ref()
+      .and_then(|p| p.mappings.for_file(&hash));
+    if let Some(mapping) = mapping {
+      return match self.table(&hash, mapping) {
+        Ok(_) => Identity::Mapped {
+          hash,
+          mapping: mapping.clone(),
+        },
+        Err(message) => Identity::Skip {
+          hash: Some(hash),
+          kind: "no-table",
+          message,
+        },
+      };
+    }
+    if book.is_kepub() || book.onboard_path().ends_with(".kepub.epub") {
+      return Identity::Skip {
+        hash: Some(hash),
+        kind: "not-mapped",
+        message: "not mapped: a kepub syncs only under its original EPUB; map it on the \
+                  computer and run `nickelinksync device prepare`"
+          .into(),
+      };
+    }
+    let Some(prepared) = &self.prepared else {
+      return Identity::Own {
+        hash,
+        why: Own::NoLibrary,
+      };
+    };
+    if prepared.is_original(&hash) {
+      Identity::Own {
+        hash,
+        why: Own::InLibrary,
+      }
+    } else if prepared.mappings.holding().any(|m| m.epub.hash == hash) {
+      Identity::Own {
+        hash,
+        why: Own::OriginalOfMapping,
+      }
+    } else {
+      Identity::Skip {
+        hash: Some(hash),
+        kind: "not-mapped",
+        message: "not mapped: neither mapped nor an original in the library index, so not \
+                  synced; map it on the computer and run `nickelinksync device prepare`"
+          .into(),
+      }
+    }
+  }
+
+  /// The translation table of the device file with checksum `hash` for
+  /// `mapping`, loaded once; why there is none.
+  fn table(&self, hash: &str, mapping: &Mapping) -> std::result::Result<Rc<Table>, String> {
+    if let Some(table) = self.tables.borrow().get(hash) {
+      return Ok(table.clone());
+    }
+    let prepared = self.prepared.as_ref().ok_or("not prepared")?;
+    let path = prepared.table_path(hash);
+    if !path.exists() {
+      return Err(
+        "mapped, but without a translation table: connect the device to the computer and \
+         run `nickelinksync device prepare`"
+          .into(),
+      );
+    }
+    let table = Table::load(&path).map_err(|e| format!("translation table: {e}"))?;
+    if table.device != hash || table.original != mapping.epub.hash {
+      return Err(
+        "the translation table is for another file: connect the device to the computer and \
+         run `nickelinksync device prepare`"
+          .into(),
+      );
+    }
+    let table = Rc::new(table);
+    self
+      .tables
+      .borrow_mut()
+      .insert(hash.to_string(), table.clone());
+    Ok(table)
+  }
+
+  /// On the device itself without a library index, `push` sends nothing:
+  /// only books the desktop knows reach the server. Why, if so.
+  pub fn push_blocked(&self) -> Option<&'static str> {
+    (self.device.live && self.prepared.is_none()).then_some(
+      "the device is not prepared: connect it to the computer and run \
+       `nickelinksync device prepare` (or \"Prepare device\" in the desktop client); \
+       nothing is sent until then",
+    )
+  }
+
   fn hash(&self, book: &Book) -> std::result::Result<String, String> {
     partial_md5(&self.device.book_file(book)).map_err(|e| format!("file not readable: {e}"))
   }
@@ -533,6 +652,13 @@ impl Session {
   ) -> std::result::Result<(Translated, Option<String>), String> {
     let mut device = Epub::open(&self.device.book_file(book)).map_err(|e| e.to_string())?;
     let (xpointer, how) = match identity {
+      Identity::Mapped { hash, mapping } if self.device.live => {
+        let table = self.table(hash, mapping)?;
+        let moved = table
+          .from_original(&mut device, xpointer, percentage)
+          .map_err(|e| e.to_string())?;
+        (moved.transferred.xpointer, Some(moved.transferred.how))
+      }
       Identity::Mapped { mapping, .. } => {
         let mut original = Epub::open(Path::new(&mapping.epub.path)).map_err(|e| e.to_string())?;
         let t =
@@ -597,6 +723,11 @@ impl Session {
       .map_err(|e| format!("not translated: {e}"))?;
     let percentage = book.percent_read as f64 / 100.0;
     let device_file = self.device.book_file(book);
+    if let Identity::Mapped { hash, mapping } = identity {
+      if self.device.live {
+        return self.local_by_table(book, hash, mapping, &x.xpointer, percentage);
+      }
+    }
     let (xpointer, mut notes, sent_file) = match identity {
       Identity::Mapped { mapping, .. } => {
         let original = PathBuf::from(&mapping.epub.path);
@@ -640,6 +771,43 @@ impl Session {
       last_read: book.last_read.as_deref().and_then(parse_timestamp),
     };
     Ok((local, note))
+  }
+
+  /// [`Session::local`] for a mapped book on the device itself, with its
+  /// translation table instead of the original EPUB.
+  fn local_by_table(
+    &self,
+    book: &Book,
+    hash: &str,
+    mapping: &Mapping,
+    xpointer: &str,
+    percentage: f64,
+  ) -> std::result::Result<(Local, Option<String>), String> {
+    let table = self.table(hash, mapping)?;
+    let moved = Epub::open(&self.device.book_file(book))
+      .map_err(|e| e.to_string())
+      .and_then(|mut device| {
+        table
+          .to_original(&mut device, xpointer, percentage, self.position)
+          .map_err(|e| e.to_string())
+      })
+      .map_err(|e| format!("not translated into the original EPUB: {e}"))?;
+    let mut notes = Vec::new();
+    if moved.transferred.how != How::SameText {
+      notes.push(moved.transferred.how.to_string());
+    }
+    if let Some(s) = &moved.stepped {
+      notes.push(s.to_string());
+    }
+    if moved.approximate {
+      notes.push("placed between the table's anchors".to_string());
+    }
+    let local = Local {
+      xpointer: moved.transferred.xpointer,
+      percentage,
+      last_read: book.last_read.as_deref().and_then(parse_timestamp),
+    };
+    Ok((local, (!notes.is_empty()).then(|| notes.join("; "))))
   }
 
   /// What `push` would do with `book`; asks the server. `force` sends

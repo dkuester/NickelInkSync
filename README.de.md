@@ -177,8 +177,49 @@ nickelinksync map add --device ~/Kindle-Kopie --book "Good Boy" --library ~/Cali
 nickelinksync push --device ~/Kindle-Kopie
 ```
 
-Die Zuordnungen werden nur auf dem Computer gelesen: Das Tolino-Plugin
-synchronisiert jedes Buch wie bisher unter seiner eigenen Prüfsumme.
+**Zuordnungen auf dem Gerät.** Das Plugin auf dem Gerät hat weder
+Bibliothek noch Original-EPUBs; deshalb bereitet der Rechner das Gerät vor:
+
+```sh
+nickelinksync device prepare --device /Volumes/KOBOeReader --library ~/Calibre-Bibliothek
+```
+
+`device prepare` schreibt drei Dinge nach `.adds/NickelInkSync/` auf dem
+Kobo oder Tolino und sonst nichts auf das Gerät (nie eine EPUB):
+
+- `library.json`, den **Bibliotheksindex**: Titel, Autoren und Prüfsumme
+  jeder Original-EPUB der Bibliothek;
+- `mappings.json`, die Zuordnungen der Bücher auf diesem Gerät, dieselben
+  wie in `map list`;
+- `tables/<Prüfsumme>.json`, je zugeordnetem Buch eine
+  **Übersetzungstabelle**: je Kapitel des Originals der Pfad, wo Absätze
+  und Sätze beginnen und KOReaders Pfad zu jedem Textknoten (kein Text des
+  Buchs), und wo der Text der Gerätedatei vom Original abweicht.
+
+Damit synchronisiert die CLI auf dem Gerät (`--live`, vom Plugin
+aufgerufen) ein zugeordnetes Buch unter der Prüfsumme des Originals und
+übersetzt die Position wie der Rechner mit der Original-EPUB: Der
+gesendete Absatz- oder Satzanfang (`position = paragraph` oder `sentence`)
+ist derselbe; mit `position = exact` und für die Server-Position auf dem
+Rückweg kann die Stelle innerhalb eines Satzes ein paar Zeichen abweichen
+(„placed between the table's anchors“). Auf dem Gerät gilt:
+
+| Buch | Synchronisiert |
+|---|---|
+| zugeordnet, mit Tabelle | unter der Prüfsumme der Original-EPUB, Position übersetzt |
+| zugeordnet, Tabelle fehlt (am Gerät zugeordnet, seitdem nicht vorbereitet) | gar nicht („no-table“) |
+| ein kepub ohne Zuordnung | gar nicht („not-mapped“) |
+| im Index als Original oder Original einer Zuordnung | unter der eigenen Prüfsumme |
+| nichts davon | gar nicht („not-mapped“) |
+| Gerät nicht vorbereitet (keine `library.json`) | `pull` unter der eigenen Prüfsumme; **`push` sendet nichts** |
+
+`device prepare` nach dem Zuordnen, Hinzufügen oder Umwandeln von Büchern
+erneut ausführen. Eine am Gerät angelegte oder entfernte Zuordnung (im
+Plugin geplant) wird in `mappings.json` am Rechner übernommen: Das
+Original wird über seine Prüfsumme in der Bibliothek gefunden. Ein kepub,
+das der Desktop-Client auf einen vorbereiteten Kobo kopiert, bekommt seine
+Tabelle sofort. Eine Tabelle wird nur neu geschrieben, wenn sich die
+Gerätedatei oder ihr Original geändert hat.
 
 **Bibliothek.** Die Original-EPUBs kommen aus einem Ordner, angegeben mit
 `--library` oder als `library` in der Konfigurationsdatei. Liegt dort eine

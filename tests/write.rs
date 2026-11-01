@@ -551,6 +551,7 @@ fn live_pull_tells_the_plugin_about_a_position_it_cannot_take() {
 #[test]
 fn live_push_tells_the_plugin_what_happened() {
   let s = Setup::tolino("live-push");
+  common::index(&s.root, &["book-a.epub"]);
   let _nickel = nickel_running(&s, "OEBPS/xhtml/xhtml-0-81.xhtml#point(/1/2/1/1:0)");
   let args = ["push", "--live", "--content-id", BOOK, "--emit"];
   // The server has nothing: sent.
@@ -608,6 +609,7 @@ fn not_in_line(s: &Setup, entries: &str) -> PathBuf {
 #[test]
 fn a_book_not_in_line_is_never_pushed() {
   let s = Setup::tolino("nil-push");
+  common::index(&s.root, &["book-a.epub"]);
   let list = not_in_line(&s, &format!("{BOOK}\t{STORED}\n"));
   let args = ["push", "--live", "--content-id", BOOK, "--emit"];
   let (output, out) = s.run(&args);
@@ -897,6 +899,7 @@ fn pull_write_folds_in_a_wal_nickel_left_behind() {
 #[test]
 fn live_kepub_is_neither_sent_nor_taken() {
   let s = Setup::tolino("live-kepub");
+  common::index(&s.root, &["book-a.epub"]);
   let kepub = "file:///mnt/onboard/Books/book-a.kepub.epub";
   let _nickel = nickel_running(&s, "OEBPS/xhtml/xhtml-0-81.xhtml#point(/1/2/1/1:0)");
   let (_, out) = emitted(&s, &["push", "--live", "--content-id", kepub, "--emit"]);
