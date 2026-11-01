@@ -1115,10 +1115,17 @@ Auf dem Kobo ist das Plugin inaktiv.
     er geht, ersetzt er dort den heutigen Weg B (CLI schreibt, verwirft die
     Seiten im Cache, N5); sonst bleibt Weg B.
   - [ ] **du:** Dieselben Tests wie C4 bis C6 am Tolino.
-- [ ] **(in D2, nach C3)** Knopf „Gerät vorbereiten“ in der GUI
+- [x] **(in D2, nach C3)** Knopf „Gerät vorbereiten“ in der GUI
   (`prepare::prepare` mit Fortschritt, `Prepared::load` für den Hinweis);
   beim Kopieren (E5) schreibt `copy::copy` Zuordnung und Tabelle schon
   selbst (`prepare::put_mapping`), wenn das Gerät vorbereitet ist.
+  Umgesetzt: Knopf neben „Aus Bibliothek hinzufügen …“ bei Kobo und
+  Tolino, Fortschritt „n von m“, Meldung mit Originalen, Zuordnungen,
+  Tabellen, übernommenen und entfernten Zuordnungen und allem, was nicht
+  ging; darunter „Vorbereitet: <Zeit>“ oder der Hinweis „Gerät nicht
+  vorbereitet“.
+  - [ ] **du:** „Gerät vorbereiten“ am Tolino oder Kobo, dann ein Buch
+    über das Plugin synchronisieren.
 
 ## Optional (später)
 

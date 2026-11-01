@@ -151,6 +151,11 @@ pub struct Texts {
   pub about_text: &'static str,
   pub release_check: &'static str,
   pub kepubify_note: &'static str,
+  pub prepare_button: &'static str,
+  pub prepare_hint: &'static str,
+  pub preparing: &'static str,
+  pub prepared_at: &'static str,
+  pub not_prepared: &'static str,
   pub settings: &'static str,
   pub settings_hint: &'static str,
   pub user: &'static str,
@@ -373,6 +378,38 @@ pub fn new_release(lang: Lang, version: &str) -> String {
   }
 }
 
+/// What preparing a device did, then each book it could not handle.
+pub fn prepared(lang: Lang, r: &nickelinksync::prepare::Report) -> String {
+  let mut line = match lang {
+    Lang::De => format!(
+      "Gerät vorbereitet: {} Originale im Index, {} Zuordnungen, {} Tabellen geschrieben \
+       ({} unverändert, {} entfernt); {} Zuordnungen vom Gerät übernommen, {} entfernt.",
+      r.originals,
+      r.mappings,
+      r.tables_written,
+      r.tables_kept,
+      r.tables_removed,
+      r.imported.len(),
+      r.removed.len()
+    ),
+    Lang::En => format!(
+      "Device prepared: {} originals in the index, {} mappings, {} tables written \
+       ({} unchanged, {} removed); {} mappings taken over from the device, {} removed.",
+      r.originals,
+      r.mappings,
+      r.tables_written,
+      r.tables_kept,
+      r.tables_removed,
+      r.imported.len(),
+      r.removed.len()
+    ),
+  };
+  for (what, why) in r.unresolved.iter().chain(&r.failed) {
+    line.push_str(&format!("\n{what}: {why}"));
+  }
+  line
+}
+
 /// After a backup was put back.
 pub fn restored(lang: Lang, before: &std::path::Path) -> String {
   match lang {
@@ -576,6 +613,11 @@ static DE: Texts = Texts {
   about_text: "Gleicht Lesepositionen zwischen Kobo, Tolino, Kindle (experimentell) und KOReader über einen KOSync-Server ab. MIT-Lizenz.",
   release_check: "Einmal am Tag bei GitHub nach einer neuen Version sehen",
   kepubify_note: "Mitgeliefert, um EPUBs beim Kopieren auf einen Kobo in kepubs umzuwandeln.",
+  prepare_button: "Gerät vorbereiten",
+  prepare_hint: "Legt auf dem Gerät den Index der Bibliothek, die Zuordnungen und je zugeordnetem Buch eine Übersetzungstabelle ab, damit es ohne Rechner synchronisiert; übernimmt am Gerät angelegte Zuordnungen.",
+  preparing: "Bereite das Gerät vor …",
+  prepared_at: "Für den Sync ohne Rechner vorbereitet:",
+  not_prepared: "Gerät nicht vorbereitet: Ohne „Gerät vorbereiten“ sendet das Plugin auf dem Gerät nichts.",
   settings: "Einstellungen",
   settings_hint: "Gespeichert in config.ini, gemeinsam mit der CLI; vorher legt die App config.ini.bak an.",
   user: "Benutzer",
@@ -729,6 +771,11 @@ static EN: Texts = Texts {
   about_text: "Syncs reading positions between Kobo, Tolino, Kindle (experimental) and KOReader through a KOSync server. MIT License.",
   release_check: "Look for a new version on GitHub once a day",
   kepubify_note: "Shipped to convert EPUBs to kepubs when copying to a Kobo.",
+  prepare_button: "Prepare device",
+  prepare_hint: "Puts the library's index, the mappings and a translation table for each mapped book on the device, so it syncs without the computer; takes over mappings made on the device.",
+  preparing: "Preparing the device …",
+  prepared_at: "Prepared for syncing without the computer:",
+  not_prepared: "Device not prepared: without “Prepare device” the plugin on the device sends nothing.",
   settings: "Settings",
   settings_hint: "Saved in config.ini, shared with the CLI; the app keeps config.ini.bak first.",
   user: "User",

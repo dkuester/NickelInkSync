@@ -54,6 +54,8 @@ enum Action {
   AddFromLibrary { kobo: bool },
   /// Choose a backup of the device database to put back.
   Restore,
+  /// Prepare the device to sync on its own.
+  Prepare,
   /// Ask before pushing a book without a reference EPUB.
   PushUnreferenced { id: String, title: String },
 }
@@ -126,6 +128,8 @@ pub struct App {
   copy_dialog: Option<CopyDialog>,
   restore_dialog: Option<RestoreDialog>,
   about_open: bool,
+  /// Preparing the shown device: how far it got.
+  preparing: Option<(usize, usize)>,
 }
 
 impl App {
@@ -166,6 +170,7 @@ impl App {
       copy_dialog: None,
       restore_dialog: None,
       about_open: false,
+      preparing: None,
       history: None,
     };
     app.check_release();
@@ -283,6 +288,17 @@ impl App {
           }
           self.devices = found;
         }
+        Event::Preparing { root, done, total } if current(&root) => {
+          self.preparing = Some((done, total));
+        }
+        Event::Prepared { root, result } => {
+          let lang = self.lang();
+          if current(&root) {
+            self.preparing = None;
+            self.notice = Some(result.map(|r| i18n::prepared(lang, &r)));
+          }
+        }
+        Event::Preparing { .. } => {}
         Event::Progress { root, done, total } if current(&root) => {
           self.view = View::Loading { done, total };
         }
@@ -581,6 +597,15 @@ impl App {
       }
       None => {}
     }
+    if let Some((done, total)) = self.preparing {
+      ui.horizontal(|ui| {
+        ui.spinner();
+        ui.label(t.preparing);
+        if total > 0 {
+          ui.weak(i18n::progress(lang, done, total));
+        }
+      });
+    }
     let mut action = None;
     match &self.view {
       View::Nothing => {
@@ -599,7 +624,8 @@ impl App {
         ui.colored_label(ui.visuals().error_fg_color, format!("{}: {e}", t.failed));
       }
       View::Loaded(loaded) => {
-        action = loaded_view(ui, t, lang, loaded, self.server.as_ref(), self.busy)
+        let busy = self.busy || self.preparing.is_some();
+        action = loaded_view(ui, t, lang, loaded, self.server.as_ref(), busy)
       }
     }
     match action {
@@ -607,6 +633,15 @@ impl App {
       Some(Action::Unmap { key, title }) => self.unmap_dialog = Some(UnmapDialog { key, title }),
       Some(Action::Push(ids)) => self.push(ids),
       Some(Action::Pull(ids)) => self.pull(ids),
+      Some(Action::Prepare) => {
+        if let Some(selected) = &self.selected {
+          self.preparing = Some((0, 0));
+          self.notice = None;
+          self.worker.send(Command::Prepare {
+            root: selected.root.clone(),
+          });
+        }
+      }
       Some(Action::Restore) => {
         if let Some(selected) = &self.selected {
           self.restore_dialog = Some(RestoreDialog::new());
@@ -1199,7 +1234,22 @@ fn loaded_view(
       {
         action = Some(Action::Restore);
       }
+      if ui
+        .add_enabled(!busy, egui::Button::new(t.prepare_button))
+        .on_hover_text(t.prepare_hint)
+        .clicked()
+      {
+        action = Some(Action::Prepare);
+      }
     });
+    match &loaded.prepared {
+      Some(created) => {
+        ui.weak(format!("{} {created}", t.prepared_at));
+      }
+      None => {
+        ui.colored_label(ui.visuals().warn_fg_color, t.not_prepared);
+      }
+    }
   }
   let compared = match server {
     Some(ServerState::Compared(compared)) => Some(compared),
