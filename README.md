@@ -18,7 +18,7 @@ the same progress.
 > `nickelinksync push` sends the reading position of each sideloaded book
 > to a KOSync server, `status` shows the device and server positions side by
 > side, and `pull` shows what a newer server position would change; on a
-> Tolino, `pull --write` writes it to the device (experimental, with a
+> Tolino or Kobo, `pull --write` writes it to the device (experimental, with a
 > backup first). The scope and the device-database findings it
 > rests on are in [SCOPE.md](SCOPE.md), the next steps are in
 > [ROADMAP.md](ROADMAP.md).
@@ -35,7 +35,7 @@ nickelinksync pull --device /Volumes/KOBOeReader
 |---|---|
 | `status` | Lists the sideloaded books with hash, stored position, KOReader XPointer and, if configured, the position on the server. |
 | `push` | Sends each book's position to the server. A position the server got after the book was last read on the device is never overwritten; by default it also asks before moving the server back to an earlier place in the book (see `confirm` below). `--force` sends without asking, `--dry-run` only shows what would be sent. |
-| `pull` | Shows which books have a newer position on the server, how the device would store it and where it would ask first. Only with `--write` is it written to the device (Tolino so far, experimental, see below); `--force` takes the server position without asking. |
+| `pull` | Shows which books have a newer position on the server, how the device would store it and where it would ask first. Only with `--write` is it written to the device (Tolino and Kobo, experimental, see below); `--force` takes the server position without asking. |
 | `sync --pending` | Sends the books whose push failed on the device (no network, a server error), as kept in `.adds/NickelInkSync/state.json`, if they still should be sent (see [The last agreed position](#the-last-agreed-position)). |
 
 All three take `--book <text>` to limit them to books whose title or file
@@ -143,9 +143,9 @@ found by the 32 characters after it), *chapter start only* (the place in
 the chapter was not found), *from the percentage only* (the chapter is not
 in the other file, for example calibre's `titlepage.xhtml`). `pull
 --write` moves the server position back into a mapped EPUB on the Tolino
-the same way, and into a mapped kepub on a Kobo with firmware 6.x as the
-span Nickel stores (`#kobo.N.M:offset`); a kepub on Kobo firmware 4.x is
-not written.
+the same way, and into a mapped kepub on a Kobo as the span Nickel stores:
+`#kobo.N.M:offset` on firmware 6.x, `#kobo.N.M` on 4.x (which stores no
+offset, so the book opens at the start of that span, usually a sentence).
 
 **Kindle (experimental).** Kindle support stays as it is until Kobo and
 Tolino are stable: no further work on it, and no device test before 0.1.0.
@@ -448,7 +448,7 @@ Tolino starts).
 
 ## Devices and books
 
-- Kobo on firmware 4.x and Tolino Shine 5, Shine Color and Vision Color on
+- Kobo on firmware 4.x and 6.x, and Tolino Shine 5, Shine Color and Vision Color on
   firmware 5.x
 - Sideloaded kepub and EPUB books without DRM
 - For now, put the **same file** on every device. The sync server tells
