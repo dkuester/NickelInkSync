@@ -287,9 +287,7 @@ impl Device {
   /// itself right after. Returns the backup if it made one.
   pub fn backup_live(&self, backups: &Path, today: &str) -> Result<Option<PathBuf>, Error> {
     if !self.live {
-      return Err(Error::Refused(
-        "only while Nickel runs (--live)".into(),
-      ));
+      return Err(Error::Refused("only while Nickel runs (--live)".into()));
     }
     daily_backup(&self.db.conn, backups, today)
   }

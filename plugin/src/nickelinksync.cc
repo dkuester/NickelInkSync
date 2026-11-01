@@ -262,8 +262,12 @@ static QString g_open_id;
 // The book whose position needs an answer (a conflict) or cannot be taken
 // from the server, or that was not brought in line with it: not pushed.
 static QString g_not_synced;
+// Why, for the message on leaving.
+static QString g_not_synced_why;
 // The book opened without asking the server (no network, a server error)
-// and its position then: pushed on leaving only if that moved.
+// and the page Nickel opened it on (its start, empty until known): pushed
+// on leaving only if the reader left that page. Nickel's row is no guide:
+// on a book's first opening it saves the first page on leaving anyway.
 static QString g_unasked_id;
 static QString g_unasked_at;
 // The toast about a device without `device prepare` was shown.
@@ -503,7 +507,8 @@ static void when_online(int seconds, F fn)
     }
     log_line(QStringLiteral("no network: switching Wi-Fi on, waiting up to %1 s").arg(seconds));
     QTimer *t = new QTimer(qApp);
-    QObject::connect(t, &QTimer::timeout, t, [t, fn, seconds, n = 0]() mutable {
+    int n = 0;  // C++11 for the Qt 5 build: no init-capture
+    QObject::connect(t, &QTimer::timeout, t, [t, fn, seconds, n]() mutable {
         if (online()) {
             t->deleteLater();
             log_line(QStringLiteral("network is there after %1 s").arg(n + 1));
@@ -734,6 +739,23 @@ static void check_open(const QString &id, const QString &target, const QString &
         toast(true, QStringLiteral("Nicht übernommen"),
               QStringLiteral("Anderes Kapitel geöffnet"));
     }
+}
+
+// After opening a book without the server: notes the page Nickel shows,
+// asking again while Nickel does not know it yet (as check_open()).
+static void note_opened_page(const QString &id, int tries)
+{
+    ReadingView *view = reading_view();
+    if (!view || g_open_id != id || g_unasked_id != id) {
+        return;
+    }
+    const QString at = current_location(view);
+    if (at.isEmpty() && tries > 0) {
+        QTimer::singleShot(kCheckOpenRetryMs, qApp, [id, tries] { note_opened_page(id, tries - 1); });
+        return;
+    }
+    g_unasked_at = at;
+    log_line(QStringLiteral("opened without the server on %1").arg(at));
 }
 
 // The row of a Volume as Nickel holds it, for the log (empty without
@@ -1054,11 +1076,19 @@ static void start_cli(const QString &what, const QStringList &args, F done)
 {
     QProcess *p = new QProcess(qApp);
     p->setProcessChannelMode(QProcess::MergedChannels);
-    QObject::connect(p, &QProcess::finished, p, [p, done](int, QProcess::ExitStatus) {
-        done(p);
-        p->deleteLater();
-    });
-    QObject::connect(p, &QProcess::errorOccurred, p, [p, what](QProcess::ProcessError error) {
+    // Both signals named so they build with Qt 5 too (finished is
+    // overloaded there, errorOccurred came in 5.6).
+    QObject::connect(p, static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished), p,
+                     [p, done](int, QProcess::ExitStatus) {
+                         done(p);
+                         p->deleteLater();
+                     });
+#if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
+    const auto failed = &QProcess::errorOccurred;
+#else
+    const auto failed = static_cast<void (QProcess::*)(QProcess::ProcessError)>(&QProcess::error);
+#endif
+    QObject::connect(p, failed, p, [p, what](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart) {
             log_line(QStringLiteral("%1: could not start the CLI: %2").arg(what, p->errorString()));
             toast(true, QStringLiteral("NickelInkSync startet nicht"), QStringLiteral("Siehe NickelInkSync.log"));
@@ -1140,9 +1170,10 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
         // Pushed on leaving only if the position moved; without a network
         // the CLI then keeps it pending.
         g_unasked_id = id;
-        g_unasked_at = g_open_row.value(QStringLiteral("ChapterIDBookmarked")).toString();
+        g_unasked_at.clear();
         log_line(QStringLiteral("open %1 unchanged: the server could not be asked").arg(id));
         ReadingController__setVolume(self, volume, bookmark);
+        QTimer::singleShot(kCheckOpenMs, qApp, [id] { note_opened_page(id, kCheckOpenTries); });
         // Without Wi-Fi the CLI only sees a timeout or no route; Nickel's
         // check is not reliable either way, so the text names both.
         const bool no_wifi = !wifi && (p.error_kind == "timeout" || p.error_kind == "network");
@@ -1154,6 +1185,7 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     QTimer::singleShot(kPendingDelayMs, qApp, [] { sync_pending(); });
     if (p.conflict) {
         g_not_synced = id;
+        g_not_synced_why = QStringLiteral("Konflikt, bleibt liegen");
         log_line(QStringLiteral("open %1 unchanged: a conflict, left alone; leaving it will not push").arg(id));
         ReadingController__setVolume(self, volume, bookmark);
         toast(true, QStringLiteral("Konflikt, nicht geladen"), QStringLiteral("Server und Gerät bewegt, bleibt liegen"),
@@ -1162,6 +1194,7 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     }
     if (p.unanswered) {
         g_not_synced = id;
+        g_not_synced_why = kUnansweredReason;
         log_line(QStringLiteral("open %1 unchanged: the position needs an answer (confirm); leaving it will not push").arg(id));
         ReadingController__setVolume(self, volume, bookmark);
         toast(true, QStringLiteral("Nicht übernommen"), kUnansweredReason, kOpenToastDelayMs);
@@ -1169,6 +1202,7 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     }
     if (!p.not_taken.isEmpty()) {
         g_not_synced = id;
+        g_not_synced_why = skip_reason(p.not_taken);
         log_line(QStringLiteral("open %1 unchanged: the server's position cannot be taken; leaving it will not push").arg(id));
         ReadingController__setVolume(self, volume, bookmark);
         toast(true, QStringLiteral("Nicht übernommen"), skip_reason(p.not_taken), kOpenToastDelayMs);
@@ -1185,9 +1219,11 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     // Not in line with the server until check_open() finds Nickel at the
     // pulled place.
     g_not_synced = id;
+    g_not_synced_why = QStringLiteral("Beim Öffnen nicht abgeglichen");
     if (g_kobo) {
         if (!write_through_nickel(id, p)) {
             g_not_synced = id;
+            g_not_synced_why = QStringLiteral("Beim Öffnen nicht abgeglichen");
             ReadingController__setVolume(self, volume, bookmark);
             toast(true, QStringLiteral("Nicht übernommen"), QStringLiteral("Nickel schreibt nicht, siehe Log"),
                   kOpenToastDelayMs);
@@ -1283,26 +1319,20 @@ static void start_push(const QString &id)
     start_cli(QStringLiteral("push"), args, [id](QProcess *p) { push_finished(id, p); });
 }
 
-// The book's row as Nickel's Volume cache holds it after saving
-// (VolumeManager::updateBookmark keeps the cache in step with the
-// database); logs what Nickel changed in it since opening. Empty without
-// the symbols.
-static QMap<QString, QVariant> saved_row(const QString &id)
+// What Nickel changed in the book's row while it was open, as its Volume
+// cache holds it after saving (VolumeManager::updateBookmark keeps the
+// cache in step with the database).
+static void log_saved_row(const QString &id)
 {
-    if (!VolumeManager__getById || !Volume__isValid || !Content__getDbValues) {
-        return QMap<QString, QVariant>();
+    if (!VolumeManager__getById || !Volume__isValid || !Content__getDbValues || g_open_row.isEmpty()) {
+        return;
     }
     alignas(8) unsigned char saved[kVolumeBytes];
     VolumeManager__getById(saved, id, QString());
-    QMap<QString, QVariant> row;
     if (Volume__isValid(saved)) {
-        row = row_of(saved);
-        if (!g_open_row.isEmpty()) {
-            log_line(QStringLiteral("row on leaving, changed since opening: %1").arg(row_diff(g_open_row, row)));
-        }
+        log_line(QStringLiteral("row on leaving, changed since opening: %1").arg(row_diff(g_open_row, row_of(saved))));
     }
     Volume__dtor(saved);
-    return row;
 }
 
 extern "C" __attribute__((visibility("default")))
@@ -1312,16 +1342,18 @@ void _nh_ReadingView__leavingReadingExperience(ReadingView *self)
         ReadingView__leavingReadingExperience(self);
         return;
     }
-    // Still on the page taken from the server? Asked before Nickel leaves.
-    const bool on_taken_page = !g_taken_page.isEmpty() && g_taken_id == g_open_id
-                               && current_location(self) == g_taken_page;
+    // Still on the page taken from the server, or the one a book opened
+    // without the server opened on? Asked before Nickel leaves.
+    const QString leaving_at = current_location(self);
+    const bool on_taken_page = !g_taken_page.isEmpty() && g_taken_id == g_open_id && leaving_at == g_taken_page;
+    const bool on_unasked_page = !g_unasked_at.isEmpty() && g_unasked_id == g_open_id && leaving_at == g_unasked_at;
     // First Nickel saves the position.
     ReadingView__leavingReadingExperience(self);
     if (!g_open_id.startsWith(QString::fromLatin1(kSideloaded))) {
         return;
     }
     const QString id = g_open_id;
-    const QMap<QString, QVariant> row = saved_row(id);
+    log_saved_row(id);
     if (on_taken_page) {
         log_line(QStringLiteral("left %1 on the page taken from the server (%2): nothing to push").arg(id, g_taken_page));
         toast(false, QStringLiteral("Fortschritt ist aktuell"), QStringLiteral("Noch auf der Seite vom Server"));
@@ -1332,15 +1364,14 @@ void _nh_ReadingView__leavingReadingExperience(ReadingView *self)
     }
     if (g_not_synced == id) {
         log_line(QStringLiteral("left %1, which is not in line with the server: not pushed").arg(id));
-        toast(true, QStringLiteral("Nicht gesendet"), QStringLiteral("Beim Öffnen nicht abgeglichen"));
+        toast(true, QStringLiteral("Nicht gesendet"), g_not_synced_why);
         if (online()) {
             sync_pending();
         }
         return;
     }
-    if (g_unasked_id == id && !row.isEmpty()
-        && row.value(QStringLiteral("ChapterIDBookmarked")).toString() == g_unasked_at) {
-        log_line(QStringLiteral("left %1, opened without the server and not moved: nothing to push").arg(id));
+    if (on_unasked_page) {
+        log_line(QStringLiteral("left %1 on the page it opened on without the server: nothing to push").arg(id));
         if (online()) {
             sync_pending();
         }

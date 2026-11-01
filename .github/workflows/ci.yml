@@ -116,7 +116,7 @@ jobs:
           cp plugin/config.ini.example "$d/.adds/NickelInkSync/"
       - uses: actions/upload-artifact@v4
         with:
-          name: NickelInkSync-tolino
+          name: NickelInkSync-device
           path: dist/NickelInkSync/
           include-hidden-files: true
           if-no-files-found: error

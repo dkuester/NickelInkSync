@@ -462,8 +462,8 @@ starts).
 
 ## Devices and books
 
-- Kobo on firmware 4.x and Tolino Shine 5, Shine Color and Vision Color on
-  firmware 5.x
+- Kobo on firmware 4.x and 6.0 and Tolino Shine 5, Shine Color and Vision
+  Color on firmware 5.x (the plugin: Kobo 6.0, Tolino 5.18 and later)
 - Sideloaded kepub and EPUB books without DRM
 - For now, put the **same file** on every device. The sync server tells
   books apart by a hash of the file, so a kepub on one device and the original

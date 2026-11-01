@@ -970,7 +970,10 @@ fn live_pull_hands_the_write_to_nickel() {
   );
   // The server is newer than DateLastRead: keep it.
   assert!(out.contains("\nNICKELINKSYNC_LAST_READ\t\n"), "{out}");
-  assert!(out.contains("\nNICKELINKSYNC_STALE_PAGES\tp1\tp2\n"), "{out}");
+  assert!(
+    out.contains("\nNICKELINKSYNC_STALE_PAGES\tp1\tp2\n"),
+    "{out}"
+  );
   let base = out
     .lines()
     .find_map(|l| l.strip_prefix("NICKELINKSYNC_BASE\t"))
