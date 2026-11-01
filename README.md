@@ -57,8 +57,18 @@ cache of rendered pages and, when no cached page holds the written place,
 at the first cached page of that chapter. So the write also drops the
 cached pages of that chapter (only of that chapter, and only when none
 holds the place); it then says so, and the device has to be restarted, not
-only ejected, because Nickel keeps those pages in memory. To undo, copy the backup back to `.kobo/KoboReader.sqlite` while
-the device is mounted.
+only ejected, because Nickel keeps those pages in memory.
+
+To undo, `nickelinksync restore --device /Volumes/KOBOeReader` lists the
+backups of that device, newest first, and `--backup PATH` puts one back:
+first a backup of the database as it is, then the old one through SQLite
+(so a left-over `-wal` cannot mix with it), then eject and restart the
+device. Each backup has a `.device` file next to it naming its device by a
+checksum of the serial number; a backup of another device, one from
+another database version (a firmware update since) and, while Kobalt is
+installed, any backup is refused. Backups from before this list as of an
+unknown device. The desktop client does the same with "Restore a
+backup …"
 
 ### Book mapping (in progress)
 
@@ -94,6 +104,7 @@ book under which checksum it syncs (shown as `sync as`):
 | mapped, EPUB unchanged | under the original EPUB's checksum, the position translated (below) |
 | mapped, EPUB missing or changed | not at all, until it is mapped again |
 | the same file as in the library, or the original EPUB of a mapping | under its own checksum |
+| a kepub (`.kepub.epub` or MimeType `application/x-kobo-epub+zip`) that is not mapped | not at all ("not mapped"), library or not: KOReader knows the book only by its original EPUB, so a kepub is never synced under its own checksum |
 | none of these, with a library configured | not at all ("not mapped"; `map suggest` helps) |
 | no library configured | under its own checksum, as before |
 
@@ -106,9 +117,13 @@ found by the 32 characters after it), *chapter start only* (the place in
 the chapter was not found), *from the percentage only* (the chapter is not
 in the other file, for example calibre's `titlepage.xhtml`). `pull
 --write` moves the server position back into a mapped EPUB on the Tolino
-the same way; into a kepub it writes nothing yet.
+the same way, and into a mapped kepub on a Kobo with firmware 6.x as the
+span Nickel stores (`#kobo.N.M:offset`); a kepub on Kobo firmware 4.x is
+not written.
 
-**Kindle.** `status` and `push` also read a Kindle's books, for every KFX
+**Kindle (experimental).** Kindle support stays as it is until Kobo and
+Tolino are stable: no further work on it, and no device test before 0.1.0.
+`status` and `push` also read a Kindle's books, for every KFX
 that is mapped to its EPUB (`map add`): the last page read (`lpr` in the
 `.sdr` folder) is translated into the EPUB and sent under its checksum.
 Nothing is written to the Kindle, and `pull` refuses. A recent Kindle
@@ -148,6 +163,17 @@ The mappings are kept in `mappings.json` in the data directory
 
 ### Desktop client (in progress)
 
+**macOS (11 or later, Apple silicon and Intel):** open
+`NickelInkSync-<version>-macos.dmg` and drag NickelInkSync into
+Applications. The app is not notarized (no Apple Developer ID), so macOS
+blocks it the first time: open it once, then System Settings → Privacy &
+Security → "Open Anyway" (since macOS 15 a right-click → "Open" no longer
+does it). The CLI comes as `nickelinksync-<version>-macos.zip`; after
+unpacking, `xattr -d com.apple.quarantine nickelinksync` lets it run. The
+app ships [kepubify](https://github.com/pgaskin/kepubify) (MIT) inside;
+its licence is in the app and on the disk image. `packaging/macos/package.sh`
+builds both files (CI: job `package-macos`).
+
 A window for the same work, built on the same library (`gui/`, egui):
 `just gui` or `cargo run -p nickelinksync-gui`. It finds a Kobo or
 Tolino connected over USB (macOS: `/Volumes`), takes a copy of a
@@ -160,13 +186,14 @@ EPUB chosen by hand; a mapping can be changed or removed. With a server
 in `config.ini` it shows the server's position next to the device's and
 sends positions per book or all at once; a `confirm` question comes as a
 dialog (keep the server's, or send the device's). On a Tolino or Kobo
-(not into kepubs yet, and not with Kobalt installed) "Get" and "Get all"
+(a kepub only once it is mapped, and not with Kobalt installed) "Get" and "Get all"
 write the server's position into the device database, after a
 backup of it in the data directory, as `pull --write` does; a `confirm`
 question comes as the same dialog (keep the device's, or take the
 server's), and the device is read again afterwards. Eject the device
 before you open the book, and restart it when the notice says so. "History" lists what the CLI and the window
-sent and wrote (`history.jsonl` in the data directory). "Add from
+sent and wrote (`history.jsonl` in the data directory). "Restore a backup …" puts back
+one of the device's database backups (as `restore` does). "Add from
 library" copies books of the library to `Books/` on a Kobo or Tolino,
 never over a file that is there or an EPUB already on the device; on a
 Kobo optionally as kepubs made by
@@ -277,8 +304,10 @@ position from the server and the book opens there, when you leave the
 book it sends yours. It
 calls the same `nickelinksync` program on the device and follows the same
 `confirm` rule; it cannot ask yet, so a position that needs an answer is
-left alone and noted in the log. On a Kobo the plugin stays inactive for
-now.
+left alone and noted in the log. It does not know the mappings (they are
+on the computer), so it never syncs a kepub; the message then says "kepub
+ohne Zuordnung" (kepub without a mapping). On a Kobo the plugin stays
+inactive for now.
 
 1. Get `NickelInkSync-tolino` from the latest CI run (or `just package`,
    see [Build](#build)). It holds `Kobo.tgz` and a `.adds/NickelInkSync/`
@@ -346,8 +375,8 @@ Tolino starts).
 - Sideloaded kepub and EPUB books without DRM
 - For now, put the **same file** on every device. The sync server tells
   books apart by a hash of the file, so a kepub on one device and the original
-  EPUB on another count as two different books. The manual mapping between
-  them is being built (see [Book mapping](#book-mapping-in-progress)).
+  EPUB on another count as two different books. A kepub syncs only once it
+  is mapped to its original EPUB (see [Book mapping](#book-mapping-in-progress)).
 
 ## History
 
@@ -402,6 +431,7 @@ NickelInkSync builds on the work of these projects and their maintainers.
 |---|---|---|---|
 | [NickelHook](https://github.com/pgaskin/NickelHook) | Patrick Gaskin | MIT | Hooking Nickel; the plugin is built on it |
 | [NickelHook, branch `qt6-support`](https://github.com/nicoverbruggen/NickelHook/tree/qt6-support) | Nico Verbruggen | MIT | Qt6 port of NickelHook for firmware 5.x, the plugin's submodule |
+| [kepubify](https://github.com/pgaskin/kepubify) 4.0.4 | Patrick Gaskin | MIT | Shipped with the macOS app: converting EPUBs to kepubs when copying to a Kobo |
 | Rust crates: [clap](https://github.com/clap-rs/clap), [md-5](https://github.com/RustCrypto/hashes), [quick-xml](https://github.com/tafia/quick-xml), [rusqlite](https://github.com/rusqlite/rusqlite) (with [SQLite](https://sqlite.org)), [serde](https://github.com/serde-rs/serde), [ureq](https://github.com/algesten/ureq) (with [rustls](https://github.com/rustls/rustls)), [zip](https://github.com/zip-rs/zip2) | their authors | MIT / Apache-2.0, SQLite public domain | The CLI (see `Cargo.toml`) |
 
 **Ideas and documentation, no code** (re-implemented from the described

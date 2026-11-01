@@ -63,8 +63,19 @@ ersten gespeicherten Seite dieses Kapitels. Deshalb verwirft das Schreiben
 auch die gespeicherten Seiten dieses Kapitels (nur dieses Kapitels und nur,
 wenn keine die Stelle enthält); es meldet das, und dann musst du das Gerät
 neu starten, nicht nur auswerfen, weil Nickel diese Seiten im Speicher
-hält. Rückgängig machen: die Sicherung bei eingehängtem Gerät
-zurück nach `.kobo/KoboReader.sqlite` kopieren.
+hält.
+
+Rückgängig machen: `nickelinksync restore --device /Volumes/KOBOeReader`
+listet die Sicherungen dieses Geräts, die neueste zuerst, und `--backup
+PFAD` spielt eine zurück: erst eine Sicherung des jetzigen Stands, dann die
+alte über SQLite (so mischt sich keine liegen gebliebene `-wal` hinein);
+danach das Gerät auswerfen und neu starten. Neben jeder Sicherung liegt
+eine `.device`-Datei, die ihr Gerät über eine Prüfsumme der Seriennummer
+nennt; die Sicherung eines anderen Geräts, eine aus einer anderen
+Datenbankversion (seitdem ein Firmware-Update) und, solange Kobalt
+installiert ist, jede Sicherung wird abgelehnt. Ältere Sicherungen stehen
+als „Gerät unbekannt“ in der Liste. Der Desktop-Client macht dasselbe mit
+„Sicherung zurückspielen …“.
 
 ### Buchzuordnung (im Aufbau)
 
@@ -102,8 +113,9 @@ entscheiden für jedes Buch, unter welcher Prüfsumme es synchronisiert wird
 | zugeordnet, EPUB unverändert | unter der Prüfsumme der Original-EPUB, Position übersetzt (siehe unten) |
 | zugeordnet, EPUB fehlt oder geändert | gar nicht, bis es neu zugeordnet ist |
 | dieselbe Datei wie in der Bibliothek, oder die Original-EPUB einer Zuordnung | unter der eigenen Prüfsumme |
+| ein kepub (`.kepub.epub` oder MimeType `application/x-kobo-epub+zip`) ohne Zuordnung | gar nicht („not mapped“), mit oder ohne Bibliothek: KOReader kennt das Buch nur unter seiner Original-EPUB, ein kepub wird also nie unter seiner eigenen Prüfsumme synchronisiert |
 | nichts davon, Bibliothek eingerichtet | gar nicht („not mapped“; `map suggest` hilft) |
-| keine Bibliothek eingerichtet | unter der eigenen Prüfsumme, wie bisher |
+| keine Bibliothek eingerichtet (EPUB) | unter der eigenen Prüfsumme, wie bisher |
 
 Die Position wird zwischen Gerätedatei und Original über das Kapitel (den
 Pfad der Datei; von Calibre geteilte Kapitel `ch1_split_000.xhtml`,
@@ -114,9 +126,13 @@ wurde über die 32 Zeichen danach gefunden), *chapter start only* (die
 Stelle im Kapitel wurde nicht gefunden), *from the percentage only* (das
 Kapitel fehlt in der anderen Datei, z. B. Calibres `titlepage.xhtml`).
 `pull --write` bringt die Server-Position genauso in eine zugeordnete EPUB
-auf dem Tolino zurück; in ein kepub schreibt es noch nichts.
+auf dem Tolino zurück und in ein zugeordnetes kepub auf einem Kobo mit
+Firmware 6.x als die Stelle, die Nickel speichert (`#kobo.N.M:offset`); in
+ein kepub auf Kobo-Firmware 4.x schreibt es nichts.
 
-**Kindle.** `status` und `push` lesen auch die Bücher eines Kindle, und
+**Kindle (experimentell).** Die Kindle-Unterstützung bleibt, wie sie ist,
+bis Kobo und Tolino stabil laufen: keine Weiterentwicklung und kein
+Gerätetest vor 0.1.0. `status` und `push` lesen auch die Bücher eines Kindle, und
 zwar jedes KFX, das seiner EPUB zugeordnet ist (`map add`): Die zuletzt
 gelesene Seite (`lpr` im `.sdr`-Ordner) wird in die EPUB übersetzt und
 unter deren Prüfsumme gesendet. Auf den Kindle wird nichts geschrieben,
@@ -160,6 +176,17 @@ Die Zuordnungen liegen in `mappings.json` im Datenordner
 
 ### Desktop-Client (im Aufbau)
 
+**macOS (ab 11, Apple Silicon und Intel):** `NickelInkSync-<Version>-macos.dmg`
+öffnen und NickelInkSync in „Programme“ ziehen. Die App ist nicht
+notarisiert (keine Apple Developer ID), daher blockiert macOS sie beim
+ersten Start: einmal öffnen, dann Systemeinstellungen → Datenschutz &
+Sicherheit → „Dennoch öffnen“ (seit macOS 15 genügt Rechtsklick → „Öffnen“
+nicht mehr). Die CLI kommt als `nickelinksync-<Version>-macos.zip`; nach
+dem Entpacken lässt `xattr -d com.apple.quarantine nickelinksync` sie
+laufen. In der App steckt [kepubify](https://github.com/pgaskin/kepubify)
+(MIT); seine Lizenz liegt in der App und auf dem Disk-Image.
+`packaging/macos/package.sh` baut beide Dateien (CI: Job `package-macos`).
+
 Ein Fenster für dieselbe Arbeit, auf derselben Bibliothek (`gui/`, egui):
 `just gui` oder `cargo run -p nickelinksync-gui`. Es findet einen per USB
 angesteckten Kobo oder Tolino (macOS: `/Volumes`), nimmt eine Kopie der
@@ -172,8 +199,8 @@ EPUB; eine Zuordnung lässt sich ändern oder entfernen. Mit einem Server
 in `config.ini` zeigt es die Stelle auf dem Server neben der auf dem
 Gerät und sendet je Buch oder alle auf einmal; eine Rückfrage nach
 `confirm` kommt als Dialog (Server behalten oder Gerät senden). Am
-Tolino und am Kobo (dort noch nicht in kepubs, und nicht mit installiertem
-Kobalt) schreiben „Holen“ und „Alle holen“ die Stelle vom Server in die
+Tolino und am Kobo (ein kepub erst, wenn es zugeordnet ist, und nicht mit
+installiertem Kobalt) schreiben „Holen“ und „Alle holen“ die Stelle vom Server in die
 Gerätedatenbank, vorher legt es eine Sicherung im Datenordner an, wie
 `pull --write`; eine Rückfrage kommt im selben Dialog (Gerät behalten oder
 Server übernehmen), danach liest es das Gerät neu ein. Wirf das Gerät
@@ -262,8 +289,10 @@ neuere Position vom Server, und das Buch öffnet dort; beim Verlassen des
 Buchs sendet es deine. Es
 ruft dasselbe Programm `nickelinksync` auf dem Gerät auf und folgt derselben
 Regel `confirm`; fragen kann es noch nicht, eine Position, die eine Antwort
-bräuchte, bleibt deshalb unverändert und steht im Log. Auf einem Kobo bleibt
-das Plugin vorerst inaktiv.
+bräuchte, bleibt deshalb unverändert und steht im Log. Zuordnungen kennt das
+Plugin nicht (sie liegen auf dem Rechner); ein kepub synchronisiert es
+deshalb nie, die Meldung sagt dann „kepub ohne Zuordnung“. Auf einem Kobo
+bleibt das Plugin vorerst inaktiv.
 
 1. `NickelInkSync-tolino` aus dem letzten CI-Lauf holen (oder `just
    package`, siehe [Bauen](#bauen)). Darin liegen `Kobo.tgz` und ein Ordner
@@ -331,8 +360,8 @@ wird nur beim Start geprüft).
 - Vorerst muss auf jedem Gerät **dieselbe Datei** liegen. Der Sync-Server
   erkennt Bücher an einer Prüfsumme der Datei, ein kepub auf dem einen und das
   ursprüngliche EPUB auf dem anderen Gerät gelten also als zwei verschiedene
-  Bücher. Die manuelle Zuordnung ist im Aufbau (siehe
-  [Buchzuordnung](#buchzuordnung-im-aufbau)).
+  Bücher. Ein kepub wird erst synchronisiert, wenn es seiner Original-EPUB
+  zugeordnet ist (siehe [Buchzuordnung](#buchzuordnung-im-aufbau)).
 
 ## Vorgeschichte
 
@@ -387,7 +416,9 @@ Die Tabelle mit Lizenzen und Links steht im [englischen README](README.md#credit
 - **Code, den es nutzt:** [NickelHook](https://github.com/pgaskin/NickelHook)
   von Patrick Gaskin (MIT), die Grundlage des Plugins, und dessen Qt6-Port im
   [Branch `qt6-support`](https://github.com/nicoverbruggen/NickelHook/tree/qt6-support)
-  von Nico Verbruggen (MIT), das Submodul des Plugins; dazu die Rust-Crates
+  von Nico Verbruggen (MIT), das Submodul des Plugins;
+  [kepubify](https://github.com/pgaskin/kepubify) 4.0.4 von Patrick Gaskin
+  (MIT), in der macOS-App mitgeliefert; dazu die Rust-Crates
   aus `Cargo.toml` (clap, md-5, quick-xml, rusqlite mit SQLite, serde, ureq
   mit rustls, zip).
 - **Ideen und Dokumentation, kein Code** (nachgebaut nach dem beschriebenen

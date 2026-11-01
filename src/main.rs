@@ -1,5 +1,5 @@
 use std::io::IsTerminal;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Duration;
 
@@ -80,6 +80,16 @@ enum Command {
     #[command(subcommand)]
     command: MapCommand,
   },
+  /// List the backups of a device database that `pull --write` made, and
+  /// with --backup put one back (after a backup of the database as it is)
+  Restore {
+    /// Mount point of the device (Kobo or Tolino)
+    #[arg(long)]
+    device: PathBuf,
+    /// The backup to put back, as the list shows it
+    #[arg(long)]
+    backup: Option<PathBuf>,
+  },
 }
 
 #[derive(Subcommand)]
@@ -88,7 +98,7 @@ enum MapCommand {
   List,
   /// Map one book on the device to its original EPUB
   Add {
-    /// Mount point of the device (Kobo, Tolino or Kindle)
+    /// Mount point of the device (Kobo, Tolino, or a Kindle: experimental)
     #[arg(long)]
     device: PathBuf,
     /// The book whose title or file path contains this text
@@ -108,7 +118,7 @@ enum MapCommand {
   /// Suggest an original EPUB from the library for each book on the device
   /// that is neither mapped nor the same file as one in the library
   Suggest {
-    /// Mount point of the device (Kobo, Tolino or Kindle)
+    /// Mount point of the device (Kobo, Tolino, or a Kindle: experimental)
     #[arg(long)]
     device: PathBuf,
     /// Only books whose title or file path contains this text
@@ -139,7 +149,7 @@ struct LibraryArgs {
 #[derive(Args)]
 struct Target {
   /// Mount point of the device, e.g. /Volumes/KOBOeReader (/mnt/onboard on
-  /// the device itself)
+  /// the device itself), or a copy of a Kindle's books (experimental)
   #[arg(long)]
   device: PathBuf,
   /// Configuration file [default: ~/.config/nickelinksync/config.ini]
@@ -182,6 +192,7 @@ fn main() -> ExitCode {
       emit,
     } => (pull(&target, force, write, emit), emit),
     Command::Map { command } => (map(command), false),
+    Command::Restore { device, backup } => (restore(&device, backup.as_deref()), false),
   };
   match result {
     Ok(true) => ExitCode::SUCCESS,
@@ -865,6 +876,40 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
     }
   }
   Ok(ok)
+}
+
+fn restore(device: &Path, backup: Option<&Path>) -> Result<bool> {
+  let Some(source) = backup else {
+    let backups = nickelinksync::restore::list(device)?;
+    if backups.is_empty() {
+      println!("No backups of this device's database.");
+      return Ok(true);
+    }
+    println!(
+      "Backups of the database on {} (newest first):",
+      device.display()
+    );
+    for b in &backups {
+      let origin = match b.origin {
+        nickelinksync::restore::Origin::ThisDevice => "",
+        nickelinksync::restore::Origin::Unknown => {
+          "  (device unknown: made before backups named it)"
+        }
+      };
+      println!(
+        "  {}  {}{origin}",
+        format_timestamp(b.time),
+        b.path.display()
+      );
+    }
+    println!("\n--backup PATH puts one back.");
+    return Ok(true);
+  };
+  let before = nickelinksync::restore::restore(device, source)?;
+  println!("Restored {}.", source.display());
+  println!("Backup of the database before: {}", before.display());
+  println!("Eject the device and restart it before you open a book.");
+  Ok(true)
 }
 
 fn map(command: MapCommand) -> Result<bool> {

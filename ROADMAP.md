@@ -10,6 +10,19 @@ priority** (highest value, worth the effort), and **low priority (optional)**
 for other device families, beyond the current scope. Effort: S = an afternoon, M = a few days,
 L = a week or more, including verification.
 
+## Release 0.1.0
+
+Decided by the owner (2026-10-31): version 0.1.0, once D2 and the
+translation back into kepubs (PR #55) are done. Assets: the desktop client
+for macOS (`.dmg`) and Windows (ZIP), the CLI for macOS and Windows as
+files of their own, and `SHA256SUMS`; plus the device package for the
+Tolino and the Kobo (`Kobo.tgz` and `.adds/NickelInkSync/` with the ARM
+build), marked experimental. Changed on 2026-11-01: the on-device client
+(C0–C7) is part of 0.1.0. No Linux yet: the AppImage (E8) follows in the
+release after. Release notes in
+English, then German. A workflow builds the assets on a `v*` tag and
+drafts the release; only the owner tags and publishes.
+
 ## Recently completed
 
 - [x] Scope fixed: Rust core + CLI (desktop and on-device) plus a NickelHook plugin
@@ -115,6 +128,14 @@ L = a week or more, including verification.
       refuses `--live` and `--write`, and the desktop client blocks "Get";
       sending over USB only warns. Same rule on Kobo and Tolino, in
       `src/kobalt.rs`; override `.adds/NickelInkSync/ignore-kobalt` for tests
+- [x] Position translation back into a kepub (Kobo 6.x): KOReader XPointer
+      → `#kobo.N.M:offset` (`position::from_xpointer_kepub`), round trip
+      with all Kobo kepub highlights of Book P and Book Q and the Book R
+      reading positions; `pull --write` writes a mapped kepub on the Kobo.
+      A kepub now syncs only through a mapping, under its original EPUB's
+      checksum, so the on-device plugin skips kepubs until mappings reach
+      the device. Checked on the Clara BW (6.0) on 2026-10-31: kepub and
+      EPUB open at KOReader's place after a restart, and back
 
 ## Quick wins
 
@@ -129,9 +150,9 @@ Order: everything the Tolino Shine Color (5.18) can test on its own comes
 first (reverse translation for plain EPUB, USB write-back, Qt6 symbols and
 plugin). **Now, before anything else: the desktop client with a graphical UI**
 (the manual book mapping in the CLI is done, see "Recently completed").
-Maintenance and bug fixes may be slotted in at any time. The first
-release brings the desktop client and the kepub reverse translation;
-after it, in the second release, comes the **on-device client** for the Kobo and the Tolino
+Maintenance and bug fixes may be slotted in at any time. Release 0.1.0
+brings the desktop client, the kepub reverse translation and the
+**on-device client** for the Kobo and the Tolino
 (mappings on the device, a base position and a pending list, plugin,
 dialog), planned in eight stages (C0–C7 in [TODO.md](TODO.md)). The
 reference Clara BW updated itself to firmware **6.0.279225** on
@@ -175,7 +196,11 @@ fixtures only.
   and the key in the system keychain on macOS and Windows, which the CLI
   reads too; E5a, copying books of the library to a Kobo or Tolino
   without overwriting anything, on a Kobo optionally as kepubs (kepubify)
-  mapped to their EPUB.
+  mapped to their EPUB; E5b, putting a backup of the device database back
+  (`restore` in the CLI and a dialog), only onto the device it came from
+  and the same database version; E6a, the macOS package (universal app in
+  a `.dmg` with kepubify, the CLI as a ZIP, built by
+  `packaging/macos/package.sh` and the CI job `package-macos`).
 
 - **Read-only device database layer** (S–M): reading the books and their
   positions is done (`status --device`); still to do: resolve
@@ -185,22 +210,21 @@ fixtures only.
   `VolumeIndex` is a ToC index, not a spine index. Fixtures: the Clara BW
   and Shine Color databases in `tests/fixtures/db/`.
 - **Position translation, back to the Kobo** (S–M, stage C1 of the
-  on-device client): KOReader XPointer → Kobo span with offset (kepub),
-  for `pull` on the Kobo, checked on 6.0; the 4.x Adobe
-  point only against the fixtures. Position format and chapter rows on
-  6.0 still to be checked. Back to
-  the Tolino is done (see "Recently completed").
+  on-device client): KOReader XPointer → Kobo span with offset (kepub) is
+  done and checked on 6.0 (see "Recently completed"); the
+  4.x Adobe point only against the fixtures. Back to the Tolino is done.
 - **USB write-back on the Kobo** (S–M): `pull --write` works on the
-  Tolino (see "Recently completed"); the Kobo needs the reverse
-  translation for kepub first.
+  Tolino and for EPUBs on the Kobo 6.0; into a mapped kepub it writes the
+  span with offset (see "Recently completed"), checked on the Clara BW. The desktop client's "Get" and "Get all" take mapped
+  kepubs too.
 - **Messages in the Tolino plugin** (S): each outcome of opening and
   leaving a book as one of Nickel's toasts, chosen by `notify` in
   `config.ini` (`all`, `errors`, `none`). Verified on the Tolino, also
   opening within the chapter last read. Still to do: English texts (the
   plugin logs `QLocale()`, `de_DE` so far).
-- **On-device client for the Kobo 6.0 and the Tolino** (L, second
-  release): one plugin for both devices, after the first release (the
-  desktop client and the kepub reverse translation). Like today's plugin
+- **On-device client for the Kobo 6.0 and the Tolino** (L, release
+  0.1.0, experimental): one plugin for both devices; the kepub reverse
+  translation it needs is done (PR #55). Like today's plugin
   it stays idle while Kobalt is installed (N7). Opening a book takes a
   newer server position, written through Nickel itself as Kobalt (MIT)
   does (`VolumeManager::updateBookmark`/`updateFields` in Nickel's

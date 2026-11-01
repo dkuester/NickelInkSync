@@ -51,6 +51,10 @@ pub enum Command {
     books: Vec<PathBuf>,
     kepub: bool,
   },
+  /// The backups of the device database that may go back.
+  Backups { root: PathBuf },
+  /// Put a backup back onto the device, then read it again.
+  Restore { root: PathBuf, backup: PathBuf },
   /// The settings in `config.ini`.
   ReadSettings,
   /// Write the settings; a typed password goes in as its key.
@@ -93,6 +97,12 @@ pub enum Event {
   History(Result<Vec<Entry>, String>),
   Overview(Overview),
   Settings(Result<Editable, String>),
+  Backups(Result<Vec<nickelinksync::restore::Backup>, String>),
+  /// A backup was put back (the backup of the state before), or why not.
+  Restored {
+    root: PathBuf,
+    result: Result<PathBuf, String>,
+  },
   LibraryBooks(Result<Vec<nickelinksync::library::LibraryBook>, String>),
   /// What copying did, by title; the device is read again after it.
   Copied {
@@ -249,6 +259,20 @@ fn run(inbox: &Receiver<Command>, outbox: &Sender<Event>, repaint: &dyn Fn()) {
           result,
         });
         load(root, Kind::Nickel);
+      }
+      Command::Backups { root } => send(Event::Backups(
+        nickelinksync::restore::list(&root).map_err(|e| e.to_string()),
+      )),
+      Command::Restore { root, backup } => {
+        let result = nickelinksync::restore::restore(&root, &backup).map_err(|e| e.to_string());
+        let restored = result.is_ok();
+        send(Event::Restored {
+          root: root.clone(),
+          result,
+        });
+        if restored {
+          load(root, Kind::Nickel);
+        }
       }
       Command::ReadSettings => send(Event::Settings(
         config_path().and_then(|p| Editable::read(&p).map_err(|e| e.to_string())),
