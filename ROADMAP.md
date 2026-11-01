@@ -173,6 +173,15 @@ drafts the release; only the owner tags and publishes.
       Checked on the Clara BW (6.0) on 2026-11-01: a Calibre kepub read on
       the Kobo, its progress opens in KOReader in the original EPUB.
       Replaces N6
+- [x] Kobo client, stage C9 (Kobo 4.38.23852, the Libra 2's firmware):
+      18 of the plugin's 23 symbols exist unchanged; the rest and
+      Kobalt's Qt5 write path, book menu, dialog, toast and Wi-Fi are
+      mapped to their 4.x forms by disassembly. The same plugin source
+      builds for Qt 5.2.1 in NickelTC (`just plugin-qt5`, `KoboRoot.tgz`),
+      loads on 4.x and stays idle until C10; CI checks its symbols against
+      a 4.38 reference and builds it
+      ([docs/nickel-4.38-symbols.md](docs/nickel-4.38-symbols.md)).
+      Replaces N1
 
 ## Quick wins
 
@@ -265,7 +274,9 @@ reading and USB write-back (C8) and the plugin as a Qt5 build (C9, C10).
 - **On-device client for the Kobo 6.0 and the Tolino** (L, release
   0.1.0, experimental): one plugin for both devices, plus a Qt5 build
   (`KoboRoot.tgz`) for Kobo 4.x (C9, C10); stages C0–C3 are done (PRs
-  #66, #55, #64, #67), the plugin itself (C4–C7) is next. Like today's plugin
+  #66, #55, #64, #67), and so is C9 (the Qt5 symbols on 4.38.23852 and a
+  Qt5 build that loads and stays idle), the plugin itself (C4–C7, C10) is
+  next. Like today's plugin
   it stays idle while Kobalt is installed (N7). Opening a book takes a
   newer server position, written through Nickel itself as Kobalt (MIT)
   does (`VolumeManager::updateBookmark`/`updateFields` in Nickel's

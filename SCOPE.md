@@ -266,7 +266,9 @@ Thin C++ layer, no sync logic of its own:
   to the CLI with `--config`; the CLI itself lives next to it.
 - Packaging: `KoboRoot.tgz` for 4.x, `Kobo.tgz` for 5.x (hook in `imageformats/`).
   Built for 5.x (Qt 6.5.2) in `ghcr.io/dkuester/nickelstorygraph-toolchain`;
-  the Qt 5 image `strayrose/nickeltc` is for the 4.x build.
+  the 4.x build (Qt 5.2.1) in the Qt 5 image `strayrose/nickeltc` from the
+  same source (`just plugin-qt5`, `#if` blocks for the few Qt5/Qt6
+  differences).
 
 ## Verified findings
 
@@ -627,9 +629,12 @@ real books sent from the Calibre library:
    the database is not written (Nickel writes its own copy back); on 5.18
    the plugin sets the pulled position in the `Volume` passed to
    `setVolume` and in the one `VolumeManager::getById` loads while opening
-   ([docs/nickel-5.18-symbols.md](docs/nickel-5.18-symbols.md)). The Qt5
-   symbols for 4.x are still open; they are checked against 4.38.23852
-   for the Libra 2 (stage C9).
+   ([docs/nickel-5.18-symbols.md](docs/nickel-5.18-symbols.md)). On Kobo
+   4.38.23852 (Libra 2, Qt5) the opening and leaving hooks exist under the
+   same names; five of the plugin's helpers do not (`Content::getId` takes
+   no argument, there is no `ContentLocation`), and a Qt5 build of the same
+   source loads there but stays idle until stage C10
+   ([docs/nickel-4.38-symbols.md](docs/nickel-4.38-symbols.md)).
 4. **Kobo firmware 6.0.** Not checked yet: the position format (kepub
    span, and whether the Adobe point counts comments and CDATA as nodes
    like the Tolino; the CLI assumes so from firmware 5 on), the chapter

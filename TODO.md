@@ -644,13 +644,14 @@ Entscheidungen des Besitzers (2026-10-31):
 
 ## Plugin
 
-- [ ] **N1 Symbole für Kobo 4.x (Qt5)** · nicht mehr blockiert: Testgerät
-  Kobo Libra 2 mit 4.38.23852 (2026-11-01); geht in **C9** (Abschnitt
-  Kobo-Client) auf.
-  - [ ] **du:** Firmware-Update 4.38.23852 für den Libra 2 (wegen
-    `libnickel.so`), siehe C9.
-  - [ ] **ich:** Symbole für „Buch geöffnet“, „Buch geschlossen“ und „an
-    Position springen“ suchen.
+- [x] **N1 Symbole für Kobo 4.x (Qt5)** · in **C9** (Abschnitt
+  Kobo-Client) aufgegangen; Ergebnis in
+  [`docs/nickel-4.38-symbols.md`](docs/nickel-4.38-symbols.md)
+  - [x] **du:** Download des Firmware-Updates 4.38.23852 für den Libra 2
+    erlaubt (2026-11-01), siehe C9.
+  - [x] **ich:** Buch geöffnet (`ReadingController::setVolume`), verlassen
+    (`ReadingView::leavingReadingExperience`) und Springen
+    (`ReadingView::goToBookmark`) gibt es auf 4.38 unter denselben Namen.
 - [ ] **N2 Plugin für den Kobo 6.0** (statt Qt5 für 4.x) · geht in **C4**
   (Abschnitt Kobo-Client) auf
   - [ ] **ich:** Symbole aus `libnickel.so` von Kobo 6.0 prüfen (Vorbild
@@ -987,8 +988,8 @@ Qt5-Fassung für Kobo 4.x), geplant
 am 2026-10-31 (deine Antworten auf meine Rückfragen). **Teil von Release
 0.1.0** (geändert am 2026-11-01); C0 bis C3 sind erledigt (PRs #66, #55,
 #64, #67), C4 läuft. **Kobo 4.x** (seit 2026-11-01, Libra 2 mit
-4.38.23852): C8 (Rust) und C9 (Qt5-Erkundung) können sofort parallel zu C4
-laufen, C10 (Plugin in Qt5) folgt nach C4, C8 und C9. **Kobalt-Schutz (N7):** Jeder neue Einstieg des
+4.38.23852): C8 (Rust) läuft parallel zu C4, C9 (Qt5-Erkundung und
+-Build) ist erledigt, C10 (Plugin in Qt5) folgt nach C4 und C8. **Kobalt-Schutz (N7):** Jeder neue Einstieg des
 Plugins (Öffnen, Verlassen, Buchmenü, NickelMenu-Auslöser, Nachholen der
 Vormerkliste, Dialog) geht durch dieselbe Prüfung wie heute und bleibt
 untätig, solange Kobalt installiert ist; Gerätetests mit Kobalt daneben
@@ -1151,19 +1152,35 @@ Auf dem Kobo ist das Plugin inaktiv.
     (N5) auf 4.x prüfen; READMEs (heute „wird nicht geschrieben“) nachziehen.
   - [ ] **du:** Book R vom Server per USB auf den **Libra 2** schreiben
     (EPUB und zugeordnetes kepub), auswerfen, öffnen.
-- [ ] **C9 Qt5-Erkundung für Kobo 4.x** (ersetzt N1; kann sofort parallel
-  laufen)
-  - [ ] **du:** Zustimmung zum Download des Firmware-Updates 4.38.23852 für
-    den Libra 2 (wegen `libnickel.so`), oder die Datei bereitstellen.
-  - [ ] **ich:** Symbole des Plugins und Kobalts Qt5-Schreibweg
-    (`platforms/kobo/qt5/`) gegen `libnickel.so` von 4.38.23852 prüfen
-    (Signaturen per Disassembly); Qt5-Build des Plugins (NickelHook mit
-    `NH_QT_MAJOR=5`, Toolchain `strayrose/nickeltc`, Präfix
-    `arm-nickel-linux-gnueabihf-`), Paket `KoboRoot.tgz`, CI-Schritt mit
-    Symbolprüfung; das Gerätepaket im Release bekommt `KoboRoot.tgz` dazu
-    (mit dem Release-Workflow abstimmen). Ergebnis in
-    `docs/nickel-4.38-symbols.md`. Auf 4.x gibt es NickelMenu upstream
-    (pgaskin, Qt5).
+- [x] **C9 Qt5-Erkundung für Kobo 4.x** (ersetzt N1) · Ergebnis in
+  [`docs/nickel-4.38-symbols.md`](docs/nickel-4.38-symbols.md)
+  - [x] **du:** Download des Firmware-Updates 4.38.23852 für den Libra 2
+    erlaubt (2026-11-01; `kobo-update-4.38.23852.zip`, 121 MB, von Kobos
+    Update-Server).
+  - [x] **ich:** 18 der 23 Plugin-Symbole gibt es auf 4.38 unverändert;
+    es fehlen `Content::getId(QString const&)` (4.x: `getId()` ohne
+    Argument), `Bookmark::isNull`, der kopierende `Volume`-Konstruktor,
+    `Bookmark::getStartLocation` und `ContentLocation` (die Klasse gibt es
+    auf 4.x nicht); Ersatz für C10 im Dokument. `Volume` und `Bookmark`
+    sind 8 Bytes (6.0: 12), `Device::isTolino` ist fest `false`. Kobalts
+    Qt5-Schreibweg geht mit drei Unterschieden zu 6.0 (`dbConnection` nimmt
+    `QString` als Wert, `updateBookmark` ohne letztes `int`, kein
+    `ContentLocation::create`); Buchmenü (`setupBookListMenu` ohne `bool`),
+    Dialog, Toast und WLAN sind da. Qt5-Build aus derselben Quelle
+    (`#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)`, NickelTC, GCC 4.9):
+    `just plugin-qt5` → `plugin/KoboRoot.tgz` (4.x-Layout); auf 4.x prüft
+    `init()` Kobalt, meldet im Log, dass es auf 4.x läuft, und bleibt
+    untätig, bis C10 das Verhalten bringt. CI-Schritt im Job `check`:
+    Symbole gegen `tools/libnickel-4.38.23852.syms.gz` (die genutzten
+    Klassen), Build, ARM, Qt 5, Handler, Layout; Artefakt
+    `NickelInkSync-kobo4-KoboRoot`. Jedes Symbol des gebauten Plugins
+    löst gegen libnickel, Qt und libc von 4.38 auf. Auf 4.x gibt es
+    NickelMenu upstream (pgaskin, Qt5) für C6. **Offen:** Das Gerätepaket
+    im Release-Workflow (PR #62, die D2-Session ist archiviert) bekommt
+    `KoboRoot.tgz` erst nach dem Merge von #62 (Schritt in der Notiz
+    `2026-11-01-kobo-c9-handover.md`).
+  - [ ] **du:** `KoboRoot.tgz` auf dem **Libra 2** installieren, Log
+    prüfen (Anleitung im PR).
 - [ ] **C10 Plugin auf Kobo 4.x** (braucht C4, C8, C9): dasselbe Verhalten
   wie C4 in der Qt5-Fassung aus derselben Quelle (`#if` für Qt5/Qt6, wo
   nötig). Ab C10 bauen C5 und C6 beide Fassungen.
