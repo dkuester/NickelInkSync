@@ -281,6 +281,10 @@ dieselbe EPUB schon auf dem Gerät liegt; auf dem Kobo auf Wunsch als
 kepub über [kepubify](https://github.com/pgaskin/kepubify) (gesucht im
 `PATH`, in den Homebrew-Ordnern, in `~/go/bin` oder über
 `$NICKELINKSYNC_KEPUBIFY`), gleich der EPUB zugeordnet.
+„Gerät vorbereiten“ macht dasselbe wie `device prepare`, mit Fortschritt:
+Index der Bibliothek, Zuordnungen und ihre Übersetzungstabellen kommen auf
+Kobo oder Tolino, damit das Plugin dort ohne Rechner synchronisiert; bis
+dahin sagt das Fenster, dass das Gerät nicht vorbereitet ist.
 „Über“ zeigt die Version und die Lizenzen (auch die von kepubify); einmal
 am Tag fragt das Fenster bei GitHub nach einer neueren Version und nennt sie
 oben mit Link (heruntergeladen wird nichts; in „Über“ abschaltbar).
