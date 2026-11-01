@@ -386,7 +386,8 @@ Entscheidungen des Besitzers (2026-10-31):
     kein Hinweis; Zeitpunkt und gefundene Version in `gui.json`, der
     Hinweis bleibt, bis diese Version installiert ist; oben ein Link
     „Neue Version … verfügbar“. Schalter in „Über“.
-  - [ ] **du:** E6b: „Über“ öffnen, Lizenzen ansehen, Schalter aus und an.
+  - [x] **du:** E6b: „Über“ öffnen, Lizenzen ansehen (2026-11-01): Lizenzen
+    werden korrekt angezeigt.
   - [ ] **ich:** **E7** Windows: Pfade für Konfiguration und Daten
     (`%APPDATA%`, heute nur `HOME`/XDG), Wechsellaufwerke erkennen,
     Anmeldeinformationsverwaltung, ZIP aus der CI (Windows-Runner); ohne
