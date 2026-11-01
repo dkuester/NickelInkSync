@@ -159,6 +159,8 @@ drafts the release; only the owner tags and publishes.
       syncs under its original's checksum, the sent paragraph start the
       same as on the desktop; without the index nothing is sent
       (`NICKELINKSYNC_NO_INDEX`), and only originals and mapped books are.
+      Checked on the Clara BW (6.0) on 2026-11-01: a Calibre kepub read on
+      the Kobo, its progress opens in KOReader in the original EPUB.
       Replaces N6
 
 ## Quick wins

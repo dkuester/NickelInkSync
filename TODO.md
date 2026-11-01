@@ -956,7 +956,7 @@ Entscheidungen des Besitzers (2026-10-31):
   - [x] **ich:** Umsetzen in Bibliothek und CLI (`--live` liest die
     Tabelle), Tests mit Book A/R (kepub ↔ EPUB) und Calibre-artiger
     Umwandlung: C3.
-  - [ ] **du:** Am Gerät prüfen: steht jetzt bei C3.
+  - [x] **du:** Am Gerät geprüft (2026-11-01, siehe C3).
 
 ## Kobo-Client
 
@@ -1056,7 +1056,7 @@ Auf dem Kobo ist das Plugin inaktiv.
     Update `Session::agreed_sent`, bei „gleich“ `Session::agreed`, am Ende
     `save_state`; auch nach einer beantworteten Rückfrage. Der Kindle
     führt keine Basis.
-- [~] **C3 Zuordnungen auf dem Gerät** (ersetzt N6; braucht C1) · PR #67
+- [x] **C3 Zuordnungen auf dem Gerät** (ersetzt N6; braucht C1) · PR #67
   - [x] **ich:** `nickelinksync device prepare --device … [--library …]`
     (`src/prepare.rs`) schreibt nach `.adds/NickelInkSync/`: `library.json`
     (Index: Prüfsumme, Titel, Autoren je Original), `mappings.json` (die
@@ -1077,9 +1077,10 @@ Auf dem Kobo ist das Plugin inaktiv.
     `copy` auf ein vorbereitetes Gerät kopiert, bekommt Zuordnung und
     Tabelle sofort (`prepare::put_mapping`). Format und Zeilen: Notiz
     `2026-11-01-kobo-c3-handover.md`.
-  - [ ] **du:** Calibre-kepub auf dem Kobo lesen, `push --live` per CLI am
-    Gerät oder per USB, in KOReader mit der Original-EPUB öffnen
-    (Anleitung in der PR-Beschreibung).
+  - [x] **du:** Am Kobo geprüft (2026-11-01, Clara BW 6.0): kepub mit
+    Calibre übertragen, der EPUB zugeordnet, `device prepare`, am Kobo
+    gelesen, Fortschritt gesendet; KOReader lädt ihn in der Original-EPUB.
+    Alle Schritte der Anleitung in PR #67 erfolgreich.
 - [ ] **C4 Plugin auf dem Kobo** (ersetzt N2; braucht C0, C2, C3)
   - [ ] **ich:** Plugin auf dem Kobo aktiv; Öffnen und Schließen über
     Nickels Schreibweg; offline vormerken, bei WLAN nachholen; kürzere
