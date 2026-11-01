@@ -224,7 +224,7 @@ fn run(inbox: &Receiver<Command>, outbox: &Sender<Event>, repaint: &dyn Fn()) {
         kind,
         questions,
       } => {
-        let result = sync::answer(&model::options(&root), questions);
+        let result = sync::answer(&model::options(&root), kind, questions);
         synced(root, kind, result);
       }
       Command::History => send(Event::History(sync::history(200))),
