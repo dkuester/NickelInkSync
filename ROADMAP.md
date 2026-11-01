@@ -197,10 +197,12 @@ fixtures only.
   (`restore` in the CLI and a dialog), only onto the device it came from
   and the same database version; E6a, the macOS package (universal app in
   a `.dmg` with kepubify, the CLI as a ZIP, built by
-  `packaging/macos/package.sh` and the CI job `package-macos`); E7, Windows
-  (config in `%APPDATA%`, data in `%LOCALAPPDATA%`, the key in the
-  Credential Manager, the icon in the exe, the app and the CLI as ZIPs from
-  the CI job `windows`).
+  `packaging/macos/package.sh` and the CI job `package-macos`); E6b, the
+  About window with the licences and a once-a-day notice of a newer
+  release (GitHub, can be switched off); E7, Windows (config in
+  `%APPDATA%`, data in `%LOCALAPPDATA%`, the key in the Credential
+  Manager, the icon in the exe, the app and the CLI as ZIPs from the CI
+  job `windows`).
 
 - **Read-only device database layer** (S–M): reading the books and their
   positions is done (`status --device`); still to do: resolve

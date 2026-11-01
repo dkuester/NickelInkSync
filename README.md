@@ -209,7 +209,10 @@ never over a file that is there or an EPUB already on the device; on a
 Kobo optionally as kepubs made by
 [kepubify](https://github.com/pgaskin/kepubify) (looked up in the `PATH`,
 Homebrew's folders, `~/go/bin` or `$NICKELINKSYNC_KEPUBIFY`), mapped to
-their EPUB at once. "Settings" edits
+their EPUB at once. "About" shows the version and the licences (with
+kepubify's); once a day the window asks GitHub for a newer release and
+names it in the top bar, with a link (nothing is downloaded; it can be
+switched off in "About"). "Settings" edits
 `config.ini` (server, user, device name, `confirm`, `position`, library)
 line by line, keeping comments, after a backup (`config.ini.bak`); a
 password typed there is kept only as its key in the keychain, and a

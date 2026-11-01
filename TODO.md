@@ -379,9 +379,15 @@ Entscheidungen des Besitzers (2026-10-31):
     gewählt (zwei E-Reader und ein Smartphone im Sync-Kreis), bis 32 Pixel
     das erste Icon mit einem E-Reader; Gatekeeper hat nichts verhindert;
     das Icon stimmt auch bei laufender App.
-  - [ ] **ich:** **E6b** Hinweis auf neue Releases (höchstens einmal am Tag
+  - [x] **ich:** **E6b** Hinweis auf neue Releases (höchstens einmal am Tag
     über die GitHub-API, abschaltbar) und Fenster „Über“ mit Version und
-    Lizenzen (NickelInkSync, kepubify).
+    Lizenzen (NickelInkSync, kepubify). Umgesetzt: `/releases/latest`
+    (ohne Entwürfe und Vorabversionen), 10 s Zeitlimit, ohne Release (404)
+    kein Hinweis; Zeitpunkt und gefundene Version in `gui.json`, der
+    Hinweis bleibt, bis diese Version installiert ist; oben ein Link
+    „Neue Version … verfügbar“. Schalter in „Über“.
+  - [x] **du:** E6b: „Über“ öffnen, Lizenzen ansehen (2026-11-01): Lizenzen
+    werden korrekt angezeigt.
   - [x] **ich:** **E7** Windows: Pfade für Konfiguration und Daten
     (`%APPDATA%`, heute nur `HOME`/XDG), Wechsellaufwerke erkennen,
     Anmeldeinformationsverwaltung, ZIP aus der CI (Windows-Runner); ohne

@@ -20,11 +20,15 @@ use crate::devices::{Found, Kind};
 use crate::i18n::{self, Choice, Lang, Texts};
 use crate::model::{Group, Loaded, Mapped, Row, Suggestions};
 use crate::overview::Overview;
+use crate::release;
 use crate::restore_dialog::{self, RestoreDialog};
 use crate::settings::Settings;
 use crate::settings_dialog::{self, Request, SettingsDialog};
 use crate::sync::{Compared, Question, ServerState};
 use crate::worker::{Command, Event, Worker};
+
+/// The kepubify release the packages ship (`packaging/macos/package.sh`).
+const KEPUBIFY: &str = "4.0.4";
 
 /// How often the drives are searched again.
 const SCAN_EVERY: Duration = Duration::from_secs(2);
@@ -121,6 +125,7 @@ pub struct App {
   settings_dialog: Option<SettingsDialog>,
   copy_dialog: Option<CopyDialog>,
   restore_dialog: Option<RestoreDialog>,
+  about_open: bool,
 }
 
 impl App {
@@ -136,7 +141,7 @@ impl App {
       .as_ref()
       .map(|p| p.display().to_string())
       .unwrap_or_default();
-    App {
+    let mut app = App {
       worker: Worker::start(move || ctx.request_repaint()),
       settings,
       settings_path,
@@ -160,8 +165,30 @@ impl App {
       settings_dialog: None,
       copy_dialog: None,
       restore_dialog: None,
+      about_open: false,
       history: None,
+    };
+    app.check_release();
+    app
+  }
+
+  /// Asks GitHub for a newer release, at most once a day, unless switched
+  /// off.
+  fn check_release(&mut self) {
+    let now = nickelinksync::history::now();
+    if !self.settings.no_release_check && release::due(self.settings.release_checked, now) {
+      self.worker.send(Command::CheckRelease);
     }
+  }
+
+  /// The newer release found, while it is newer than this version.
+  fn newer_release(&self) -> Option<&(String, String)> {
+    self
+      .settings
+      .release
+      .as_ref()
+      .filter(|(version, _)| release::newer(version, env!("CARGO_PKG_VERSION")))
+      .filter(|_| !self.settings.no_release_check)
   }
 
   fn lang(&self) -> Lang {
@@ -325,6 +352,14 @@ impl App {
             }
           }
         }
+        Event::Release(result) => {
+          // Asked again on the next start if GitHub could not be reached.
+          if let Ok(found) = result {
+            self.settings.release_checked = Some(nickelinksync::history::now());
+            self.settings.release = found.map(|r| (r.version, r.url));
+            self.save_settings();
+          }
+        }
         Event::Settings(result) => {
           if let Some(dialog) = &mut self.settings_dialog {
             dialog.edit = Some(result);
@@ -412,8 +447,12 @@ impl App {
   }
 
   fn top_bar(&mut self, ui: &mut egui::Ui, t: &Texts) {
+    let newer = self.newer_release().cloned();
     ui.horizontal(|ui| {
       ui.heading("NickelInkSync");
+      if let Some((version, url)) = &newer {
+        ui.hyperlink_to(i18n::new_release(self.lang(), version), url);
+      }
       ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         let before = self.settings.language;
         egui::ComboBox::from_id_salt("language")
@@ -430,6 +469,9 @@ impl App {
         ui.label(t.language);
         if self.settings.language != before {
           self.save_settings();
+        }
+        if ui.button(t.about).clicked() {
+          self.about_open = true;
         }
         if ui.button(t.settings).clicked() {
           self.settings_dialog = Some(SettingsDialog::new());
@@ -744,6 +786,44 @@ impl App {
       }
       Some(copy_dialog::Request::Close) => self.copy_dialog = None,
       None => {}
+    }
+  }
+
+  fn about_window(&mut self, ctx: &egui::Context, t: &Texts) {
+    let mut open = self.about_open;
+    let mut check = !self.settings.no_release_check;
+    egui::Window::new(t.about)
+      .open(&mut open)
+      .default_size([560.0, 420.0])
+      .show(ctx, |ui| {
+        ui.heading(concat!("NickelInkSync ", env!("CARGO_PKG_VERSION")));
+        ui.label(t.about_text);
+        ui.hyperlink("https://github.com/dkuester/NickelInkSync");
+        ui.add_space(6.0);
+        ui.checkbox(&mut check, t.release_check);
+        ui.add_space(6.0);
+        egui::ScrollArea::vertical().show(ui, |ui| {
+          egui::CollapsingHeader::new("NickelInkSync – MIT License")
+            .default_open(false)
+            .show(ui, |ui| {
+              ui.monospace(include_str!("../../LICENSE"));
+            });
+          egui::CollapsingHeader::new(format!("kepubify {KEPUBIFY} – MIT License"))
+            .default_open(false)
+            .show(ui, |ui| {
+              ui.label(t.kepubify_note);
+              ui.hyperlink("https://github.com/pgaskin/kepubify");
+              ui.monospace(include_str!(
+                "../../packaging/licenses/kepubify-LICENSE.txt"
+              ));
+            });
+        });
+      });
+    self.about_open = open;
+    if check == self.settings.no_release_check {
+      self.settings.no_release_check = !check;
+      self.save_settings();
+      self.check_release();
     }
   }
 
@@ -1505,6 +1585,7 @@ impl eframe::App for App {
     self.settings_dialog(&ctx, t);
     self.copy_dialog(&ctx, t);
     self.restore_dialog(&ctx, t);
+    self.about_window(&ctx, t);
   }
 }
 

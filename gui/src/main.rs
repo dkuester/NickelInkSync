@@ -12,6 +12,7 @@ mod devices;
 mod i18n;
 mod model;
 mod overview;
+mod release;
 mod restore_dialog;
 mod settings;
 mod settings_dialog;
