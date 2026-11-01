@@ -16,6 +16,13 @@ pub struct Settings {
   pub language: Choice,
   /// The last chosen copy of a Kindle's books.
   pub kindle_folder: Option<PathBuf>,
+  /// Do not ask GitHub for newer releases.
+  pub no_release_check: bool,
+  /// When it last asked, Unix seconds.
+  pub release_checked: Option<i64>,
+  /// The newer release it found then (version, page), shown while it is
+  /// newer than this version.
+  pub release: Option<(String, String)>,
 }
 
 impl Settings {
@@ -59,6 +66,7 @@ mod tests {
     let settings = Settings {
       language: Choice::De,
       kindle_folder: Some("/tmp/kindle".into()),
+      ..Settings::default()
     };
     settings.save(&path).unwrap();
     assert_eq!(Settings::load(&path), settings);

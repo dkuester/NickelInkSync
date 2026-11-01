@@ -14,6 +14,8 @@ eframe = "0.37.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sys-locale = "0.3.2"
+# The release notice asks GitHub; the same client as the library.
+ureq = { version = "3.5.0", default-features = false, features = ["rustls", "json"] }
 
 # Native folder dialog for the Kindle copy. On Linux rfd needs GTK or a
 # portal runtime; the Linux build (optional, E8) types the path instead.
