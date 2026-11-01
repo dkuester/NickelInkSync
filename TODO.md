@@ -1029,28 +1029,58 @@ gescheiterten Push (ohne WLAN nur ein Toast); ein ohne WLAN geöffnetes Buch
 wird beim Schließen gar nicht gesendet; der Zustand liegt nur im Speicher.
 Auf dem Kobo ist das Plugin inaktiv.
 
-- [ ] **C0 Erkundung in der Kobo-VM** (6.0.279225)
-  - [ ] **ich:** Symbole des Plugins und Kobalts Schreibweg gegen
-    `libnickel.so` von 6.0 prüfen (Signaturen per Disassembly); den
-    Schreibweg als Wegwerf-Plugin in der VM ausprobieren (Buch öffnet an
-    der geschriebenen Stelle, auch beim ersten Öffnen nach dem Start).
-    Nickel öffnet auch auf dem Kobo 6.0 aus seinem Cache gerenderter
-    Seiten (N5, 31.10.): prüfen, ob Kobalts Weg ihn umgeht oder die Seiten
-    des Kapitels weiter verworfen werden müssen (wie die CLI seit N5);
-    Ergebnis in `docs/nickel-6.0-symbols.md`. Zusätzlich die Symbole für
-    einen eigenen Dialog und den Buchmenü-Eintrag
-    (`ActionProxyMixin::setupBookListMenu`).
+- [x] **C0 Erkundung in der Kobo-VM** (6.0.279225) · PR #66 · Ergebnis in
+  [`docs/nickel-6.0-symbols.md`](docs/nickel-6.0-symbols.md)
+  - [x] **ich:** Alle 23 Symbole des Plugins gibt es in 6.0 unverändert,
+    ebenso Kobalts Schreibweg, Buchmenü (`setupBookListMenu`) und Dialog
+    (`ConfirmationDialogFactory::getConfirmationDialog`); Signaturen per
+    Disassembly geprüft. `updateBookmark` ändert nur das `Volume` im
+    Speicher, `updateFields` schreibt und zieht Nickels `Volume`-Cache nach.
+    In der VM (Wegwerf-Plugin, Book R als kepub und EPUB) öffnet Nickel an
+    der geschriebenen Stelle, auch beim ersten Öffnen nach dem Start, aber
+    **Kobalts Weg umgeht den Seiten-Cache nicht**: Ist der Anfang des
+    Zielkapitels gespeichert und keine Seite hält die Stelle, öffnet Nickel
+    beim ersten Öffnen nach dem Start am Kapitelanfang (kepub und EPUB).
+    Werden die Seiten des Kapitels in derselben Transaktion verworfen (wie
+    die CLI seit N5), öffnet es richtig, ohne Neustart. Buchmenü-Eintrag
+    und Dialog erscheinen und reagieren; ein eigener `QPushButton` im Dialog
+    bekommt keine Berührung. Kobalt-Schutz: die CLI verweigert in der
+    Kobo-VM richtig; im Plugin endet `init()` auf dem Kobo vor der Prüfung.
+    Die VM behält jetzt `/mnt/aux` (gezeichnete Seiten) über Neustarts.
 - [x] **C1 kepub zurück** (K4-Rest): XPointer → `#kobo.N.M:offset`
   (UTF-16-Einheiten), Fixtures Book P/Q/R; `pull --write` am Kobo per USB.
   - [x] **ich:** Übersetzung, Tests (PR #55; siehe K4).
   - [x] **du:** Book R vom Server per USB auf den Kobo schreiben, auswerfen,
     öffnen: geprüft 2026-10-31, öffnet an der Stelle (siehe K4).
-- [ ] **C2 Basis-Stand und Vormerkliste** (nur Bibliothek und CLI)
-  - [ ] **ich:** `.adds/NickelInkSync/state.json` (je Buch Basis-Stand,
-    vorgemerkt); Drei-Wege-Regel in `sync.rs` mit `confirm`; `not-in-line.tsv`
-    einmal übernehmen, dann entfällt sie; `sync --pending` sendet bzw. holt
-    alle vorgemerkten Bücher; Maschinenzeilen für das Plugin. Tests mit dem
-    Mock-Server, auch für den Wechsel vom heutigen Plugin.
+- [x] **C2 Basis-Stand und Vormerkliste** (nur Bibliothek und CLI) · PR #64
+  - [x] **ich:** `.adds/NickelInkSync/state.json` (`src/state.rs`): je Buch
+    Basis (Dokument, Nickels Stelle, XPointer, Prozent, Server-Zeit),
+    `not_in_line` und `pending`; geschrieben nach `push`, `pull --write`
+    und bei `IN_SYNC`, gemeinsam für `--live` und USB, atomar und nur mit
+    den Büchern des eigenen Laufs (zwei Läufe auf dem Gerät können sich
+    überschneiden). Drei-Wege-Regel (`sync::decide_since`, `Moved`): nur
+    der Server bewegt → Server gewinnt (Nickels `DateLastRead` beim Öffnen
+    zählt nicht mehr), nur das Gerät → Gerät gewinnt, auch rückwärts,
+    beide → die bisherige Regel mit `confirm`; `always` fragt weiter;
+    ohne Basis wie bisher. `not-in-line.tsv` wird beim Laden übernommen
+    und beim ersten Speichern gelöscht (auch später neu geschriebene
+    Zeilen des heutigen Plugins), gleiches Verhalten wie bisher.
+    `push --live` merkt bei `timeout`/`network`/`server` vor
+    (`NICKELINKSYNC_PENDING<tab>ID<tab>marked<tab>Art`); neu
+    `sync --pending` (`--live`, `--emit`) mit einer Zeile je Buch und
+    `NICKELINKSYNC_PENDING_LEFT`; neue Zeile `NICKELINKSYNC_CONFLICT` mit
+    beiden Ständen für C5. Kobalt-Schutz greift auch hier. Tests:
+    `tests/state.rs` (Mock-Server, auch der Übergang von
+    `not-in-line.tsv`), `tests/kobalt.rs`. Format und Zeilen: Notiz
+    `2026-11-01-kobo-c2-handover.md`.
+  - [ ] **ich (C4):** Plugin wertet `PENDING`/`CONFLICT` aus, ruft
+    `sync --pending` bei jedem WLAN auf und schreibt `not_in_line` selbst
+    in `state.json` statt in `not-in-line.tsv`.
+  - [x] **D2:** Der Desktop-Client schreibt die Basis bei „Holen“ (über
+    `Session::write`) und jetzt auch beim Senden: nach einem gesendeten
+    Update `Session::agreed_sent`, bei „gleich“ `Session::agreed`, am Ende
+    `save_state`; auch nach einer beantworteten Rückfrage. Der Kindle
+    führt keine Basis.
 - [ ] **C3 Zuordnungen auf dem Gerät** (ersetzt N6; braucht C1)
   - [ ] **ich:** Am Rechner `device prepare`: Index und Übersetzungstabellen
     aufs Gerät, Zuordnungen in beide Richtungen abgleichen (eine am Gerät
@@ -1063,11 +1093,21 @@ Auf dem Kobo ist das Plugin inaktiv.
   - [ ] **ich:** Plugin auf dem Kobo aktiv; Öffnen und Schließen über
     Nickels Schreibweg; offline vormerken, bei WLAN nachholen; kürzere
     Wartezeit; Meldung ohne Index. Paket `Kobo.tgz` für beide Geräte.
+    Nach C0: Schreiben im `setVolume`-Hook über Nickel **und** die Seiten
+    des Zielkapitels in derselben Transaktion verwerfen; die CLI entscheidet
+    nur noch (`pull --live --emit` ohne `--write`, Tagessicherung bleibt;
+    den Basis-Stand in `state.json` erst nach Nickels Commit setzen);
+    `kobalt_blocks()` vor der Tolino-Prüfung und in jedem neuen Einstieg
+    (Empfehlung in `docs/nickel-6.0-symbols.md`).
   - [ ] **du:** Am Clara BW: Buch mit WLAN öffnen (Stand vom Server),
     dann WLAN aus, lesen, schließen (vorgemerkt), WLAN an, ein anderes Buch
-    öffnen (nachgeholt); in KOReader prüfen.
+    öffnen (nachgeholt); in KOReader prüfen. Dazu der Fall, den die VM nur
+    annähert: Anfang eines Kapitels lesen, verlassen, in KOReader weiter in
+    dasselbe Kapitel, Kobo neu starten, öffnen.
 - [ ] **C5 Dialog bei Konflikten** (braucht C4)
-  - [ ] **ich:** Qt-Dialog beim Öffnen mit beiden Ständen und drei Knöpfen.
+  - [ ] **ich:** Qt-Dialog beim Öffnen mit beiden Ständen und drei Knöpfen
+    (`ConfirmationDialog` hat zwei eigene; der dritte muss ein
+    Nickel-Widget sein, siehe C0).
   - [ ] **du:** Konflikt am Kobo nachstellen (KOReader und Kobo offline
     an verschiedenen Stellen), alle drei Knöpfe.
 - [ ] **C6 Oberfläche** (braucht C5)

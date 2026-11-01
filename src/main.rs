@@ -18,7 +18,7 @@ use nickelinksync::session::{
 };
 use nickelinksync::suggest::{self, Candidate};
 use nickelinksync::sync::{
-  self, format_timestamp, outlook, Confirm, Direction, Local, Outlook, Side,
+  self, format_timestamp, outlook_since, Confirm, Direction, Local, Moved, Outlook, Side,
 };
 
 type Result<T> = session::Result<T>;
@@ -48,8 +48,10 @@ enum Command {
     dry_run: bool,
     /// For the plugin: print the outcome as lines `NICKELINKSYNC_SENT<tab>
     /// percent`, `NICKELINKSYNC_IN_SYNC`, `NICKELINKSYNC_NOT_SENT<tab>reason`,
-    /// `NICKELINKSYNC_UNANSWERED<tab>n` and `NICKELINKSYNC_ERROR<tab>kind<tab>
-    /// message`
+    /// `NICKELINKSYNC_CONFLICT<tab>…` and `NICKELINKSYNC_UNANSWERED<tab>n`
+    /// for a position that needs an answer, `NICKELINKSYNC_ERROR<tab>kind<tab>
+    /// message`, and `NICKELINKSYNC_PENDING<tab>ContentID<tab>marked<tab>kind`
+    /// when a failed push is kept for `sync --pending` (with --live)
     #[arg(long)]
     emit: bool,
   },
@@ -67,10 +69,26 @@ enum Command {
     write: bool,
     /// For the plugin: print each position to take as one line
     /// `NICKELINKSYNC_POSITION<tab>percent<tab>ChapterIDBookmarked` followed
-    /// by `NICKELINKSYNC_FROM<tab>device`, `NICKELINKSYNC_UNANSWERED<tab>n`
-    /// if positions need an answer, `NICKELINKSYNC_NOT_TAKEN<tab>reason<tab>
+    /// by `NICKELINKSYNC_FROM<tab>device`, `NICKELINKSYNC_CONFLICT<tab>…` and
+    /// `NICKELINKSYNC_UNANSWERED<tab>n` if positions need an answer,
+    /// `NICKELINKSYNC_NOT_TAKEN<tab>reason<tab>
     /// message` for one that cannot be taken, and `NICKELINKSYNC_ERROR<tab>
     /// kind<tab>message` if the server could not be asked
+    #[arg(long)]
+    emit: bool,
+  },
+  /// Send the books whose push from the device failed (no network, a server
+  /// error), as kept in .adds/NickelInkSync/state.json
+  Sync {
+    #[command(flatten)]
+    target: Target,
+    /// The books whose push failed; required (the only kind of sync so far)
+    #[arg(long, required = true)]
+    pending: bool,
+    /// For the plugin: one line `NICKELINKSYNC_PENDING<tab>ContentID<tab>
+    /// result<tab>detail` per book (sent, in-sync, server-newer, conflict,
+    /// not-sent, error, gone), `NICKELINKSYNC_CONFLICT<tab>…` for a conflict,
+    /// and `NICKELINKSYNC_PENDING_LEFT<tab>n` at the end
     #[arg(long)]
     emit: bool,
   },
@@ -191,6 +209,11 @@ fn main() -> ExitCode {
       write,
       emit,
     } => (pull(&target, force, write, emit), emit),
+    Command::Sync {
+      target,
+      pending: _,
+      emit,
+    } => (sync_pending(&target, emit), emit),
     Command::Map { command } => (map(command), false),
     Command::Restore { device, backup } => (restore(&device, backup.as_deref()), false),
   };
@@ -373,8 +396,28 @@ fn status(target: &Target) -> Result<bool> {
       };
       println!("  koreader  {koreader}");
     }
-    if let Some(at) = session.not_in_line.get(&book.content_id) {
+    let entry = session.entry(&book.content_id).unwrap_or_default();
+    if let Some(at) = &entry.not_in_line {
       println!("  plugin    not in line: Nickel opened at {at} instead of the server's position");
+    }
+    if let Some(base) = entry
+      .base
+      .as_ref()
+      .filter(|b| Some(b.document.as_str()) == identity.document())
+    {
+      println!(
+        "  base      {} ({}), agreed at {}",
+        base.xpointer,
+        percent(base.percentage),
+        format_timestamp(base.timestamp)
+      );
+    }
+    if let Some(pending) = &entry.pending {
+      println!(
+        "  pending   push failed ({}) at {}; `sync --pending` sends it",
+        pending.reason,
+        format_timestamp(pending.since)
+      );
     }
     let state = match book.read_status {
       2 => "finished",
@@ -403,9 +446,16 @@ fn status(target: &Target) -> Result<bool> {
         }
         if let Ok((local, _)) = &local {
           let local = session.against(book, &identity, local.clone(), remote.as_ref());
+          let moved = match (&remote, &entry.not_in_line) {
+            (Some(remote), None) => session.moved(book, hash, remote),
+            _ => None,
+          };
+          if let Some(note) = moved_note(moved) {
+            println!("  since     {note}");
+          }
           println!(
             "  sync      {}",
-            sync_note(&local, remote.as_ref(), server.config.confirm)
+            sync_note(&local, remote.as_ref(), moved, server.config.confirm)
           );
         }
       }
@@ -418,9 +468,24 @@ fn status(target: &Target) -> Result<bool> {
   Ok(true)
 }
 
+/// What moved since the base, for `status`, `push` and `pull`.
+fn moved_note(moved: Option<Moved>) -> Option<&'static str> {
+  Some(match moved? {
+    Moved::Neither => "neither side moved since the last sync",
+    Moved::Device => "only the device moved since the last sync",
+    Moved::Server => "only the server moved since the last sync",
+    Moved::Both => "both moved since the last sync",
+  })
+}
+
 /// What `push` and `pull` would do with a book, for `status`.
-fn sync_note(local: &Local, remote: Option<&Progress>, confirm: Confirm) -> String {
-  match outlook(local, remote, confirm) {
+fn sync_note(
+  local: &Local,
+  remote: Option<&Progress>,
+  moved: Option<Moved>,
+  confirm: Confirm,
+) -> String {
+  match outlook_since(local, remote, moved, confirm) {
     Outlook::InSync => "in sync".into(),
     Outlook::Push => "device is newer: push sends it".into(),
     Outlook::Pull => "server is newer: pull would move the device".into(),
@@ -499,6 +564,66 @@ fn confirm(
   Ok(apply)
 }
 
+/// For the plugin: a position needs an answer, with both sides for the
+/// dialog. `why`: `both-moved` (both moved since the last sync),
+/// `always` (`confirm = always`) or `backwards`.
+fn emit_conflict(
+  book: &Book,
+  local: &Local,
+  remote: &Progress,
+  moved: Option<Moved>,
+  confirm: Confirm,
+) {
+  let why = match (moved, confirm) {
+    (Some(Moved::Both), _) => "both-moved",
+    (_, Confirm::Always) => "always",
+    _ => "backwards",
+  };
+  let whole = |p: f64| (p * 100.0).round().clamp(0.0, 100.0).to_string();
+  emit_line(
+    "CONFLICT",
+    &[
+      &book.content_id,
+      why,
+      &whole(local.percentage),
+      &local.last_read.map(|t| t.to_string()).unwrap_or_default(),
+      book.position.as_deref().unwrap_or_default(),
+      &whole(remote.percentage),
+      &remote.timestamp.to_string(),
+      &remote.device,
+      &remote.progress,
+    ],
+  );
+}
+
+/// A failed request worth trying again later: no network or a server error.
+fn retry_later(e: &kosync::Error) -> bool {
+  matches!(e.kind(), "timeout" | "network" | "server")
+}
+
+/// On the device, keeps a failed push of `book` for `sync --pending`.
+fn keep_pending(session: &Session, book: &Book, e: &kosync::Error, live: bool, emit: bool) {
+  if !live || !retry_later(e) {
+    return;
+  }
+  session.mark_pending(book, e.kind());
+  println!("  pending   kept for `sync --pending`");
+  if emit {
+    emit_line("PENDING", &[&book.content_id, "marked", e.kind()]);
+  }
+}
+
+/// Writes `state.json`; a failure is reported, not fatal.
+fn save_state(session: &Session) -> bool {
+  match session.save_state() {
+    Ok(()) => true,
+    Err(e) => {
+      eprintln!("nickelinksync: state.json: {e}");
+      false
+    }
+  }
+}
+
 fn unanswered_note(unanswered: usize) {
   if unanswered > 0 {
     println!("\n{unanswered} book(s) need an answer: run again in a terminal, or with --force.");
@@ -538,17 +663,22 @@ fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool>
   if kindle_device::is_kindle(&options.device) {
     return kindle_push(&options, force, dry_run);
   }
-  let mut session = open_session(&options)?;
+  let session = open_session(&options)?;
   if session.kobalt.blocks() {
     // Sending touches only the server; Kobalt's own KOSync may send too.
     eprintln!("nickelinksync: warning: sending anyway; if Kobalt syncs with KOSync itself, it may send these books as well");
   }
-  let mut forced = Vec::new();
   let server = require_server(&options)?;
   let (device, device_id) = server.config.identity(&session.model);
   if let Err(e) = server.client.authorize() {
     emit_error(emit, &e);
     eprintln!("nickelinksync: {}: {e}", server.config.server);
+    if !dry_run {
+      for book in session.books.iter().filter(|b| b.position.is_some()) {
+        keep_pending(&session, book, &e, options.live, emit);
+      }
+      save_state(&session);
+    }
     return Ok(false);
   }
   println!(
@@ -573,7 +703,7 @@ fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool>
     }
     let hash = step.identity.document().unwrap_or_default();
     println!("  hash      {hash}");
-    let (local, note, remote, action) = match step.outcome {
+    let outcome = match step.outcome {
       PushOutcome::NotInLine { at } => {
         println!("  skipped   not in line: Nickel opened at {at} instead of the server's position");
         println!("            pull takes the server's position; --force sends the device's anyway");
@@ -585,6 +715,9 @@ fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool>
       PushOutcome::Failed(e) => {
         println!("  failed    {e}");
         emit_error(emit, &e);
+        if !dry_run {
+          keep_pending(&session, book, &e, options.live, emit);
+        }
         ok = false;
         continue;
       }
@@ -593,21 +726,27 @@ fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool>
         note,
         remote,
         action,
-        forced: was_forced,
+        moved,
+        ..
       } => {
-        if was_forced {
-          forced.push(book.content_id.as_str());
+        if let Some(note) = moved_note(moved) {
+          println!("  since     {note}");
         }
-        (local, note, remote, action)
+        (local, note, remote, action, moved)
       }
       PushOutcome::Skip { .. } => unreachable!("handled above"),
     };
+    let (local, note, remote, action, moved) = outcome;
     let remote = remote.as_ref();
     match action {
       Action::InSync => {
-        println!("  in sync   {}", describe(remote.expect("both hold it")));
+        let remote = remote.expect("both hold it");
+        println!("  in sync   {}", describe(remote));
         if emit {
           emit_line("IN_SYNC", &[]);
+        }
+        if !dry_run {
+          session.agreed(book, hash, remote);
         }
         continue;
       }
@@ -624,6 +763,7 @@ fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool>
       Action::Ask { backwards } => {
         let remote = remote.expect("asks only about a server position");
         let answer = (backwards, confirm_setting);
+        let before = unanswered;
         if !confirm(
           Direction::Push,
           &local,
@@ -632,6 +772,9 @@ fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool>
           dry_run,
           &mut unanswered,
         )? {
+          if emit && unanswered > before {
+            emit_conflict(book, &local, remote, moved, confirm_setting);
+          }
           continue;
         }
       }
@@ -642,11 +785,16 @@ fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool>
       continue;
     }
     match send(&server.client, &update, note, emit) {
-      // The plugin's pushes on the device are not kept.
-      Ok(t) if !options.live => record(&[sent_entry(&update, t, book.title.clone())]),
-      Ok(_) => {}
+      Ok(t) => {
+        session.agreed_sent(book, &update, t);
+        // The plugin's pushes on the device are not kept.
+        if !options.live {
+          record(&[sent_entry(&update, t, book.title.clone())]);
+        }
+      }
       Err(e) => {
         ok = false;
+        keep_pending(&session, book, &e, options.live, emit);
         if matches!(e, kosync::Error::Unauthorized) {
           break;
         }
@@ -659,9 +807,187 @@ fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool>
   }
   if dry_run {
     println!("\nDry run: nothing was sent.");
-  } else if ok {
-    // Sent with --force: the server holds the device's position now.
-    session.not_in_line.remove(forced)?;
+  } else {
+    ok &= save_state(&session);
+  }
+  Ok(ok)
+}
+
+/// `sync --pending`: asks the server about each book whose push failed on
+/// the device and sends it if it still should; what the server has
+/// meanwhile wins only by the usual rule.
+fn sync_pending(target: &Target, emit: bool) -> Result<bool> {
+  let options = target.options();
+  if kindle_device::is_kindle(&options.device) {
+    return Err("a Kindle keeps no pending books".into());
+  }
+  // On the device, an installed Kobalt stops this in Session::open.
+  let session = open_session(&options)?;
+  if session.kobalt.blocks() {
+    eprintln!("nickelinksync: warning: sending anyway; if Kobalt syncs with KOSync itself, it may send these books as well");
+  }
+  let pending = session.pending();
+  let report = |id: &str, result: &str, detail: &str| {
+    println!(
+      "  pending   {result}{}",
+      if detail.is_empty() {
+        String::new()
+      } else {
+        format!(" ({detail})")
+      }
+    );
+    if emit {
+      emit_line("PENDING", &[id, result, detail]);
+    }
+  };
+  if pending.is_empty() {
+    println!("\nNo pending books.");
+    if emit {
+      emit_line("PENDING_LEFT", &["0"]);
+    }
+    return Ok(true);
+  }
+  let server = require_server(&options)?;
+  let (device, device_id) = server.config.identity(&session.model);
+  let confirm_setting = server.config.confirm;
+  let filtered = options.book.is_some() || options.content_id.is_some();
+  let mut left = 0;
+  let mut unanswered = 0;
+  let mut ok = true;
+  let mut stop: Option<kosync::Error> = server.client.authorize().err();
+  if let Some(e) = &stop {
+    emit_error(emit, e);
+    eprintln!("nickelinksync: {}: {e}", server.config.server);
+  } else {
+    println!(
+      "Server {} as {}, device \"{device}\"",
+      server.config.server, server.config.user
+    );
+  }
+  for id in &pending {
+    let Some(book) = session.books.iter().find(|b| &b.content_id == id) else {
+      if !filtered {
+        println!("\n{id}");
+        report(id, "gone", "no longer on the device");
+        session.forget(id);
+      }
+      continue;
+    };
+    heading(book);
+    if let Some(e) = &stop {
+      report(id, "error", e.kind());
+      left += 1;
+      ok = false;
+      continue;
+    }
+    let step = session.push_step(book, &server.client, confirm_setting, false);
+    let hash = step.identity.document().unwrap_or_default().to_string();
+    let (local, note, remote, action, moved) = match step.outcome {
+      PushOutcome::Skip { kind, message } => {
+        println!("  skipped   {message}");
+        report(id, "not-sent", kind);
+        session.clear_pending(id);
+        continue;
+      }
+      PushOutcome::NotInLine { at } => {
+        println!("  skipped   not in line: Nickel opened at {at} instead of the server's position");
+        report(id, "not-sent", "not-in-line");
+        session.clear_pending(id);
+        continue;
+      }
+      PushOutcome::Failed(e) => {
+        println!("  failed    {e}");
+        report(id, "error", e.kind());
+        left += 1;
+        ok = false;
+        if !retry_later(&e) {
+          stop = Some(e);
+        }
+        continue;
+      }
+      PushOutcome::Ready {
+        local,
+        note,
+        remote,
+        action,
+        moved,
+        ..
+      } => (local, note, remote, action, moved),
+    };
+    if let Some(note) = moved_note(moved) {
+      println!("  since     {note}");
+    }
+    let remote = remote.as_ref();
+    match action {
+      Action::InSync => {
+        let remote = remote.expect("both hold it");
+        println!("  in sync   {}", describe(remote));
+        session.agreed(book, &hash, remote);
+        report(id, "in-sync", "");
+        continue;
+      }
+      Action::Keep => {
+        let remote = remote.expect("only a server position is kept");
+        println!("  keep      server is newer: {}", describe(remote));
+        let whole = (remote.percentage * 100.0).round().clamp(0.0, 100.0);
+        report(id, "server-newer", &whole.to_string());
+        session.clear_pending(id);
+        continue;
+      }
+      Action::Apply => {}
+      Action::Ask { backwards } => {
+        let remote = remote.expect("asks only about a server position");
+        let before = unanswered;
+        let send = confirm(
+          Direction::Push,
+          &local,
+          remote,
+          (backwards, confirm_setting),
+          false,
+          &mut unanswered,
+        )?;
+        if unanswered > before {
+          report(id, "conflict", "");
+          if emit {
+            emit_conflict(book, &local, remote, moved, confirm_setting);
+          }
+          left += 1;
+          continue;
+        }
+        if !send {
+          // Answered: the server's position stays.
+          let whole = (remote.percentage * 100.0).round().clamp(0.0, 100.0);
+          report(id, "server-newer", &whole.to_string());
+          session.clear_pending(id);
+          continue;
+        }
+      }
+    }
+    let update = session::update(&hash, &local, &device, &device_id);
+    match send(&server.client, &update, note, false) {
+      Ok(t) => {
+        session.agreed_sent(book, &update, t);
+        let whole = (update.percentage * 100.0).round().clamp(0.0, 100.0);
+        report(id, "sent", &whole.to_string());
+        if !options.live {
+          record(&[sent_entry(&update, t, book.title.clone())]);
+        }
+      }
+      Err(e) => {
+        report(id, "error", e.kind());
+        left += 1;
+        ok = false;
+        if !retry_later(&e) {
+          stop = Some(e);
+        }
+      }
+    }
+  }
+  ok &= save_state(&session);
+  unanswered_note(unanswered);
+  println!("\n{left} book(s) still pending.");
+  if emit {
+    emit_line("PENDING_LEFT", &[&left.to_string()]);
   }
   Ok(ok)
 }
@@ -730,7 +1056,7 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
     if let Identity::Mapped { .. } = step.identity {
       println!("  sync as   {}", describe_identity(&step.identity));
     }
-    let (remote, local, plugin, action) = match step.outcome {
+    let (remote, local, plugin, (action, moved)) = match step.outcome {
       PullOutcome::NothingStored => {
         println!("  server    (nothing stored)");
         continue;
@@ -748,8 +1074,14 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
         remote,
         local,
         plugin,
+        moved,
         action,
-      } => (remote, local, plugin, action),
+      } => {
+        if let Some(note) = moved_note(moved) {
+          println!("  since     {note}");
+        }
+        (remote, local, plugin, (action, moved))
+      }
       PullOutcome::Skip { .. } => unreachable!("handled above"),
     };
     println!(
@@ -768,6 +1100,9 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
     let apply = match action {
       Action::InSync => {
         println!("  in sync   {}", describe(&remote));
+        if write {
+          session.agreed(book, step.identity.document().unwrap_or_default(), &remote);
+        }
         false
       }
       Action::Apply => true,
@@ -779,14 +1114,19 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
       Action::Ask { backwards } => {
         let local = local.as_ref().expect("asks only with a device position");
         let answer = (backwards, confirm_setting);
-        confirm(
+        let before = unanswered;
+        let apply = confirm(
           Direction::Pull,
           local,
           &remote,
           answer,
           !write,
           &mut unanswered,
-        )?
+        )?;
+        if emit && unanswered > before {
+          emit_conflict(book, local, &remote, moved, confirm_setting);
+        }
+        apply
       }
     };
     if !apply {
@@ -836,6 +1176,7 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
     println!("\nDry run: nothing was written to the device; --write writes it.");
   } else if writes.is_empty() {
     println!("\nNothing to write to the device.");
+    ok &= save_state(&session);
   } else {
     let written = session.write(&writes)?;
     if !options.live {
@@ -1369,7 +1710,7 @@ fn kindle_status(options: &Options) -> Result<bool> {
         if let Some(local) = &local {
           println!(
             "  sync      {}",
-            sync_note(local, remote.as_ref(), server.config.confirm)
+            sync_note(local, remote.as_ref(), None, server.config.confirm)
               .replace("pull would move the device", "the Kindle is only read")
           );
         }

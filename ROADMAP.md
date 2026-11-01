@@ -134,6 +134,23 @@ drafts the release; only the owner tags and publishes.
       checksum, so the on-device plugin skips kepubs until mappings reach
       the device. Checked on the Clara BW (6.0) on 2026-10-31: kepub and
       EPUB open at KOReader's place after a restart, and back
+- [x] Last agreed position and pending list (stage C2 of the on-device
+      client, library and CLI, PR #64): `.adds/NickelInkSync/state.json` keeps
+      each book's base, shared by the plugin and USB; a side that did not
+      move since gives way (Nickel's `DateLastRead` on opening no longer
+      counts as reading), and only when both moved do the times and
+      `confirm` decide. A failed `push --live` is kept as pending and
+      `sync --pending` sends it later, with machine lines for the plugin
+      (including both positions of a conflict for the dialog). The
+      plugin's `not-in-line.tsv` moves into `state.json`
+- [x] Kobo client, stage C0 (Kobo 6.0.279225, in the Nickel VM, PR #66): every
+      plugin symbol and Kobalt's write path through Nickel exist in 6.0,
+      signatures checked by disassembly, plus a book menu entry and a
+      dialog of our own. Writing through Nickel opens the book at the
+      written place for kepub and EPUB, but on the first opening after a
+      start Nickel's page cache still wins when the chapter start is
+      cached; dropping that chapter's pages in the same transaction fixes
+      it ([docs/nickel-6.0-symbols.md](docs/nickel-6.0-symbols.md))
 
 ## Quick wins
 
@@ -230,8 +247,10 @@ fixtures only.
   for both devices, after the desktop client. Opening a book takes a
   newer server position, written through Nickel itself as Kobalt (MIT)
   does (`VolumeManager::updateBookmark`/`updateFields` in Nickel's
-  transaction, then `Repository::refreshCache<Volume>`); leaving it sends
-  the position. Each book keeps the position last agreed with the server
+  transaction, which keeps Nickel's book cache in step), dropping the
+  target chapter's cached pages in the same transaction as the CLI does
+  (stage C0: Nickel's page cache still decides where a book opens);
+  leaving it sends the position. Each book keeps the position last agreed with the server
   (a base): a side unchanged since then gives way, so Nickel's
   `DateLastRead` on opening no longer counts as reading; when both
   changed, a dialog shows both positions to choose from. A book read
