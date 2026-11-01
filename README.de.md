@@ -415,6 +415,17 @@ Toolchain-Image `ghcr.io/dkuester/nickelstorygraph-toolchain` gebaut
 legt es mit dem Geräteprogramm in `dist/NickelInkSync/` zusammen. Mit
 `--recurse-submodules` klonen oder `git submodule update --init` ausführen.
 
+### Release
+
+Ein Tag `v*` startet `.github/workflows/release.yml`. Er prüft, dass der Tag
+der Version in `Cargo.toml` und `gui/Cargo.toml` entspricht, baut die
+Dateien für macOS und Windows und das Gerätepaket auf ihren Plattformen und
+legt einen Entwurf eines GitHub-Release an, mit `SHA256SUMS` und den Notes
+aus `.github/release-notes.md` (englisch, darunter deutsch). Veröffentlicht
+wird nichts: Der Entwurf wartet auf den Besitzer. Von Hand gestartet
+(Actions → Release → Run workflow) ist es ein Probelauf, der nur die Dateien
+als Artefakte baut.
+
 ## Support
 
 | | |

@@ -428,6 +428,21 @@ together with the device binary into `dist/NickelInkSync/`. Clone with
 `--recurse-submodules`, or run `git submodule update --init`.
 Each CI run uploads the same file as the artifact `nickelinksync-armv7-musleabihf`.
 
+### Release
+
+A tag `v*` starts `.github/workflows/release.yml`. It checks that the tag
+is the version in `Cargo.toml` and `gui/Cargo.toml`, builds the macOS and
+Windows files and the device package on their platforms, and drafts a
+GitHub release with them, `SHA256SUMS` and the notes from
+`.github/release-notes.md` (English, then German). Nothing is published:
+the draft waits for the owner. Started by hand (Actions → Release → Run
+workflow) it is a trial run that only builds the files as artifacts.
+
+```sh
+# after setting the version in Cargo.toml and gui/Cargo.toml
+git tag v0.1.0 && git push origin v0.1.0
+```
+
 ## Support
 
 | | |
