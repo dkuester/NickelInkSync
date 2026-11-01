@@ -172,7 +172,8 @@ gezeigt, unter 80 % ist der beste als „uncertain“ markiert.
 
 Die Zuordnungen liegen in `mappings.json` im Datenordner
 `~/.local/share/nickelinksync/` (oder `$XDG_DATA_HOME/nickelinksync`, oder
-`$NICKELINKSYNC_DATA_DIR`), den sich CLI und Desktop-Client teilen.
+`$NICKELINKSYNC_DATA_DIR`; unter Windows `%LOCALAPPDATA%\nickelinksync\`),
+den sich CLI und Desktop-Client teilen.
 
 ### Desktop-Client (im Aufbau)
 
@@ -186,6 +187,15 @@ dem Entpacken lässt `xattr -d com.apple.quarantine nickelinksync` sie
 laufen. In der App steckt [kepubify](https://github.com/pgaskin/kepubify)
 (MIT); seine Lizenz liegt in der App und auf dem Disk-Image.
 `packaging/macos/package.sh` baut beide Dateien (CI: Job `package-macos`).
+
+**Windows (ab 10, x64):** `NickelInkSync-<Version>-windows-x64.zip`
+irgendwohin entpacken und `NickelInkSync.exe` starten; `kepubify.exe` bleibt
+daneben liegen. Das Programm ist nicht signiert, daher warnt SmartScreen
+beim ersten Start: „Weitere Informationen“ → „Trotzdem ausführen“. Die CLI
+kommt als `nickelinksync-<Version>-windows-x64.zip`. Der Schlüssel liegt in
+der Windows-Anmeldeinformationsverwaltung, Kobo und Tolino findet die App
+über ihren Laufwerksbuchstaben. `packaging/windows/package.ps1` baut beide
+Dateien (CI: Job `windows`).
 
 Ein Fenster für dieselbe Arbeit, auf derselben Bibliothek (`gui/`, egui):
 `just gui` oder `cargo run -p nickelinksync-gui`. Es findet einen per USB
@@ -231,7 +241,8 @@ Datenordner.
 `push` und `pull` brauchen eine Konfigurationsdatei, `status` nutzt sie, wenn
 es sie gibt. Standardort: `~/.config/nickelinksync/config.ini` (oder
 `$XDG_CONFIG_HOME/nickelinksync/config.ini`, oder der Pfad in
-`$NICKELINKSYNC_CONFIG`). Das Format steht im [englischen README](README.md#configuration):
+`$NICKELINKSYNC_CONFIG`); unter Windows `%APPDATA%\nickelinksync\config.ini`.
+`library = ~/…` beginnt im Benutzerordner (unter Windows `%USERPROFILE%`). Das Format steht im [englischen README](README.md#configuration):
 `server`, `user`, `password` (oder `key` = MD5 des Passworts), optional
 `device`, `device_id`, `confirm`, `notify` (nur für das Tolino-Plugin,
 siehe unten), `library` (Ordner mit den Original-EPUBs für die

@@ -30,6 +30,10 @@ gui:
 package-macos:
   packaging/macos/package.sh
 
+# Windows release files in dist\ (on Windows, PowerShell): app and CLI as ZIPs
+package-windows:
+  pwsh -File packaging/windows/package.ps1
+
 # Build the device binary and run `--version` in an ARMv7 container (Docker, QEMU)
 check-device: build-device
   file {{ device_bin }}

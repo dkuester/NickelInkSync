@@ -119,6 +119,29 @@ jobs:
       - name: Build
         run: cargo build --release -p nickelinksync-gui
 
+  # The Windows build: clippy and tests on Windows, then the release files
+  # (the desktop client and the CLI as ZIPs) as an artifact. Not a required
+  # check.
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Tests
+        run: cargo test --workspace
+      - name: Package
+        shell: pwsh
+        run: packaging/windows/package.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NickelInkSync-windows
+          path: dist/*.zip
+
   # The macOS release files (universal .app in a .dmg, the CLI as a ZIP),
   # as an artifact; the release workflow builds them the same way. Not a
   # required check.

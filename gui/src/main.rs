@@ -2,6 +2,10 @@
 //! syncs, in a window. Built on the `nickelinksync` library like the CLI,
 //! sharing its configuration and mappings.
 
+// No console window next to the app on Windows (release builds only, so a
+// debug build still prints its panics).
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 mod app;
 mod copy_dialog;
 mod devices;

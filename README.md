@@ -159,7 +159,8 @@ below 50 % are not shown; below 80 % the best one is marked "uncertain".
 
 The mappings are kept in `mappings.json` in the data directory
 `~/.local/share/nickelinksync/` (or `$XDG_DATA_HOME/nickelinksync`, or
-`$NICKELINKSYNC_DATA_DIR`), shared with the desktop client.
+`$NICKELINKSYNC_DATA_DIR`; on Windows `%LOCALAPPDATA%\nickelinksync\`),
+shared with the desktop client.
 
 ### Desktop client (in progress)
 
@@ -173,6 +174,15 @@ unpacking, `xattr -d com.apple.quarantine nickelinksync` lets it run. The
 app ships [kepubify](https://github.com/pgaskin/kepubify) (MIT) inside;
 its licence is in the app and on the disk image. `packaging/macos/package.sh`
 builds both files (CI: job `package-macos`).
+
+**Windows (10 or later, x64):** unpack
+`NickelInkSync-<version>-windows-x64.zip` anywhere and start
+`NickelInkSync.exe`; `kepubify.exe` stays next to it. The program is not
+code-signed, so SmartScreen warns the first time: "More info" → "Run
+anyway". The CLI comes as `nickelinksync-<version>-windows-x64.zip`. The
+key goes into the Windows Credential Manager, and a Kobo or Tolino is
+found by its drive letter. `packaging/windows/package.ps1` builds both
+files (CI: job `windows`).
 
 A window for the same work, built on the same library (`gui/`, egui):
 `just gui` or `cargo run -p nickelinksync-gui`. It finds a Kobo or
@@ -217,7 +227,8 @@ with the CLI; its own settings (language, Kindle folder) are in
 `push` and `pull` need a configuration file, `status` uses it if it exists.
 Default location: `~/.config/nickelinksync/config.ini` (or
 `$XDG_CONFIG_HOME/nickelinksync/config.ini`, or the path in
-`$NICKELINKSYNC_CONFIG`).
+`$NICKELINKSYNC_CONFIG`); on Windows `%APPDATA%\nickelinksync\config.ini`.
+A `library = ~/…` starts at the home folder (`%USERPROFILE%` on Windows).
 
 ```ini
 # KOSync server and account
