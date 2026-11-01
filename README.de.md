@@ -153,9 +153,10 @@ wurde über die 32 Zeichen danach gefunden), *chapter start only* (die
 Stelle im Kapitel wurde nicht gefunden), *from the percentage only* (das
 Kapitel fehlt in der anderen Datei, z. B. Calibres `titlepage.xhtml`).
 `pull --write` bringt die Server-Position genauso in eine zugeordnete EPUB
-auf dem Tolino zurück und in ein zugeordnetes kepub auf einem Kobo mit
-Firmware 6.x als die Stelle, die Nickel speichert (`#kobo.N.M:offset`); in
-ein kepub auf Kobo-Firmware 4.x schreibt es nichts.
+auf dem Tolino zurück und in ein zugeordnetes kepub auf einem Kobo
+als die Stelle, die Nickel speichert: `#kobo.N.M:offset` auf Firmware 6.x,
+`#kobo.N.M` auf 4.x (die keinen Offset speichert; das Buch öffnet dann am
+Anfang dieses Abschnitts, meist eines Satzes).
 
 **Kindle (experimentell).** Die Kindle-Unterstützung bleibt, wie sie ist,
 bis Kobo und Tolino stabil laufen: keine Weiterentwicklung und kein
@@ -435,7 +436,7 @@ wird nur beim Start geprüft).
 
 ## Geräte und Bücher
 
-- Kobo mit Firmware 4.x sowie Tolino Shine 5, Shine Color und Vision Color mit
+- Kobo mit Firmware 4.x und 6.x sowie Tolino Shine 5, Shine Color und Vision Color mit
   Firmware 5.x
 - Seitengeladene kepub- und EPUB-Bücher ohne DRM
 - Vorerst muss auf jedem Gerät **dieselbe Datei** liegen. Der Sync-Server

@@ -143,9 +143,9 @@ found by the 32 characters after it), *chapter start only* (the place in
 the chapter was not found), *from the percentage only* (the chapter is not
 in the other file, for example calibre's `titlepage.xhtml`). `pull
 --write` moves the server position back into a mapped EPUB on the Tolino
-the same way, and into a mapped kepub on a Kobo with firmware 6.x as the
-span Nickel stores (`#kobo.N.M:offset`); a kepub on Kobo firmware 4.x is
-not written.
+the same way, and into a mapped kepub on a Kobo as the span Nickel stores:
+`#kobo.N.M:offset` on firmware 6.x, `#kobo.N.M` on 4.x (which stores no
+offset, so the book opens at the start of that span, usually a sentence).
 
 **Kindle (experimental).** Kindle support stays as it is until Kobo and
 Tolino are stable: no further work on it, and no device test before 0.1.0.
@@ -448,7 +448,7 @@ Tolino starts).
 
 ## Devices and books
 
-- Kobo on firmware 4.x and Tolino Shine 5, Shine Color and Vision Color on
+- Kobo on firmware 4.x and 6.x, and Tolino Shine 5, Shine Color and Vision Color on
   firmware 5.x
 - Sideloaded kepub and EPUB books without DRM
 - For now, put the **same file** on every device. The sync server tells

@@ -493,7 +493,7 @@ Entscheidungen des Besitzers (2026-10-31):
     Span. `pull --write` schreibt in ein zugeordnetes kepub am Kobo 6.x;
     der Seiten-Cache aus PR #48 vergleicht Spans genauso wie Points.
     Kobo 4.x (Span ohne Offset, Adobe-Point mit zusammengefasstem Text)
-    wird noch nicht geschrieben; kommt mit **C8** (Libra 2, 4.38).
+    wird seit **C8** ebenfalls geschrieben (siehe dort).
   - [x] **du (Entscheidung, 2026-10-31):** Ein kepub wird **nur über eine
     Zuordnung** zu seinem EPUB synchronisiert, immer unter der Prüfsumme
     des EPUBs, nie unter der eigenen (auch ohne Bibliothek; ein
@@ -1138,17 +1138,30 @@ Auf dem Kobo ist das Plugin inaktiv.
     aus dem Index (Vorschläge nach Titel und Autor); Einstieg über
     NickelMenu-Datei und Buchmenü.
   - [ ] **du:** Am Kobo: vorgemerkte Bücher senden, ein kepub zuordnen.
-- [ ] **C8 Kobo 4.x lesen und zurückschreiben** (Rust, CLI und GUI; kann
+- [~] **C8 Kobo 4.x lesen und zurückschreiben** (Rust, CLI und GUI; kann
   sofort parallel laufen) · neues Testgerät **Kobo Libra 2, Firmware
   4.38.23852** (Qt5, von dir am 2026-11-01).
   - [ ] **du:** Datenbankkopie des Libra 2 (`.kobo/KoboReader.sqlite`, Nickel
     beendet bzw. per USB) mit Book P/Q/R als kepub und EPUB, P und Q markiert
     wie zuvor, für neue Fixtures (`tools/make_db_fixture.py`).
-  - [ ] **ich:** Positionsformat auf 4.38 gegen die 4.46-Fixtures prüfen;
-    Rückrichtung für Kobo 4.x: Adobe-Point mit zusammengefasstem Text
-    (`PointFlavor::JoinText`) und kepub-Span ohne Offset (`#kobo.N.M`);
-    `pull --write` am Libra 2 per USB, in CLI und Desktop-Client; Seiten-Cache
-    (N5) auf 4.x prüfen; READMEs (heute „wird nicht geschrieben“) nachziehen.
+  - [x] **ich:** Rückrichtung für Kobo 4.x (`from_xpointer`,
+    `from_xpointer_kepub` mit `PointFlavor::JoinText`): Adobe-Point, in dem
+    Text, CDATA und Kommentare eines Elements ein Knoten sind (Offset in
+    UTF-8-Bytes durch Text und CDATA, Kommentare zählen nicht), und
+    kepub-Span ohne Offset (`#kobo.N.M`; die Stelle im Span geht verloren,
+    Nickel öffnet am Span-Anfang). Rundreise mit allen 16 EPUB-Markierungen
+    des Clara BW 4.46 und KOReaders Markierungen derselben Wörter (p7w03
+    nach dem Kommentar `/1/4/16/1:13`, q5w04 nach CDATA `/1/4/12/1:20`),
+    KOReaders kepub-Markierungen ergeben die Kobo-Spans, Book A und Book R
+    als Leseposition (`tests/xpointer.rs`). `pull --write` und „Holen“ im
+    Desktop-Client schreiben beides auf 4.x (`tests/write.rs`,
+    `tests/sync_mapping.rs`, `gui/src/sync.rs`); Sicherung vorher und
+    Kobalt-Schutz wie bisher. Modell-ID 388 = Kobo Libra 2. READMEs,
+    `SCOPE.md`, `ROADMAP.md` nachgezogen.
+  - [ ] **ich:** 4.38-Fixtures aus der Datenbankkopie, gegen die
+    4.46-Befunde prüfen (Markierungen, Book-R-Positionen, Modell-ID);
+    Seiten-Cache (N5) auf 4.38: gibt es `CachePersistence*`? Die CLI
+    verwirft dort wie auf 6.0 nur, wenn die Tabellen da sind, sonst nichts.
   - [ ] **du:** Book R vom Server per USB auf den **Libra 2** schreiben
     (EPUB und zugeordnetes kepub), auswerfen, öffnen.
 - [ ] **C9 Qt5-Erkundung für Kobo 4.x** (ersetzt N1; kann sofort parallel
