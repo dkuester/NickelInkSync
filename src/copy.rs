@@ -2,7 +2,9 @@
 //! `Books/`: the EPUB as it is, or on a Kobo a kepub made by kepubify,
 //! mapped to the EPUB so it syncs with KOReader at once. The library is
 //! only read, and nothing on the device is overwritten: a file of the same
-//! name, or the same EPUB already in `Books/`, is left as it is.
+//! name, or the same EPUB already in `Books/`, is left as it is. On a
+//! prepared device the new mapping goes onto the device too, with its
+//! translation table ([`crate::prepare::put_mapping`]).
 
 use std::fs::{self, File};
 use std::io;
@@ -12,6 +14,7 @@ use std::process::Command;
 use crate::hash::partial_md5;
 use crate::map;
 use crate::mapping::{DeviceBook, Mapping, Store};
+use crate::prepare;
 use crate::sync::iso_timestamp;
 
 /// The folder on the device the books go into.
@@ -134,7 +137,10 @@ fn copy_book(
   let mapped = match format {
     Format::Epub => false,
     Format::Kepub => {
-      map_kepub(store, &target, &on_device, epub)?;
+      let mapping = map_kepub(store, &target, &on_device, epub)?;
+      // A failure leaves the book unmapped on the device until the next
+      // `device prepare`, which writes the table again.
+      let _ = prepare::put_mapping(root, &mapping);
       true
     }
   };
@@ -213,14 +219,19 @@ fn write_new(source: &Path, target: &Path) -> io::Result<()> {
 }
 
 /// Maps the kepub at `target` (`on_device` on the device) to `epub`.
-fn map_kepub(store: &mut Store, target: &Path, on_device: &str, epub: &Path) -> Result<(), String> {
+fn map_kepub(
+  store: &mut Store,
+  target: &Path,
+  on_device: &str,
+  epub: &Path,
+) -> Result<Mapping, String> {
   let (original, _) = map::original(epub).map_err(|e| e.to_string())?;
   let hash = partial_md5(target).map_err(|e| format!("{}: {e}", target.display()))?;
   let now = std::time::SystemTime::now()
     .duration_since(std::time::UNIX_EPOCH)
     .map(|d| d.as_secs() as i64)
     .unwrap_or(0);
-  store.insert(Mapping {
+  let mapping = Mapping {
     device: DeviceBook::File {
       hash,
       path: on_device.to_string(),
@@ -229,8 +240,10 @@ fn map_kepub(store: &mut Store, target: &Path, on_device: &str, epub: &Path) -> 
     },
     epub: original,
     created: iso_timestamp(now),
-  });
-  store.save().map_err(|e| e.to_string())
+  };
+  store.insert(mapping.clone());
+  store.save().map_err(|e| e.to_string())?;
+  Ok(mapping)
 }
 
 #[cfg(test)]

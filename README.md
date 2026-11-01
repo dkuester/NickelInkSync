@@ -165,8 +165,48 @@ nickelinksync map add --device ~/Kindle-copy --book "Good Boy" --library ~/Calib
 nickelinksync push --device ~/Kindle-copy
 ```
 
-The mappings are only read on the computer: the Tolino plugin syncs every
-book under its own checksum, as before.
+**Mappings on the device.** The plugin on the device has no library
+and no original EPUBs, so the computer prepares the device for it:
+
+```sh
+nickelinksync device prepare --device /Volumes/KOBOeReader --library ~/Calibre\ Library
+```
+
+`device prepare` writes three things into `.adds/NickelInkSync/` on the
+Kobo or Tolino, and nothing else on it (never an EPUB):
+
+- `library.json`, the **library index**: title, authors and checksum of
+  every original EPUB in the library;
+- `mappings.json`, the mappings of the books on this device, the same as
+  in `map list`;
+- `tables/<checksum>.json`, a **translation table** for each mapped book:
+  for each chapter of the original its path, where its paragraphs and
+  sentences start and KOReader's path to each text node (no text of the
+  book), and where the device file's text differs from the original's.
+
+With them the CLI on the device (`--live`, run by the plugin) syncs a
+mapped book under its original's checksum and translates its position as
+the computer does with the original EPUB: the paragraph or sentence start
+it sends (`position = paragraph` or `sentence`) is the same; with
+`position = exact`, and for the server's position on the way back, the
+place inside a sentence may be a few characters off ("placed between the
+table's anchors"). On the device:
+
+| Book | Synced |
+|---|---|
+| mapped, with its table | under the original EPUB's checksum, the position translated |
+| mapped, table missing (mapped on the device, not prepared since) | not at all ("no-table") |
+| a kepub that is not mapped | not at all ("not-mapped") |
+| in the index as an original, or the original of a mapping | under its own checksum |
+| none of these | not at all ("not-mapped") |
+| device not prepared (no `library.json`) | `pull` under its own checksum; **`push` sends nothing** |
+
+Run `device prepare` again after mapping, adding or converting books. A
+mapping made or removed on the device (planned in the plugin) is taken
+over into `mappings.json` on the computer: the original is found by its
+checksum in the library. A kepub that the desktop client copies to a
+prepared Kobo gets its table at once. A table is written again only when
+the device file or its original changed.
 
 **Library.** The original EPUBs come from a folder given with `--library`
 or as `library` in the configuration file. If it holds a Calibre library

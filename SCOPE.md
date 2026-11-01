@@ -88,7 +88,7 @@ with the device file's checksum needs no mapping. The Kindle's
 book; it does not appear in the library, so it adds nothing to the score.
 
 **Syncing through the mapping** (`src/transfer.rs`, `status`/`push`/`pull`
-on the desktop; the plugin does not read mappings): a mapped book syncs
+on the desktop; on the device through tables, below): a mapped book syncs
 under the original's checksum; a broken mapping, and with a library
 configured a book that is neither mapped, nor in the library, nor the
 original of a mapping, does not sync at all; without a library every
@@ -122,6 +122,26 @@ split chapter, changed text) moves both ways (`tests/transfer.rs`,
 EPUB on the Tolino and into a mapped kepub on a Kobo 6.x (as a span with
 offset, `position::from_xpointer_kepub`). A kepub syncs only through a
 mapping, never under its own checksum.
+
+**Mappings on the device** (C3, `src/prepare.rs`, `src/table.rs`):
+`device prepare` puts the library index (`library.json`: checksum, title,
+authors of each original), the mappings of the books on the device
+(`mappings.json`, plus `added`/`removed` for mappings made on the device,
+taken over by checksum) and one translation table per mapped book
+(`tables/<device checksum>.json`) into `.adds/NickelInkSync/`; never an
+EPUB or its text. A table holds per original spine item the text nodes
+(KOReader path, visible start and length, collapsed length, paragraph
+start, and the collapsed offset of the first character and of each
+sentence start), the sentence starts, and for chapters whose text
+differs pairs of (device, original) indices found at build time. That is
+what `transfer` and `step_back` need for `position = paragraph` and
+`sentence`: the device sends exactly what the desktop sends
+(`tests/table.rs` compares both ways for Book A, Book R and a
+calibre-like conversion). Other places (`exact`, the server's position
+on the way back) are put between two anchors in proportion. `--live`
+reads these files; without `library.json`, `push` and `sync --pending`
+send nothing (`NICKELINKSYNC_NO_INDEX`), and only an original from the
+index or a book with a mapping and table is sent.
 
 **Place to send** (`position`, `transfer::step_back`): a device stores
 its page start, often mid-sentence; KOReader opens the page holding that

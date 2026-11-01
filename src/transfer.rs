@@ -87,46 +87,24 @@ pub fn transfer(
   to: &mut Epub,
   percentage: f64,
 ) -> Result<Transferred, Error> {
-  let bad = || Error::BadXPointer(xpointer.to_string());
-  let (spine_index, below) = split_xpointer(xpointer)
-    .filter(|&(i, _)| i < from.spine.len())
-    .ok_or_else(bad)?;
-  let key = chapter_key(&from.spine[spine_index]);
+  let source = group_at(from, xpointer)?;
+  let key = source.key;
+  let known = source.index;
+  let k = known.unwrap_or(0);
+  let source: Vec<char> = source
+    .texts
+    .iter()
+    .flat_map(|t| t.2.chars.iter().copied())
+    .collect();
 
-  // The source chapter, all its parts, and the place in them.
-  let from_parts = parts(from, &key);
-  let mut source = Vec::new();
-  let mut base = 0;
-  let mut local = None;
-  for &part in &from_parts {
-    let html = from.chapter(part)?;
-    let text = ChapterText::of(&html);
-    if part == spine_index {
-      base = source.len();
-      local = Some(
-        Some(below)
-          .filter(|b| !b.is_empty())
-          .and_then(|b| node_for(&html, b))
-          .map(|(path, chars)| text.index_of(&path, chars)),
-      );
-    }
-    source.extend_from_slice(&text.chars);
-  }
-  let known = local.flatten();
-  let k = base + known.unwrap_or(0);
-
-  let to_parts = parts(to, &key);
-  if to_parts.is_empty() {
+  let texts = group(to, &key)?;
+  if texts.is_empty() {
     return at_percentage(to, percentage);
   }
-  let mut target = Vec::new();
-  let mut texts = Vec::new();
-  for &part in &to_parts {
-    let html = to.chapter(part)?;
-    let text = ChapterText::of(&html);
-    target.extend_from_slice(&text.chars);
-    texts.push((part, html, text));
-  }
+  let target: Vec<char> = texts
+    .iter()
+    .flat_map(|t| t.2.chars.iter().copied())
+    .collect();
 
   let (found, how) = match known {
     None => (0, How::ChapterStart),
@@ -137,6 +115,63 @@ pub fn transfer(
     },
   };
   Ok(locate(&texts, found, how))
+}
+
+/// A chapter's parts, each with its document and visible text.
+pub(crate) type Parts = Vec<(usize, Element, ChapterText)>;
+
+/// The chapter of a position: its key, its parts and the place in them.
+pub(crate) struct Group {
+  pub key: String,
+  pub texts: Parts,
+  /// Visible characters before the place in all the parts; `None` if
+  /// only the chapter is known.
+  pub index: Option<usize>,
+}
+
+/// The chapter that the KOReader position `xpointer` in `epub` is in, and
+/// the place in it.
+pub(crate) fn group_at(epub: &mut Epub, xpointer: &str) -> Result<Group, Error> {
+  let (spine_index, below) = split_xpointer(xpointer)
+    .filter(|&(i, _)| i < epub.spine.len())
+    .ok_or_else(|| Error::BadXPointer(xpointer.to_string()))?;
+  let key = chapter_key(&epub.spine[spine_index]);
+  let mut texts = Vec::new();
+  let mut base = 0;
+  let mut local = None;
+  for part in parts(epub, &key) {
+    let html = epub.chapter(part)?;
+    let text = ChapterText::of(&html);
+    if part == spine_index {
+      local = Some(
+        Some(below)
+          .filter(|b| !b.is_empty())
+          .and_then(|b| node_for(&html, b))
+          .map(|(path, chars)| text.index_of(&path, chars)),
+      );
+    }
+    if local.is_none() {
+      base += text.chars.len();
+    }
+    texts.push((part, html, text));
+  }
+  Ok(Group {
+    key,
+    texts,
+    index: local.flatten().map(|i| base + i),
+  })
+}
+
+/// The parts of the chapter `key` in `epub`; none if it has no such
+/// chapter.
+pub(crate) fn group(epub: &mut Epub, key: &str) -> Result<Parts, Error> {
+  let mut texts = Vec::new();
+  for part in parts(epub, key) {
+    let html = epub.chapter(part)?;
+    let text = ChapterText::of(&html);
+    texts.push((part, html, text));
+  }
+  Ok(texts)
 }
 
 /// Visible characters a paragraph start may lie before the position for
@@ -230,7 +265,7 @@ pub fn step_back(
 
 /// The child path of the innermost block element on the way to the node at
 /// `path`; `[]` (all of the chapter) if there is none.
-fn block_of(html: &Element, path: &[usize]) -> Vec<usize> {
+pub(crate) fn block_of(html: &Element, path: &[usize]) -> Vec<usize> {
   let mut block = Vec::new();
   let mut element = html;
   for (depth, &i) in path.iter().enumerate() {
@@ -272,7 +307,7 @@ fn is_block(name: &str) -> bool {
 
 /// A sentence starts at visible character `i`: after `.`, `!`, `?` or `…`
 /// and any closing quotes or brackets, and `i` is none of those itself.
-fn sentence_starts(chars: &[char], i: usize) -> bool {
+pub(crate) fn sentence_starts(chars: &[char], i: usize) -> bool {
   let ends = |c: char| matches!(c, '.' | '!' | '?' | '…');
   let closes = |c: char| {
     matches!(
@@ -291,7 +326,11 @@ fn sentence_starts(chars: &[char], i: usize) -> bool {
 }
 
 /// The XPointer of visible character `index` in the parts of a chapter.
-fn locate(texts: &[(usize, Element, ChapterText)], index: usize, how: How) -> Transferred {
+pub(crate) fn locate(
+  texts: &[(usize, Element, ChapterText)],
+  index: usize,
+  how: How,
+) -> Transferred {
   let mut left = index;
   for (n, (part, html, text)) in texts.iter().enumerate() {
     let last = n + 1 == texts.len();
@@ -318,7 +357,7 @@ fn locate(texts: &[(usize, Element, ChapterText)], index: usize, how: How) -> Tr
 }
 
 /// The place at `percentage` of the book's visible text.
-fn at_percentage(epub: &mut Epub, percentage: f64) -> Result<Transferred, Error> {
+pub(crate) fn at_percentage(epub: &mut Epub, percentage: f64) -> Result<Transferred, Error> {
   let mut texts = Vec::new();
   for part in 0..epub.spine.len() {
     let html = epub.chapter(part)?;
@@ -331,7 +370,7 @@ fn at_percentage(epub: &mut Epub, percentage: f64) -> Result<Transferred, Error>
 }
 
 /// The spine indices of a chapter's parts, in reading order.
-fn parts(epub: &Epub, key: &str) -> Vec<usize> {
+pub(crate) fn parts(epub: &Epub, key: &str) -> Vec<usize> {
   (0..epub.spine.len())
     .filter(|&i| chapter_key(&epub.spine[i]) == key)
     .collect()
@@ -353,7 +392,7 @@ pub fn chapter_key(path: &str) -> String {
 
 /// Where the `ANCHOR` characters at `k` in `source` are in `target`: the
 /// occurrence nearest to the same relative place.
-fn find(source: &[char], k: usize, target: &[char]) -> Option<usize> {
+pub(crate) fn find(source: &[char], k: usize, target: &[char]) -> Option<usize> {
   if source.is_empty() || target.is_empty() {
     return None;
   }
@@ -397,16 +436,16 @@ fn visible(c: char) -> bool {
 
 /// The visible characters of a chapter's `body`, in document order, each
 /// with the text node it is in and its character index there.
-struct ChapterText {
-  chars: Vec<char>,
+pub(crate) struct ChapterText {
+  pub chars: Vec<char>,
   /// For each character: index into `nodes`, character index in the node.
-  at: Vec<(usize, usize)>,
+  pub at: Vec<(usize, usize)>,
   /// Text and CDATA nodes as child paths from `html`.
-  nodes: Vec<Vec<usize>>,
+  pub nodes: Vec<Vec<usize>>,
 }
 
 impl ChapterText {
-  fn of(html: &Element) -> Self {
+  pub fn of(html: &Element) -> Self {
     let mut text = ChapterText {
       chars: Vec::new(),
       at: Vec::new(),
@@ -444,7 +483,7 @@ impl ChapterText {
   }
 
   /// Visible characters before character `chars` of the node at `path`.
-  fn index_of(&self, path: &[usize], chars: usize) -> usize {
+  pub fn index_of(&self, path: &[usize], chars: usize) -> usize {
     let Some(node) = self.nodes.iter().position(|n| n == path) else {
       return 0;
     };
