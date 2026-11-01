@@ -551,6 +551,7 @@ fn live_pull_tells_the_plugin_about_a_position_it_cannot_take() {
 #[test]
 fn live_push_tells_the_plugin_what_happened() {
   let s = Setup::tolino("live-push");
+  common::index(&s.root, &["book-a.epub"]);
   let _nickel = nickel_running(&s, "OEBPS/xhtml/xhtml-0-81.xhtml#point(/1/2/1/1:0)");
   let args = ["push", "--live", "--content-id", BOOK, "--emit"];
   // The server has nothing: sent.
@@ -608,6 +609,7 @@ fn not_in_line(s: &Setup, entries: &str) -> PathBuf {
 #[test]
 fn a_book_not_in_line_is_never_pushed() {
   let s = Setup::tolino("nil-push");
+  common::index(&s.root, &["book-a.epub"]);
   let list = not_in_line(&s, &format!("{BOOK}\t{STORED}\n"));
   let args = ["push", "--live", "--content-id", BOOK, "--emit"];
   let (output, out) = s.run(&args);
@@ -653,11 +655,24 @@ fn pull_takes_the_server_position_where_nickel_left_the_book() {
   assert!(output.status.success(), "{out}");
   assert!(out.contains("  plugin    Nickel opened here"), "{out}");
   assert_eq!(s.row(BOOK).0, AHEAD_ON_DEVICE);
-  // Written: off the list, the other book stays.
+  // Written: the old list is taken over into state.json and goes; the
+  // other book stays not in line, book-a has the server's position as base.
+  assert!(!list.exists());
+  let state = state_json(&s);
   assert_eq!(
-    fs::read_to_string(&list).unwrap(),
-    "file:///mnt/onboard/other.epub\tx.xhtml\n"
+    state["books"]["file:///mnt/onboard/other.epub"],
+    serde_json::json!({"not_in_line": "x.xhtml"})
   );
+  let base = &state["books"][BOOK]["base"];
+  assert_eq!(base["device"], AHEAD_ON_DEVICE);
+  assert_eq!(base["xpointer"], AHEAD);
+  assert_eq!(base["timestamp"], LAST_READ - 3600);
+  assert!(state["books"][BOOK].get("not_in_line").is_none(), "{state}");
+}
+
+fn state_json(s: &Setup) -> serde_json::Value {
+  let path = s.root.join(".adds/NickelInkSync/state.json");
+  serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
 }
 
 #[test]
@@ -884,6 +899,7 @@ fn pull_write_folds_in_a_wal_nickel_left_behind() {
 #[test]
 fn live_kepub_is_neither_sent_nor_taken() {
   let s = Setup::tolino("live-kepub");
+  common::index(&s.root, &["book-a.epub"]);
   let kepub = "file:///mnt/onboard/Books/book-a.kepub.epub";
   let _nickel = nickel_running(&s, "OEBPS/xhtml/xhtml-0-81.xhtml#point(/1/2/1/1:0)");
   let (_, out) = emitted(&s, &["push", "--live", "--content-id", kepub, "--emit"]);

@@ -14,6 +14,11 @@ ln -sf /state/hwcfg.img /dev/disk/by-partlabel/hwcfg
 mkdir -p /mnt/onboard
 mount --bind /state/onboard /mnt/onboard
 
+# The aux partition: Nickel's rendered pages (/mnt/aux/rendering), whose
+# rows are in the database. Kept across restarts, as on the device.
+mkdir -p /state/aux /mnt/aux
+mount --bind /state/aux /mnt/aux
+
 # A battery at 80 %, not charging. 6.0 reads `battery`; 5.18 also reads
 # the PMIC's own `bd71827_bat`.
 mount -t tmpfs none /sys/class/power_supply

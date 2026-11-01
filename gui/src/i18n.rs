@@ -147,6 +147,10 @@ pub struct Texts {
   pub no_backups: &'static str,
   pub backup_device_unknown: &'static str,
   pub restore_button: &'static str,
+  pub about: &'static str,
+  pub about_text: &'static str,
+  pub release_check: &'static str,
+  pub kepubify_note: &'static str,
   pub settings: &'static str,
   pub settings_hint: &'static str,
   pub user: &'static str,
@@ -361,6 +365,14 @@ pub fn report(lang: Lang, report: &crate::sync::Report) -> String {
   line
 }
 
+/// The notice of a newer release in the top bar.
+pub fn new_release(lang: Lang, version: &str) -> String {
+  match lang {
+    Lang::De => format!("Neue Version {version} verfügbar"),
+    Lang::En => format!("New version {version} available"),
+  }
+}
+
 /// After a backup was put back.
 pub fn restored(lang: Lang, before: &std::path::Path) -> String {
   match lang {
@@ -560,6 +572,10 @@ static DE: Texts = Texts {
   no_backups: "Keine Sicherungen dieses Geräts.",
   backup_device_unknown: "Gerät unbekannt, ältere Sicherung",
   restore_button: "Zurückspielen",
+  about: "Über",
+  about_text: "Gleicht Lesepositionen zwischen Kobo, Tolino, Kindle (experimentell) und KOReader über einen KOSync-Server ab. MIT-Lizenz.",
+  release_check: "Einmal am Tag bei GitHub nach einer neuen Version sehen",
+  kepubify_note: "Mitgeliefert, um EPUBs beim Kopieren auf einen Kobo in kepubs umzuwandeln.",
   settings: "Einstellungen",
   settings_hint: "Gespeichert in config.ini, gemeinsam mit der CLI; vorher legt die App config.ini.bak an.",
   user: "Benutzer",
@@ -709,6 +725,10 @@ static EN: Texts = Texts {
   no_backups: "No backups of this device.",
   backup_device_unknown: "device unknown, older backup",
   restore_button: "Restore",
+  about: "About",
+  about_text: "Syncs reading positions between Kobo, Tolino, Kindle (experimental) and KOReader through a KOSync server. MIT License.",
+  release_check: "Look for a new version on GitHub once a day",
+  kepubify_note: "Shipped to convert EPUBs to kepubs when copying to a Kobo.",
   settings: "Settings",
   settings_hint: "Saved in config.ini, shared with the CLI; the app keeps config.ini.bak first.",
   user: "User",

@@ -32,7 +32,7 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0 bis E6a und O5 erledigt; als Nächstes E6b). **Der
+fertig, D2 läuft (E0 bis E6b und O5 erledigt; als Nächstes E7). **Der
 Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31) gehört
 seit 2026-11-01 ebenfalls zu **Release 0.1.0**.
 
@@ -57,9 +57,10 @@ Entscheidungen des Besitzers (2026-10-31):
   ruhen, bis Kobo und Tolino stabil sind.
 - **kepub:** synchronisiert nur über eine gültige Zuordnung, unter der MD5
   der zugeordneten EPUB, nie unter der eigenen Prüfsumme, mit oder ohne
-  Bibliothek (PRs #55, #60). Das Plugin hat bis C3 keine Zuordnungen und
-  synchronisiert deshalb kein kepub („kepub ohne Zuordnung“). Beim Kindle
-  gilt dasselbe (nur zugeordnete KFX).
+  Bibliothek (PRs #55, #60). Aufs Gerät kommen die Zuordnungen mit `device
+  prepare` (C3, PR #67); ohne sie sendet das Gerät nichts, auch der Tolino
+  (gehört in die Release-Notes). Beim Kindle gilt dasselbe (nur zugeordnete
+  KFX).
 - Release-Notes **englisch, darunter deutsch**, wie die READMEs.
 - Ein Workflow baut die Assets bei einem Tag `v*` und legt einen Entwurf an;
   den Tag setzt und das Release veröffentlicht nur der Besitzer.
@@ -392,9 +393,15 @@ Entscheidungen des Besitzers (2026-10-31):
     gewählt (zwei E-Reader und ein Smartphone im Sync-Kreis), bis 32 Pixel
     das erste Icon mit einem E-Reader; Gatekeeper hat nichts verhindert;
     das Icon stimmt auch bei laufender App.
-  - [ ] **ich:** **E6b** Hinweis auf neue Releases (höchstens einmal am Tag
+  - [x] **ich:** **E6b** Hinweis auf neue Releases (höchstens einmal am Tag
     über die GitHub-API, abschaltbar) und Fenster „Über“ mit Version und
-    Lizenzen (NickelInkSync, kepubify).
+    Lizenzen (NickelInkSync, kepubify). Umgesetzt: `/releases/latest`
+    (ohne Entwürfe und Vorabversionen), 10 s Zeitlimit, ohne Release (404)
+    kein Hinweis; Zeitpunkt und gefundene Version in `gui.json`, der
+    Hinweis bleibt, bis diese Version installiert ist; oben ein Link
+    „Neue Version … verfügbar“. Schalter in „Über“.
+  - [x] **du:** E6b: „Über“ öffnen, Lizenzen ansehen (2026-11-01): Lizenzen
+    werden korrekt angezeigt.
   - [ ] **ich:** **E7** Windows: Pfade für Konfiguration und Daten
     (`%APPDATA%`, heute nur `HOME`/XDG), Wechsellaufwerke erkennen,
     Anmeldeinformationsverwaltung, ZIP aus der CI (Windows-Runner); ohne
@@ -943,8 +950,8 @@ Entscheidungen des Besitzers (2026-10-31):
     erster Start nach der Kobalt-Installation wie erwartet nicht erkannt;
     beim nächsten Start erkannt, Toast „NickelInkSync ist aus“ nach etwa
     20 s; beim Start danach kein Toast mehr (`kobalt-noticed`).
-- [ ] **N6 Zuordnungen auf dem Gerät** · geht in **C3** (Abschnitt
-  Kobo-Client) auf; Weg (a) gewählt, nie Original-EPUBs aufs Gerät ·
+- [x] **N6 Zuordnungen auf dem Gerät** · in **C3** (Abschnitt
+  Kobo-Client) aufgegangen; Weg (a) gewählt, nie Original-EPUBs aufs Gerät ·
   Lücke, die du am 2026-10-29 bemerkt hast: Am Rechner sendet `push` ein
   zugeordnetes Buch (kepub, von Calibre verändertes EPUB) unter der
   Prüfsumme der Original-EPUB, mit der Stelle in sie übersetzt; KOReader
@@ -953,26 +960,24 @@ Entscheidungen des Besitzers (2026-10-31):
   eigenen Prüfsumme der Gerätedatei, mit der KOReader nichts anfangen
   kann; dasselbe beim Holen. Für die Übersetzung braucht die Bibliothek
   heute die Original-EPUB selbst, und die liegt nicht auf dem Gerät.
-  - [ ] **ich:** Weg wählen und vorschlagen: (a) beim Anlegen der
+  - [x] **ich:** Weg wählen und vorschlagen: (a) beim Anlegen der
     Zuordnung eine kleine Übersetzungstabelle erzeugen (Prüfsumme des
     Originals, Kapitelpfade, Textlängen bzw. Offsets je Kapitel kepub ↔
     Original) und nach `.adds/NickelInkSync/` aufs Gerät legen (die GUI
     beim Kopieren in E5 oder per Knopf, die CLI per Befehl); (b) die
     Original-EPUB verborgen mit aufs Gerät kopieren (einfacher, kostet
     Speicher). Beide Richtungen, Kobo und Tolino.
-  - [ ] **ich:** Umsetzen in Bibliothek und CLI (`--live` liest die
+  - [x] **ich:** Umsetzen in Bibliothek und CLI (`--live` liest die
     Tabelle), Tests mit Book A/R (kepub ↔ EPUB) und Calibre-artiger
-    Umwandlung.
-  - [ ] **du:** Am Gerät prüfen: ein Calibre-kepub auf dem Kobo bzw. ein
-    Calibre-EPUB auf dem Tolino lesen, Buch verlassen, in KOReader mit der
-    Original-EPUB öffnen.
+    Umwandlung: C3.
+  - [x] **du:** Am Gerät geprüft (2026-11-01, siehe C3).
 
 ## Kobo-Client
 
 Client auf dem Gerät (ein Plugin für Kobo 6.0 und Tolino 5.18), geplant
 am 2026-10-31 (deine Antworten auf meine Rückfragen). **Teil von Release
-0.1.0** (geändert am 2026-11-01); C1 ist mit PR #55 erledigt, C0 und C2
-beginnen jetzt. **Kobalt-Schutz (N7):** Jeder neue Einstieg des
+0.1.0** (geändert am 2026-11-01); C0 bis C3 sind erledigt (PRs #66, #55,
+#64, #67), C4 läuft. **Kobalt-Schutz (N7):** Jeder neue Einstieg des
 Plugins (Öffnen, Verlassen, Buchmenü, NickelMenu-Auslöser, Nachholen der
 Vormerkliste, Dialog) geht durch dieselbe Prüfung wie heute und bleibt
 untätig, solange Kobalt installiert ist; Gerätetests mit Kobalt daneben
@@ -1019,45 +1024,102 @@ gescheiterten Push (ohne WLAN nur ein Toast); ein ohne WLAN geöffnetes Buch
 wird beim Schließen gar nicht gesendet; der Zustand liegt nur im Speicher.
 Auf dem Kobo ist das Plugin inaktiv.
 
-- [ ] **C0 Erkundung in der Kobo-VM** (6.0.279225)
-  - [ ] **ich:** Symbole des Plugins und Kobalts Schreibweg gegen
-    `libnickel.so` von 6.0 prüfen (Signaturen per Disassembly); den
-    Schreibweg als Wegwerf-Plugin in der VM ausprobieren (Buch öffnet an
-    der geschriebenen Stelle, auch beim ersten Öffnen nach dem Start).
-    Nickel öffnet auch auf dem Kobo 6.0 aus seinem Cache gerenderter
-    Seiten (N5, 31.10.): prüfen, ob Kobalts Weg ihn umgeht oder die Seiten
-    des Kapitels weiter verworfen werden müssen (wie die CLI seit N5);
-    Ergebnis in `docs/nickel-6.0-symbols.md`. Zusätzlich die Symbole für
-    einen eigenen Dialog und den Buchmenü-Eintrag
-    (`ActionProxyMixin::setupBookListMenu`).
+- [x] **C0 Erkundung in der Kobo-VM** (6.0.279225) · PR #66 · Ergebnis in
+  [`docs/nickel-6.0-symbols.md`](docs/nickel-6.0-symbols.md)
+  - [x] **ich:** Alle 23 Symbole des Plugins gibt es in 6.0 unverändert,
+    ebenso Kobalts Schreibweg, Buchmenü (`setupBookListMenu`) und Dialog
+    (`ConfirmationDialogFactory::getConfirmationDialog`); Signaturen per
+    Disassembly geprüft. `updateBookmark` ändert nur das `Volume` im
+    Speicher, `updateFields` schreibt und zieht Nickels `Volume`-Cache nach.
+    In der VM (Wegwerf-Plugin, Book R als kepub und EPUB) öffnet Nickel an
+    der geschriebenen Stelle, auch beim ersten Öffnen nach dem Start, aber
+    **Kobalts Weg umgeht den Seiten-Cache nicht**: Ist der Anfang des
+    Zielkapitels gespeichert und keine Seite hält die Stelle, öffnet Nickel
+    beim ersten Öffnen nach dem Start am Kapitelanfang (kepub und EPUB).
+    Werden die Seiten des Kapitels in derselben Transaktion verworfen (wie
+    die CLI seit N5), öffnet es richtig, ohne Neustart. Buchmenü-Eintrag
+    und Dialog erscheinen und reagieren; ein eigener `QPushButton` im Dialog
+    bekommt keine Berührung. Kobalt-Schutz: die CLI verweigert in der
+    Kobo-VM richtig; im Plugin endet `init()` auf dem Kobo vor der Prüfung.
+    Die VM behält jetzt `/mnt/aux` (gezeichnete Seiten) über Neustarts.
 - [x] **C1 kepub zurück** (K4-Rest): XPointer → `#kobo.N.M:offset`
   (UTF-16-Einheiten), Fixtures Book P/Q/R; `pull --write` am Kobo per USB.
   - [x] **ich:** Übersetzung, Tests (PR #55; siehe K4).
   - [x] **du:** Book R vom Server per USB auf den Kobo schreiben, auswerfen,
     öffnen: geprüft 2026-10-31, öffnet an der Stelle (siehe K4).
-- [ ] **C2 Basis-Stand und Vormerkliste** (nur Bibliothek und CLI)
-  - [ ] **ich:** `.adds/NickelInkSync/state.json` (je Buch Basis-Stand,
-    vorgemerkt); Drei-Wege-Regel in `sync.rs` mit `confirm`; `not-in-line.tsv`
-    einmal übernehmen, dann entfällt sie; `sync --pending` sendet bzw. holt
-    alle vorgemerkten Bücher; Maschinenzeilen für das Plugin. Tests mit dem
-    Mock-Server, auch für den Wechsel vom heutigen Plugin.
-- [ ] **C3 Zuordnungen auf dem Gerät** (ersetzt N6; braucht C1)
-  - [ ] **ich:** Am Rechner `device prepare`: Index und Übersetzungstabellen
-    aufs Gerät, Zuordnungen in beide Richtungen abgleichen (eine am Gerät
-    angelegte Zuordnung findet ihr Original über die Prüfsumme); `--live`
-    liest sie; Push ohne Index oder ohne Eintrag verweigert, mit eigener
-    Maschinenzeile für die Meldung.
-  - [ ] **du:** Calibre-kepub auf dem Kobo lesen, `push --live` per Plugin
-    oder CLI, in KOReader mit der Original-EPUB öffnen.
+- [x] **C2 Basis-Stand und Vormerkliste** (nur Bibliothek und CLI) · PR #64
+  - [x] **ich:** `.adds/NickelInkSync/state.json` (`src/state.rs`): je Buch
+    Basis (Dokument, Nickels Stelle, XPointer, Prozent, Server-Zeit),
+    `not_in_line` und `pending`; geschrieben nach `push`, `pull --write`
+    und bei `IN_SYNC`, gemeinsam für `--live` und USB, atomar und nur mit
+    den Büchern des eigenen Laufs (zwei Läufe auf dem Gerät können sich
+    überschneiden). Drei-Wege-Regel (`sync::decide_since`, `Moved`): nur
+    der Server bewegt → Server gewinnt (Nickels `DateLastRead` beim Öffnen
+    zählt nicht mehr), nur das Gerät → Gerät gewinnt, auch rückwärts,
+    beide → die bisherige Regel mit `confirm`; `always` fragt weiter;
+    ohne Basis wie bisher. `not-in-line.tsv` wird beim Laden übernommen
+    und beim ersten Speichern gelöscht (auch später neu geschriebene
+    Zeilen des heutigen Plugins), gleiches Verhalten wie bisher.
+    `push --live` merkt bei `timeout`/`network`/`server` vor
+    (`NICKELINKSYNC_PENDING<tab>ID<tab>marked<tab>Art`); neu
+    `sync --pending` (`--live`, `--emit`) mit einer Zeile je Buch und
+    `NICKELINKSYNC_PENDING_LEFT`; neue Zeile `NICKELINKSYNC_CONFLICT` mit
+    beiden Ständen für C5. Kobalt-Schutz greift auch hier. Tests:
+    `tests/state.rs` (Mock-Server, auch der Übergang von
+    `not-in-line.tsv`), `tests/kobalt.rs`. Format und Zeilen: Notiz
+    `2026-11-01-kobo-c2-handover.md`.
+  - [ ] **ich (C4):** Plugin wertet `PENDING`/`CONFLICT` aus, ruft
+    `sync --pending` bei jedem WLAN auf und schreibt `not_in_line` selbst
+    in `state.json` statt in `not-in-line.tsv`.
+  - [x] **D2:** Der Desktop-Client schreibt die Basis bei „Holen“ (über
+    `Session::write`) und jetzt auch beim Senden: nach einem gesendeten
+    Update `Session::agreed_sent`, bei „gleich“ `Session::agreed`, am Ende
+    `save_state`; auch nach einer beantworteten Rückfrage. Der Kindle
+    führt keine Basis.
+- [x] **C3 Zuordnungen auf dem Gerät** (ersetzt N6; braucht C1) · PR #67
+  - [x] **ich:** `nickelinksync device prepare --device … [--library …]`
+    (`src/prepare.rs`) schreibt nach `.adds/NickelInkSync/`: `library.json`
+    (Index: Prüfsumme, Titel, Autoren je Original), `mappings.json` (die
+    Zuordnungen der Bücher auf dem Gerät, dazu `added`/`removed` für am
+    Gerät angelegte bzw. entfernte, die prepare über die Prüfsumme in der
+    Bibliothek in den Store übernimmt) und je zugeordnetem Buch
+    `tables/<Geräte-MD5>.json` (`src/table.rs`: Textknoten mit
+    KOReader-Pfad, Absatz- und Satzanfängen, keine Buchtexte; nie eine
+    EPUB). `--live` liest sie: zugeordnet mit Tabelle → unter der
+    Original-Prüfsumme, gesendeter Absatz-/Satzanfang genau wie am Rechner
+    (`tests/table.rs`: Book A, Book R, Calibre-artige Umwandlung, geänderter
+    Text; `tests/prepare.rs`); `exact` und der Rückweg zwischen zwei Ankern
+    anteilig. Ohne `library.json` senden `push --live` und
+    `sync --pending --live` nichts (`NICKELINKSYNC_NO_INDEX<tab>Meldung`);
+    gesendet wird nur ein Original aus dem Index oder ein Buch mit
+    Zuordnung und Tabelle (sonst `NOT_SENT not-mapped` bzw. `no-table`).
+    Holen bleibt erlaubt. Kobalt-Schutz unverändert. Ein kepub, das
+    `copy` auf ein vorbereitetes Gerät kopiert, bekommt Zuordnung und
+    Tabelle sofort (`prepare::put_mapping`). Format und Zeilen: Notiz
+    `2026-11-01-kobo-c3-handover.md`.
+  - [x] **du:** Am Kobo geprüft (2026-11-01, Clara BW 6.0): kepub mit
+    Calibre übertragen, der EPUB zugeordnet, `device prepare`, am Kobo
+    gelesen, Fortschritt gesendet; KOReader lädt ihn in der Original-EPUB.
+    Alle Schritte der Anleitung in PR #67 erfolgreich.
 - [ ] **C4 Plugin auf dem Kobo** (ersetzt N2; braucht C0, C2, C3)
   - [ ] **ich:** Plugin auf dem Kobo aktiv; Öffnen und Schließen über
     Nickels Schreibweg; offline vormerken, bei WLAN nachholen; kürzere
     Wartezeit; Meldung ohne Index. Paket `Kobo.tgz` für beide Geräte.
+    Nach C0: Schreiben im `setVolume`-Hook über Nickel **und** die Seiten
+    des Zielkapitels in derselben Transaktion verwerfen; die CLI entscheidet
+    nur noch (`pull --live --emit` ohne `--write`, Tagessicherung bleibt;
+    den Basis-Stand in `state.json` erst nach Nickels Commit setzen);
+    `kobalt_blocks()` vor der Tolino-Prüfung und in jedem neuen Einstieg
+    (Empfehlung in `docs/nickel-6.0-symbols.md`).
   - [ ] **du:** Am Clara BW: Buch mit WLAN öffnen (Stand vom Server),
     dann WLAN aus, lesen, schließen (vorgemerkt), WLAN an, ein anderes Buch
-    öffnen (nachgeholt); in KOReader prüfen.
+    öffnen (nachgeholt); in KOReader prüfen. Dazu der Fall, den die VM nur
+    annähert: Anfang eines Kapitels lesen, verlassen, in KOReader weiter in
+    dasselbe Kapitel, Kobo neu starten, öffnen.
 - [ ] **C5 Dialog bei Konflikten** (braucht C4)
-  - [ ] **ich:** Qt-Dialog beim Öffnen mit beiden Ständen und drei Knöpfen.
+  - [ ] **ich:** Qt-Dialog beim Öffnen mit beiden Ständen und drei Knöpfen
+    (`ConfirmationDialog` hat zwei eigene; der dritte muss ein
+    Nickel-Widget sein, siehe C0).
   - [ ] **du:** Konflikt am Kobo nachstellen (KOReader und Kobo offline
     an verschiedenen Stellen), alle drei Knöpfe.
 - [ ] **C6 Oberfläche** (braucht C5)
@@ -1073,8 +1135,10 @@ Auf dem Kobo ist das Plugin inaktiv.
     er geht, ersetzt er dort den heutigen Weg B (CLI schreibt, verwirft die
     Seiten im Cache, N5); sonst bleibt Weg B.
   - [ ] **du:** Dieselben Tests wie C4 bis C6 am Tolino.
-- [ ] **(in D2, nach C3)** Knopf „Gerät vorbereiten“ in der GUI; beim
-  Kopieren (E5) Index und Tabelle gleich mitschreiben.
+- [ ] **(in D2, nach C3)** Knopf „Gerät vorbereiten“ in der GUI
+  (`prepare::prepare` mit Fortschritt, `Prepared::load` für den Hinweis);
+  beim Kopieren (E5) schreibt `copy::copy` Zuordnung und Tabelle schon
+  selbst (`prepare::put_mapping`), wenn das Gerät vorbereitet ist.
 
 ## Optional (später)
 

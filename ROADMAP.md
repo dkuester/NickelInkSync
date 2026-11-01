@@ -24,8 +24,9 @@ experimental; no further Kindle work or test before 0.1.0, and sending the
 Kindle copy, reading over MTP and the rest of L1 wait until the Kobo and
 the Tolino are stable. A kepub syncs only through a valid mapping, under
 the MD5 of the mapped EPUB, never under its own checksum (PRs #55, #60);
-the plugin has no mappings until stage C3, so it syncs no kepub yet. The
-same holds for the Kindle (mapped KFX only). Release notes in English,
+on the device the mappings come with `device prepare` (C3, PR #67), and
+without it the device sends nothing, the Tolino included (to say in the
+release notes). The same holds for the Kindle (mapped KFX only). Release notes in English,
 then German. A workflow builds the assets on a `v*` tag and
 drafts the release; only the owner tags and publishes.
 
@@ -142,6 +143,34 @@ drafts the release; only the owner tags and publishes.
       checksum, so the on-device plugin skips kepubs until mappings reach
       the device. Checked on the Clara BW (6.0) on 2026-10-31: kepub and
       EPUB open at KOReader's place after a restart, and back
+- [x] Last agreed position and pending list (stage C2 of the on-device
+      client, library and CLI, PR #64): `.adds/NickelInkSync/state.json` keeps
+      each book's base, shared by the plugin and USB; a side that did not
+      move since gives way (Nickel's `DateLastRead` on opening no longer
+      counts as reading), and only when both moved do the times and
+      `confirm` decide. A failed `push --live` is kept as pending and
+      `sync --pending` sends it later, with machine lines for the plugin
+      (including both positions of a conflict for the dialog). The
+      plugin's `not-in-line.tsv` moves into `state.json`
+- [x] Kobo client, stage C0 (Kobo 6.0.279225, in the Nickel VM, PR #66): every
+      plugin symbol and Kobalt's write path through Nickel exist in 6.0,
+      signatures checked by disassembly, plus a book menu entry and a
+      dialog of our own. Writing through Nickel opens the book at the
+      written place for kepub and EPUB, but on the first opening after a
+      start Nickel's page cache still wins when the chapter start is
+      cached; dropping that chapter's pages in the same transaction fixes
+      it ([docs/nickel-6.0-symbols.md](docs/nickel-6.0-symbols.md))
+- [x] Mappings on the device (stage C3 of the on-device client, library and
+      CLI, PR #67): `device prepare` puts a library index, the device's mappings and
+      a translation table per mapped book into `.adds/NickelInkSync/`
+      (never an EPUB), and takes mappings made or removed on the device
+      over into the desktop's store. On the device a mapped kepub or EPUB
+      syncs under its original's checksum, the sent paragraph start the
+      same as on the desktop; without the index nothing is sent
+      (`NICKELINKSYNC_NO_INDEX`), and only originals and mapped books are.
+      Checked on the Clara BW (6.0) on 2026-11-01: a Calibre kepub read on
+      the Kobo, its progress opens in KOReader in the original EPUB.
+      Replaces N6
 
 ## Quick wins
 
@@ -206,7 +235,9 @@ fixtures only.
   (`restore` in the CLI and a dialog), only onto the device it came from
   and the same database version; E6a, the macOS package (universal app in
   a `.dmg` with kepubify, the CLI as a ZIP, built by
-  `packaging/macos/package.sh` and the CI job `package-macos`).
+  `packaging/macos/package.sh` and the CI job `package-macos`); E6b, the
+  About window with the licences and a once-a-day notice of a newer
+  release (GitHub, can be switched off).
 
 - **Read-only device database layer** (S–M): reading the books and their
   positions is done (`status --device`); still to do: resolve
@@ -229,13 +260,15 @@ fixtures only.
   opening within the chapter last read. Still to do: English texts (the
   plugin logs `QLocale()`, `de_DE` so far).
 - **On-device client for the Kobo 6.0 and the Tolino** (L, release
-  0.1.0, experimental): one plugin for both devices; the kepub reverse
-  translation it needs is done (PR #55). Like today's plugin
+  0.1.0, experimental): one plugin for both devices; stages C0–C3 are
+  done (PRs #66, #55, #64, #67), the plugin itself (C4–C7) is next. Like today's plugin
   it stays idle while Kobalt is installed (N7). Opening a book takes a
   newer server position, written through Nickel itself as Kobalt (MIT)
   does (`VolumeManager::updateBookmark`/`updateFields` in Nickel's
-  transaction, then `Repository::refreshCache<Volume>`); leaving it sends
-  the position. Each book keeps the position last agreed with the server
+  transaction, which keeps Nickel's book cache in step), dropping the
+  target chapter's cached pages in the same transaction as the CLI does
+  (stage C0: Nickel's page cache still decides where a book opens);
+  leaving it sends the position. Each book keeps the position last agreed with the server
   (a base): a side unchanged since then gives way, so Nickel's
   `DateLastRead` on opening no longer counts as reading; when both
   changed, a dialog shows both positions to choose from. A book read

@@ -55,6 +55,8 @@ pub enum Command {
   Backups { root: PathBuf },
   /// Put a backup back onto the device, then read it again.
   Restore { root: PathBuf, backup: PathBuf },
+  /// Ask GitHub for a newer release.
+  CheckRelease,
   /// The settings in `config.ini`.
   ReadSettings,
   /// Write the settings; a typed password goes in as its key.
@@ -97,6 +99,8 @@ pub enum Event {
   History(Result<Vec<Entry>, String>),
   Overview(Overview),
   Settings(Result<Editable, String>),
+  /// A newer release, none, or why GitHub could not be asked.
+  Release(Result<Option<crate::release::Release>, String>),
   Backups(Result<Vec<nickelinksync::restore::Backup>, String>),
   /// A backup was put back (the backup of the state before), or why not.
   Restored {
@@ -220,7 +224,7 @@ fn run(inbox: &Receiver<Command>, outbox: &Sender<Event>, repaint: &dyn Fn()) {
         kind,
         questions,
       } => {
-        let result = sync::answer(&model::options(&root), questions);
+        let result = sync::answer(&model::options(&root), kind, questions);
         synced(root, kind, result);
       }
       Command::History => send(Event::History(sync::history(200))),
@@ -274,6 +278,7 @@ fn run(inbox: &Receiver<Command>, outbox: &Sender<Event>, repaint: &dyn Fn()) {
           load(root, Kind::Nickel);
         }
       }
+      Command::CheckRelease => send(Event::Release(crate::release::check())),
       Command::ReadSettings => send(Event::Settings(
         config_path().and_then(|p| Editable::read(&p).map_err(|e| e.to_string())),
       )),

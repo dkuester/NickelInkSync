@@ -5,9 +5,10 @@
 //! in the terminal, the desktop client in a dialog) before it applies the
 //! step, so the rules live in one place.
 
-use std::cell::OnceCell;
-use std::collections::HashSet;
+use std::cell::{OnceCell, RefCell};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::time::Duration;
 
 use crate::config::{self, Config, LocalSettings, PushPosition};
@@ -21,12 +22,16 @@ use crate::kobalt::Kobalt;
 use crate::kosync::{self, Client, Progress, Update};
 use crate::library::Library;
 use crate::mapping::{EpubState, Mapping, Store};
-use crate::not_in_line::NotInLine;
 use crate::position::{
   from_xpointer, from_xpointer_kepub, to_xpointer, PointFlavor, Position, Translated, XPointer,
 };
+use crate::prepare::Prepared;
 use crate::restore;
-use crate::sync::{decide, iso_timestamp, parse_timestamp, Confirm, Decision, Direction, Local};
+use crate::state::{Base, Entry, State};
+use crate::sync::{
+  decide, decide_since, iso_timestamp, parse_timestamp, Confirm, Decision, Direction, Local, Moved,
+};
+use crate::table::Table;
 use crate::transfer::{step_back, transfer, How};
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -44,7 +49,8 @@ pub struct Options {
   /// Only the book with exactly this ContentID (Kindle: `content_id`).
   pub content_id: Option<String>,
   /// Nickel is running (on the device): read its database as it is being
-  /// written, never write it, no mappings.
+  /// written, never write it; mappings and the library index from
+  /// `.adds/NickelInkSync` ([`crate::prepare`]).
   pub live: bool,
   /// How long each request to the server may take.
   pub timeout: Duration,
@@ -230,6 +236,8 @@ pub enum PushOutcome {
     note: Option<String>,
     remote: Option<Progress>,
     action: Action,
+    /// What moved since the base; `None` without one.
+    moved: Option<Moved>,
     /// Sent past a not-in-line entry with `force`: once sent, the server
     /// holds the device's position and the entry goes.
     forced: bool,
@@ -248,20 +256,25 @@ pub fn update(document: &str, local: &Local, device: &str, device_id: &str) -> U
 }
 
 /// The server's answer for `local` turned into a push outcome.
+/// `moved` says what moved since the base, given the server's position.
 fn push_ready(
   local: Local,
   note: Option<String>,
   remote: std::result::Result<Option<Progress>, kosync::Error>,
+  moved: impl FnOnce(&Progress) -> Option<Moved>,
   confirm: Confirm,
-  force: bool,
-  forced: bool,
+  (force, forced): (bool, bool),
 ) -> PushOutcome {
   let remote = match remote {
     Ok(remote) => remote,
     Err(e) => return PushOutcome::Failed(e),
   };
+  let moved = remote.as_ref().and_then(moved);
   let action = match &remote {
-    Some(remote) => Action::from(decide(Direction::Push, &local, remote, confirm), force),
+    Some(remote) => Action::from(
+      decide_since(Direction::Push, &local, remote, moved, confirm),
+      force,
+    ),
     None => Action::Apply,
   };
   PushOutcome::Ready {
@@ -269,12 +282,13 @@ fn push_ready(
     note,
     remote,
     action,
+    moved,
     forced,
   }
 }
 
-/// Why `pull` pays no heed to the device's time (the plugin's not-in-line
-/// list, see [`NotInLine`]).
+/// Why `pull` pays no heed to the device's time (a book not in line, see
+/// [`crate::state`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Plugin {
   /// Nickel opened at its own place instead of the server's, and the book
@@ -300,6 +314,8 @@ pub enum PullOutcome {
     /// `None` if the book was never opened or its position not translated.
     local: Option<Local>,
     plugin: Option<Plugin>,
+    /// What moved since the base; `None` without one.
+    moved: Option<Moved>,
     action: Action,
   },
 }
@@ -345,16 +361,24 @@ pub struct Session {
   pub model: String,
   pub flavor: PointFlavor,
   pub books: Vec<Book>,
-  /// Book mappings; none on the device itself (`live`).
+  /// Book mappings; none on the device itself (`live`), which has
+  /// `prepared` instead.
   pub store: Store,
+  /// On the device itself: what the desktop prepared for it, `None` if it
+  /// was not prepared (then nothing is sent).
+  pub prepared: Option<Prepared>,
+  /// Translation tables loaded so far, by device checksum.
+  tables: RefCell<HashMap<String, Rc<Table>>>,
   /// The library of originals, if one is configured.
   pub library: Option<Library>,
   /// Checksums of the library's EPUBs, computed when first needed.
   library_hashes: OnceCell<HashSet<String>>,
   /// Which place is sent (`position` in the configuration).
   pub position: PushPosition,
-  /// Books the plugin could not bring in line.
-  pub not_in_line: NotInLine,
+  /// `state.json`: the base of each book, not in line, pending.
+  state: RefCell<State>,
+  /// Bases of the positions [`Session::take`] made, until written.
+  taken: RefCell<HashMap<String, (Option<String>, Base)>>,
   /// What was found of Kobalt: while it is installed, nothing is written
   /// into the device database.
   pub kobalt: Kobalt,
@@ -393,8 +417,12 @@ impl Session {
       options.content_id.as_deref(),
     );
     let settings = options.local_settings()?;
-    // The mappings and the library live on the desktop; the plugin syncs
-    // every book under its own checksum, as before.
+    // The mappings and the library live on the desktop; on the device the
+    // CLI has what `device prepare` left there.
+    let prepared = match options.live {
+      true => Prepared::load(&device.root)?,
+      false => None,
+    };
     let (store, library) = if options.live {
       (Store::default(), None)
     } else {
@@ -405,7 +433,7 @@ impl Session {
       };
       (load_store()?, library)
     };
-    let not_in_line = NotInLine::load(&device.root)?;
+    let state = State::load(&device.root)?;
     Ok(Session {
       device,
       family,
@@ -413,10 +441,13 @@ impl Session {
       flavor,
       books,
       store,
+      prepared,
+      tables: RefCell::default(),
       library,
       library_hashes: OnceCell::new(),
       position: settings.position,
-      not_in_line,
+      state: RefCell::new(state),
+      taken: RefCell::default(),
       kobalt,
       content_id: options.content_id.clone(),
     })
@@ -436,6 +467,9 @@ impl Session {
         }
       }
     };
+    if self.device.live {
+      return self.identity_live(book, hash);
+    }
     if let Some(mapping) = self.store.for_file(&hash) {
       return match mapping.check() {
         EpubState::Ok => Identity::Mapped {
@@ -494,6 +528,106 @@ impl Session {
     }
   }
 
+  /// [`Session::identity`] on the device itself: by what the desktop
+  /// prepared. A mapping needs its table; a book that is not mapped syncs
+  /// only if the index has it as an original. Without an index every
+  /// EPUB syncs under its own checksum, but `push` sends nothing
+  /// ([`Session::push_blocked`]).
+  fn identity_live(&self, book: &Book, hash: String) -> Identity {
+    let mapping = self
+      .prepared
+      .as_ref()
+      .and_then(|p| p.mappings.for_file(&hash));
+    if let Some(mapping) = mapping {
+      return match self.table(&hash, mapping) {
+        Ok(_) => Identity::Mapped {
+          hash,
+          mapping: mapping.clone(),
+        },
+        Err(message) => Identity::Skip {
+          hash: Some(hash),
+          kind: "no-table",
+          message,
+        },
+      };
+    }
+    if book.is_kepub() || book.onboard_path().ends_with(".kepub.epub") {
+      return Identity::Skip {
+        hash: Some(hash),
+        kind: "not-mapped",
+        message: "not mapped: a kepub syncs only under its original EPUB; map it on the \
+                  computer and run `nickelinksync device prepare`"
+          .into(),
+      };
+    }
+    let Some(prepared) = &self.prepared else {
+      return Identity::Own {
+        hash,
+        why: Own::NoLibrary,
+      };
+    };
+    if prepared.is_original(&hash) {
+      Identity::Own {
+        hash,
+        why: Own::InLibrary,
+      }
+    } else if prepared.mappings.holding().any(|m| m.epub.hash == hash) {
+      Identity::Own {
+        hash,
+        why: Own::OriginalOfMapping,
+      }
+    } else {
+      Identity::Skip {
+        hash: Some(hash),
+        kind: "not-mapped",
+        message: "not mapped: neither mapped nor an original in the library index, so not \
+                  synced; map it on the computer and run `nickelinksync device prepare`"
+          .into(),
+      }
+    }
+  }
+
+  /// The translation table of the device file with checksum `hash` for
+  /// `mapping`, loaded once; why there is none.
+  fn table(&self, hash: &str, mapping: &Mapping) -> std::result::Result<Rc<Table>, String> {
+    if let Some(table) = self.tables.borrow().get(hash) {
+      return Ok(table.clone());
+    }
+    let prepared = self.prepared.as_ref().ok_or("not prepared")?;
+    let path = prepared.table_path(hash);
+    if !path.exists() {
+      return Err(
+        "mapped, but without a translation table: connect the device to the computer and \
+         run `nickelinksync device prepare`"
+          .into(),
+      );
+    }
+    let table = Table::load(&path).map_err(|e| format!("translation table: {e}"))?;
+    if table.device != hash || table.original != mapping.epub.hash {
+      return Err(
+        "the translation table is for another file: connect the device to the computer and \
+         run `nickelinksync device prepare`"
+          .into(),
+      );
+    }
+    let table = Rc::new(table);
+    self
+      .tables
+      .borrow_mut()
+      .insert(hash.to_string(), table.clone());
+    Ok(table)
+  }
+
+  /// On the device itself without a library index, `push` sends nothing:
+  /// only books the desktop knows reach the server. Why, if so.
+  pub fn push_blocked(&self) -> Option<&'static str> {
+    (self.device.live && self.prepared.is_none()).then_some(
+      "the device is not prepared: connect it to the computer and run \
+       `nickelinksync device prepare` (or \"Prepare device\" in the desktop client); \
+       nothing is sent until then",
+    )
+  }
+
   fn hash(&self, book: &Book) -> std::result::Result<String, String> {
     partial_md5(&self.device.book_file(book)).map_err(|e| format!("file not readable: {e}"))
   }
@@ -518,6 +652,13 @@ impl Session {
   ) -> std::result::Result<(Translated, Option<String>), String> {
     let mut device = Epub::open(&self.device.book_file(book)).map_err(|e| e.to_string())?;
     let (xpointer, how) = match identity {
+      Identity::Mapped { hash, mapping } if self.device.live => {
+        let table = self.table(hash, mapping)?;
+        let moved = table
+          .from_original(&mut device, xpointer, percentage)
+          .map_err(|e| e.to_string())?;
+        (moved.transferred.xpointer, Some(moved.transferred.how))
+      }
       Identity::Mapped { mapping, .. } => {
         let mut original = Epub::open(Path::new(&mapping.epub.path)).map_err(|e| e.to_string())?;
         let t =
@@ -582,6 +723,11 @@ impl Session {
       .map_err(|e| format!("not translated: {e}"))?;
     let percentage = book.percent_read as f64 / 100.0;
     let device_file = self.device.book_file(book);
+    if let Identity::Mapped { hash, mapping } = identity {
+      if self.device.live {
+        return self.local_by_table(book, hash, mapping, &x.xpointer, percentage);
+      }
+    }
     let (xpointer, mut notes, sent_file) = match identity {
       Identity::Mapped { mapping, .. } => {
         let original = PathBuf::from(&mapping.epub.path);
@@ -627,6 +773,43 @@ impl Session {
     Ok((local, note))
   }
 
+  /// [`Session::local`] for a mapped book on the device itself, with its
+  /// translation table instead of the original EPUB.
+  fn local_by_table(
+    &self,
+    book: &Book,
+    hash: &str,
+    mapping: &Mapping,
+    xpointer: &str,
+    percentage: f64,
+  ) -> std::result::Result<(Local, Option<String>), String> {
+    let table = self.table(hash, mapping)?;
+    let moved = Epub::open(&self.device.book_file(book))
+      .map_err(|e| e.to_string())
+      .and_then(|mut device| {
+        table
+          .to_original(&mut device, xpointer, percentage, self.position)
+          .map_err(|e| e.to_string())
+      })
+      .map_err(|e| format!("not translated into the original EPUB: {e}"))?;
+    let mut notes = Vec::new();
+    if moved.transferred.how != How::SameText {
+      notes.push(moved.transferred.how.to_string());
+    }
+    if let Some(s) = &moved.stepped {
+      notes.push(s.to_string());
+    }
+    if moved.approximate {
+      notes.push("placed between the table's anchors".to_string());
+    }
+    let local = Local {
+      xpointer: moved.transferred.xpointer,
+      percentage,
+      last_read: book.last_read.as_deref().and_then(parse_timestamp),
+    };
+    Ok((local, (!notes.is_empty()).then(|| notes.join("; "))))
+  }
+
   /// What `push` would do with `book`; asks the server. `force` sends
   /// without asking, also past a newer server position or a not-in-line
   /// entry.
@@ -668,8 +851,8 @@ impl Session {
         }
       }
     };
-    let forced = match self.not_in_line.get(&book.content_id) {
-      Some(at) if !force => return PushOutcome::NotInLine { at: at.to_string() },
+    let forced = match self.not_in_line(&book.content_id) {
+      Some(at) if !force => return PushOutcome::NotInLine { at },
       Some(_) => true,
       None => false,
     };
@@ -678,7 +861,8 @@ impl Session {
       Ok(remote) => self.against(book, identity, local, remote.as_ref()),
       Err(_) => local,
     };
-    push_ready(local, note, remote, confirm, force, forced)
+    let moved = |remote: &Progress| self.moved(book, document, remote);
+    push_ready(local, note, remote, moved, confirm, (force, forced))
   }
 
   /// What `pull` would do with `book`; asks the server. `force` takes the
@@ -723,8 +907,12 @@ impl Session {
       .ok()
       .map(|(local, _)| self.against(book, identity, local, Some(&remote)));
     // After a failed take Nickel's DateLastRead says nothing about reading.
-    let left_by_nickel = self.not_in_line.get(&book.content_id);
-    let (decision, plugin) = match (&local, left_by_nickel) {
+    let left_by_nickel = self.not_in_line(&book.content_id);
+    let moved = match left_by_nickel {
+      None => self.moved(book, document, &remote),
+      Some(_) => None,
+    };
+    let (decision, plugin) = match (&local, left_by_nickel.as_deref()) {
       (Some(_), Some(at)) if book.position.as_deref() == Some(at) => {
         (Decision::Apply, Some(Plugin::NothingReadSince))
       }
@@ -738,15 +926,107 @@ impl Session {
           Some(Plugin::ReadOnSince),
         )
       }
-      (Some(local), None) => (decide(Direction::Pull, local, &remote, confirm), None),
+      (Some(local), None) => (
+        decide_since(Direction::Pull, local, &remote, moved, confirm),
+        None,
+      ),
       (None, _) => (Decision::Apply, None),
     };
     PullOutcome::Ready {
       remote,
       local,
       plugin,
+      moved,
       action: Action::from(decision, force),
     }
+  }
+
+  /// What moved since the base of `book` for `document`, against the
+  /// server's position; `None` without a base. The device moved if Nickel
+  /// stores another place than then, the server if it holds another
+  /// position.
+  pub fn moved(&self, book: &Book, document: &str, remote: &Progress) -> Option<Moved> {
+    let state = self.state.borrow();
+    let base = state.base(&book.content_id, document)?;
+    Some(Moved::from(
+      book.position.as_deref() == Some(base.device.as_str()),
+      remote.progress == base.xpointer,
+    ))
+  }
+
+  /// What `state.json` holds about `content_id`.
+  pub fn entry(&self, content_id: &str) -> Option<Entry> {
+    self.state.borrow().get(content_id).cloned()
+  }
+
+  /// Where Nickel opened `content_id` instead of the server's position.
+  pub fn not_in_line(&self, content_id: &str) -> Option<String> {
+    self
+      .state
+      .borrow()
+      .not_in_line(content_id)
+      .map(str::to_string)
+  }
+
+  /// The ContentIDs of the books with a pending push.
+  pub fn pending(&self) -> Vec<String> {
+    let state = self.state.borrow();
+    state.pending().map(|(id, _)| id.to_string()).collect()
+  }
+
+  /// The device and the server agree on `remote` for `book`: its base for
+  /// the next run (call [`Session::save_state`] at the end).
+  pub fn agreed(&self, book: &Book, document: &str, remote: &Progress) {
+    self.state.borrow_mut().agreed(
+      &book.content_id,
+      book.title.as_deref(),
+      Base {
+        document: document.to_string(),
+        device: book.position.clone().unwrap_or_default(),
+        xpointer: remote.progress.clone(),
+        percentage: remote.percentage,
+        timestamp: remote.timestamp,
+      },
+    );
+  }
+
+  /// `update` reached the server at `time` (its answer, else now): the base
+  /// of `book` for the next run.
+  pub fn agreed_sent(&self, book: &Book, update: &Update, time: Option<i64>) {
+    let remote = Progress {
+      progress: update.progress.clone(),
+      percentage: update.percentage,
+      device: update.device.clone(),
+      device_id: update.device_id.clone(),
+      timestamp: time.unwrap_or_else(crate::history::now),
+    };
+    self.agreed(book, &update.document, &remote);
+  }
+
+  /// A push of `book` failed for `reason` (an error kind): kept for
+  /// `sync --pending`.
+  pub fn mark_pending(&self, book: &Book, reason: &str) {
+    self.state.borrow_mut().mark_pending(
+      &book.content_id,
+      book.title.as_deref(),
+      reason,
+      crate::history::now(),
+    );
+  }
+
+  /// Nothing more to send for `content_id`.
+  pub fn clear_pending(&self, content_id: &str) {
+    self.state.borrow_mut().clear_pending(content_id);
+  }
+
+  /// Forgets `content_id` in `state.json` (no longer on the device).
+  pub fn forget(&self, content_id: &str) {
+    self.state.borrow_mut().remove(content_id);
+  }
+
+  /// Writes what this run changed into `state.json`.
+  pub fn save_state(&self) -> std::io::Result<()> {
+    self.state.borrow_mut().save()
   }
 
   /// The server's position for `book` as a write to the device database.
@@ -766,6 +1046,21 @@ impl Session {
       .filter(|&t| t >= remote.timestamp)
       .map(|_| iso_timestamp(remote.timestamp - 1));
     let percent = (remote.percentage * 100.0).round().clamp(0.0, 100.0) as i64;
+    if let Some(document) = identity.document() {
+      self.taken.borrow_mut().insert(
+        book.content_id.clone(),
+        (
+          book.title.clone(),
+          Base {
+            document: document.to_string(),
+            device: translated.position.to_string(),
+            xpointer: remote.progress.clone(),
+            percentage: remote.percentage,
+            timestamp: remote.timestamp,
+          },
+        ),
+      );
+    }
     Ok(Take {
       write: Write {
         content_id: book.content_id.clone(),
@@ -777,8 +1072,9 @@ impl Session {
     })
   }
 
-  /// Writes the positions into the device database after a backup of it,
-  /// and clears their not-in-line entries.
+  /// Writes the positions into the device database after a backup of it;
+  /// in `state.json` each becomes the book's base (made by
+  /// [`Session::take`]) and is in line.
   /// Refused while Kobalt is installed ([`crate::kobalt::Active`]).
   pub fn write(&mut self, writes: &[Write]) -> Result<Written> {
     self.kobalt.check()?;
@@ -811,9 +1107,19 @@ impl Session {
         pages_dropped,
       }
     };
-    self
-      .not_in_line
-      .remove(writes.iter().map(|w| w.content_id.as_str()))?;
+    {
+      let mut state = self.state.borrow_mut();
+      let mut taken = self.taken.borrow_mut();
+      for w in writes {
+        match taken.remove(&w.content_id) {
+          Some((title, base)) if base.device == w.position => {
+            state.agreed(&w.content_id, title.as_deref(), base)
+          }
+          _ => state.clear_not_in_line([w.content_id.as_str()]),
+        }
+      }
+      state.save()?;
+    }
     Ok(written)
   }
 }
@@ -1016,9 +1322,9 @@ impl KindleSession {
         local,
         note,
         client.progress(&mapping.epub.hash),
+        |_| None,
         confirm,
-        force,
-        false,
+        (force, false),
       ),
       Err(message) => PushOutcome::Skip {
         kind: "skipped",

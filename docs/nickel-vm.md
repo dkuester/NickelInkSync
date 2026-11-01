@@ -73,6 +73,7 @@ the plugin pulls, and Nickel opens chapter 3 at paragraph 20.
 | Hardware configuration | The `hwcfg` partition, written by [vm/hwcfg.py](../vm/hwcfg.py): board E60T00 (spa), MT8113T, 1448×1072 colour screen, brand Tolino (customer 0x21) or Kobo (0x09). `hwdetect` and Nickel read it and report `spaTolinoColour` on the `tolino` VM. |
 | Screen | `/dev/fb0` is a plain file (`vm/state/VM/fb0.raw`, 32-bit). [vm/src/vmshim.c](../vm/src/vmshim.c), preloaded into Nickel, answers the framebuffer ioctls and accepts the e-ink update ioctls. Nickel's own `kobo` platform plugin draws into it; [vm/topng.py](../vm/topng.py) turns it into a PNG. |
 | Touch | qemu-user translates neither uinput nor evdev ioctls, so `/dev/input/touchscreen` is a FIFO: [vm/src/vmtouch.c](../vm/src/vmtouch.c) writes input events into it, and the shim answers Qt's evdev queries on it. `just vm tap` sends it a command. |
+| Aux partition | `/mnt/aux`, where Nickel keeps the images of its rendered pages (`rendering/`; their rows are in the database), is `vm/state/VM/aux/`, so it survives a restart as on the device. Before 1 November 2026 it was lost at every restart, and Nickel then rendered every page live. |
 | Battery | `/sys/class/power_supply/battery` (6.0) and `bd71827_bat` (5.18) on a tmpfs: 80 %, not charging. |
 | USB | `export-usb.sh` does nothing; `just vm usb` writes plug events into Nickel's udev FIFO and taps "Verbinden", so Nickel imports new books as after a USB session. |
 | Wi-Fi | [vm/wifi/wifi.py](../vm/wifi/wifi.py) in a sidecar container that shares the VM's network: it renames `eth0` to `wlan0`, owns `name.marples.roy.dhcpcd` on the system bus (the dhcpcd-dbus API Nickel scans and connects through) and answers wpa_supplicant's control socket. One network, `VM-WLAN`, is known and joined after each scan, as wpa_supplicant would; on connecting it restores the address and default route, as dhcpcd would. Nickel's connectivity check then goes to the internet through Docker. The real `wpa_supplicant`, `dhcpcd` and `dhcpcd-dbus` are stubbed. |
@@ -105,6 +106,14 @@ with a push, and a pull that opened the book exactly at the pulled place
 (chapter 3, paragraph 20) all worked. The `kobo` VM on 6.0 boots to the
 Kobo language screen; its first-start screens are not tapped through.
 
+On 1 November 2026 the `kobo` VM on 6.0.279225 (stage C0): after the
+language screen ("English") Nickel goes straight to the Kobo home screen,
+with no further set-up. A NickelHook plugin loads; importing Book R as
+kepub and EPUB, opening, turning pages, leaving ("Back to My Books" in the
+reading menu), a book menu entry of a plugin and a `ConfirmationDialog`
+all work by tap. The results are in
+[nickel-6.0-symbols.md](nickel-6.0-symbols.md#the-write-path-in-the-vm).
+
 ## Limits
 
 - **Firmware versions.** The `tolino` VM runs what the Tolino runs now
@@ -126,6 +135,13 @@ Kobo language screen; its first-start screens are not tapped through.
   plugin's check 3 s after opening found no position yet under emulation and
   reported "Nickel hat ein anderes Kapitel geöffnet", although Nickel had
   opened the pulled page.
+- **Screen and log.** The screenshot sometimes lags one step behind,
+  most often with menus and dialogs; take another one a few seconds
+  later. The syslog is a 512 KB ring buffer that the renderer's messages
+  fill within seconds of opening a book, so the lines of the opening are
+  often gone; for such tests run
+  `docker exec nickel-vm-kobo sh -c 'killall syslogd; syslogd -O /state/syslog.txt'`
+  after the start (the log then is `vm/state/kobo/syslog.txt`).
 - **No e-ink.** Update modes, waveforms and flashing are accepted and
   ignored; Nickel's light sleep is refused (it logs "Cannot enter suspend
   while charging" every few seconds, which is harmless).
