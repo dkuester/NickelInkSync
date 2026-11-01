@@ -32,7 +32,7 @@ ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
 allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
-fertig, D2 läuft (E0 bis E6b und O5 erledigt; als Nächstes E7). **Danach
+fertig, D2 läuft (E0 bis E7 und O5 erledigt; als Nächstes der Release-Workflow). **Danach
 der Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31).
 
 ## Release 0.1.0
@@ -368,7 +368,7 @@ Entscheidungen des Besitzers (2026-10-31):
   - [x] **ich:** **E6a** macOS-Paket: `packaging/macos/package.sh` baut
     `NickelInkSync-<Version>-macos.dmg` (Universal-App arm64 + x86_64,
     ab macOS 11, ad hoc signiert, nicht notarisiert, mit `/Applications`-
-    Verknüpfung und Lizenzen) und `nickelinksync-<Version>-macos.zip`
+    Verknüpfung und Lizenzen) und `nickelinksync-cli-<Version>-macos.zip`
     (Universal-CLI). kepubify 4.0.4 (MIT) liegt neben dem Programm in der
     App, SHA-256 der beiden macOS-Binaries im Skript fest; die App sucht
     kepubify zuerst neben sich. Icon-Entwurf `packaging/icon.svg`. CI-Job
@@ -388,16 +388,39 @@ Entscheidungen des Besitzers (2026-10-31):
     „Neue Version … verfügbar“. Schalter in „Über“.
   - [x] **du:** E6b: „Über“ öffnen, Lizenzen ansehen (2026-11-01): Lizenzen
     werden korrekt angezeigt.
-  - [ ] **ich:** **E7** Windows: Pfade für Konfiguration und Daten
+  - [x] **ich:** **E7** Windows: Pfade für Konfiguration und Daten
     (`%APPDATA%`, heute nur `HOME`/XDG), Wechsellaufwerke erkennen,
     Anmeldeinformationsverwaltung, ZIP aus der CI (Windows-Runner); ohne
     Code-Signing warnt SmartScreen beim ersten Start.
-  - [ ] **ich:** **Release-Workflow** (nach E7): GitHub-Actions-Workflow,
+    Umgesetzt: Konfiguration in `%APPDATA%\nickelinksync\config.ini`,
+    Daten (Zuordnungen, Sicherungen, Verlauf, `gui.json`) in
+    `%LOCALAPPDATA%\nickelinksync`, `~` ist `%USERPROFILE%`; Laufwerke D:
+    bis Z: (gab es schon); Schlüssel in der Anmeldeinformationsverwaltung
+    (`keyring`, aus E4); kein Konsolenfenster im Release-Build; Icon
+    (`packaging/windows/icon.ico`, bis 32 Pixel das kleine) und Version in
+    der exe (`gui/build.rs`, `winresource`). `packaging/windows/package.ps1`
+    baut `NickelInkSync-<Version>-windows-x64.zip` (mit kepubify 4.0.4,
+    SHA-256 geprüft) und `nickelinksync-cli-<Version>-windows-x64.zip`; CI-Job
+    `windows` (clippy, Tests, Paket, kein Pflicht-Check). Lokal quer
+    gebaut und mit clippy geprüft (`x86_64-pc-windows-gnu` über zig).
+  - [ ] **du:** E7: ZIP aus der CI auf dem Windows-Rechner entpacken,
+    SmartScreen „Trotzdem ausführen“, Tolino anstecken, Einstellungen,
+    ein Buch senden; Icon in Taskleiste und Explorer ansehen.
+  - [x] **ich:** **Release-Workflow** (nach E7): GitHub-Actions-Workflow,
     der bei einem Tag `v*` die Release-Assets baut und als **Entwurf**
     eines GitHub-Release anlegt; Versionsprüfung Tag ↔ `Cargo.toml`
     beider Crates; `SHA256SUMS` mit hochladen; Release-Notes englisch,
     darunter deutsch, mit Hinweisen zu Gatekeeper und SmartScreen. Den Tag
     setzt und das Release veröffentlicht nur der Besitzer.
+    Umgesetzt: `.github/workflows/release.yml` (Jobs `version`, `macos`,
+    `windows`, `device`, `draft`); Notes-Vorlage `.github/release-notes.md`
+    mit Download-Tabelle, Installation (Gatekeeper, SmartScreen,
+    Gerätepaket experimentell, Kobalt), kepub- und Kindle-Hinweis. Das
+    Gerätepaket `NickelInkSync-<Version>-device.zip` (`Kobo.tgz`,
+    `.adds/NickelInkSync/`, Lizenz) ist dabei. Von Hand gestartet ein
+    Probelauf ohne Entwurf. Mit actionlint (und shellcheck) geprüft.
+  - [ ] **du:** nach dem Merge einen Probelauf starten (Actions → Release
+    → Run workflow) und die Artefakte ansehen.
   - [ ] **du:** E7 auf dem Windows-PC mit Tolino oder Kobo.
   - [ ] **ich (optional):** **E8** Linux als **AppImage**, gebaut auf einer
     alten glibc-Basis (ältestes noch unterstütztes Ubuntu LTS), damit es auf

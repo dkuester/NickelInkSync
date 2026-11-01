@@ -240,7 +240,8 @@ gezeigt, unter 80 % ist der beste als „uncertain“ markiert.
 
 Die Zuordnungen liegen in `mappings.json` im Datenordner
 `~/.local/share/nickelinksync/` (oder `$XDG_DATA_HOME/nickelinksync`, oder
-`$NICKELINKSYNC_DATA_DIR`), den sich CLI und Desktop-Client teilen.
+`$NICKELINKSYNC_DATA_DIR`; unter Windows `%LOCALAPPDATA%\nickelinksync\`),
+den sich CLI und Desktop-Client teilen.
 
 ### Desktop-Client (im Aufbau)
 
@@ -249,11 +250,20 @@ Die Zuordnungen liegen in `mappings.json` im Datenordner
 notarisiert (keine Apple Developer ID), daher blockiert macOS sie beim
 ersten Start: einmal öffnen, dann Systemeinstellungen → Datenschutz &
 Sicherheit → „Dennoch öffnen“ (seit macOS 15 genügt Rechtsklick → „Öffnen“
-nicht mehr). Die CLI kommt als `nickelinksync-<Version>-macos.zip`; nach
+nicht mehr). Die CLI kommt als `nickelinksync-cli-<Version>-macos.zip`; nach
 dem Entpacken lässt `xattr -d com.apple.quarantine nickelinksync` sie
 laufen. In der App steckt [kepubify](https://github.com/pgaskin/kepubify)
 (MIT); seine Lizenz liegt in der App und auf dem Disk-Image.
 `packaging/macos/package.sh` baut beide Dateien (CI: Job `package-macos`).
+
+**Windows (ab 10, x64):** `NickelInkSync-<Version>-windows-x64.zip`
+irgendwohin entpacken und `NickelInkSync.exe` starten; `kepubify.exe` bleibt
+daneben liegen. Das Programm ist nicht signiert, daher warnt SmartScreen
+beim ersten Start: „Weitere Informationen“ → „Trotzdem ausführen“. Die CLI
+kommt als `nickelinksync-cli-<Version>-windows-x64.zip`. Der Schlüssel liegt in
+der Windows-Anmeldeinformationsverwaltung, Kobo und Tolino findet die App
+über ihren Laufwerksbuchstaben. `packaging/windows/package.ps1` baut beide
+Dateien (CI: Job `windows`).
 
 Ein Fenster für dieselbe Arbeit, auf derselben Bibliothek (`gui/`, egui):
 `just gui` oder `cargo run -p nickelinksync-gui`. Es findet einen per USB
@@ -302,7 +312,8 @@ Datenordner.
 `push` und `pull` brauchen eine Konfigurationsdatei, `status` nutzt sie, wenn
 es sie gibt. Standardort: `~/.config/nickelinksync/config.ini` (oder
 `$XDG_CONFIG_HOME/nickelinksync/config.ini`, oder der Pfad in
-`$NICKELINKSYNC_CONFIG`). Das Format steht im [englischen README](README.md#configuration):
+`$NICKELINKSYNC_CONFIG`); unter Windows `%APPDATA%\nickelinksync\config.ini`.
+`library = ~/…` beginnt im Benutzerordner (unter Windows `%USERPROFILE%`). Das Format steht im [englischen README](README.md#configuration):
 `server`, `user`, `password` (oder `key` = MD5 des Passworts), optional
 `device`, `device_id`, `confirm`, `notify` (nur für das Tolino-Plugin,
 siehe unten), `library` (Ordner mit den Original-EPUBs für die
@@ -477,6 +488,17 @@ Toolchain-Image `ghcr.io/dkuester/nickelstorygraph-toolchain` gebaut
 (Docker, amd64): `just plugin` erzeugt `plugin/Kobo.tgz`, `just package`
 legt es mit dem Geräteprogramm in `dist/NickelInkSync/` zusammen. Mit
 `--recurse-submodules` klonen oder `git submodule update --init` ausführen.
+
+### Release
+
+Ein Tag `v*` startet `.github/workflows/release.yml`. Er prüft, dass der Tag
+der Version in `Cargo.toml` und `gui/Cargo.toml` entspricht, baut die
+Dateien für macOS und Windows und das Gerätepaket auf ihren Plattformen und
+legt einen Entwurf eines GitHub-Release an, mit `SHA256SUMS` und den Notes
+aus `.github/release-notes.md` (englisch, darunter deutsch). Veröffentlicht
+wird nichts: Der Entwurf wartet auf den Besitzer. Von Hand gestartet
+(Actions → Release → Run workflow) ist es ein Probelauf, der nur die Dateien
+als Artefakte baut.
 
 ## Support
 

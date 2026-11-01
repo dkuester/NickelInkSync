@@ -225,7 +225,8 @@ below 50 % are not shown; below 80 % the best one is marked "uncertain".
 
 The mappings are kept in `mappings.json` in the data directory
 `~/.local/share/nickelinksync/` (or `$XDG_DATA_HOME/nickelinksync`, or
-`$NICKELINKSYNC_DATA_DIR`), shared with the desktop client.
+`$NICKELINKSYNC_DATA_DIR`; on Windows `%LOCALAPPDATA%\nickelinksync\`),
+shared with the desktop client.
 
 ### Desktop client (in progress)
 
@@ -234,11 +235,20 @@ The mappings are kept in `mappings.json` in the data directory
 Applications. The app is not notarized (no Apple Developer ID), so macOS
 blocks it the first time: open it once, then System Settings → Privacy &
 Security → "Open Anyway" (since macOS 15 a right-click → "Open" no longer
-does it). The CLI comes as `nickelinksync-<version>-macos.zip`; after
+does it). The CLI comes as `nickelinksync-cli-<version>-macos.zip`; after
 unpacking, `xattr -d com.apple.quarantine nickelinksync` lets it run. The
 app ships [kepubify](https://github.com/pgaskin/kepubify) (MIT) inside;
 its licence is in the app and on the disk image. `packaging/macos/package.sh`
 builds both files (CI: job `package-macos`).
+
+**Windows (10 or later, x64):** unpack
+`NickelInkSync-<version>-windows-x64.zip` anywhere and start
+`NickelInkSync.exe`; `kepubify.exe` stays next to it. The program is not
+code-signed, so SmartScreen warns the first time: "More info" → "Run
+anyway". The CLI comes as `nickelinksync-cli-<version>-windows-x64.zip`. The
+key goes into the Windows Credential Manager, and a Kobo or Tolino is
+found by its drive letter. `packaging/windows/package.ps1` builds both
+files (CI: job `windows`).
 
 A window for the same work, built on the same library (`gui/`, egui):
 `just gui` or `cargo run -p nickelinksync-gui`. It finds a Kobo or
@@ -286,7 +296,8 @@ with the CLI; its own settings (language, Kindle folder) are in
 `push` and `pull` need a configuration file, `status` uses it if it exists.
 Default location: `~/.config/nickelinksync/config.ini` (or
 `$XDG_CONFIG_HOME/nickelinksync/config.ini`, or the path in
-`$NICKELINKSYNC_CONFIG`).
+`$NICKELINKSYNC_CONFIG`); on Windows `%APPDATA%\nickelinksync\config.ini`.
+A `library = ~/…` starts at the home folder (`%USERPROFILE%` on Windows).
 
 ```ini
 # KOSync server and account
@@ -487,6 +498,21 @@ amd64): `just plugin` gives `plugin/Kobo.tgz`, `just package` puts it
 together with the device binary into `dist/NickelInkSync/`. Clone with
 `--recurse-submodules`, or run `git submodule update --init`.
 Each CI run uploads the same file as the artifact `nickelinksync-armv7-musleabihf`.
+
+### Release
+
+A tag `v*` starts `.github/workflows/release.yml`. It checks that the tag
+is the version in `Cargo.toml` and `gui/Cargo.toml`, builds the macOS and
+Windows files and the device package on their platforms, and drafts a
+GitHub release with them, `SHA256SUMS` and the notes from
+`.github/release-notes.md` (English, then German). Nothing is published:
+the draft waits for the owner. Started by hand (Actions → Release → Run
+workflow) it is a trial run that only builds the files as artifacts.
+
+```sh
+# after setting the version in Cargo.toml and gui/Cargo.toml
+git tag v0.1.0 && git push origin v0.1.0
+```
 
 ## Support
 

@@ -303,6 +303,8 @@ fn both_moving_is_a_conflict_by_the_old_rule() {
 
 #[test]
 fn a_failed_push_on_the_device_is_kept_and_sent_later() {
+  // A refused connection, not a timeout: Windows tries a refused port again
+  // for about two seconds before it gives up, so the limit is longer.
   let s = Setup::new("pending");
   let down = s.server_down();
   let args = [
@@ -310,7 +312,7 @@ fn a_failed_push_on_the_device_is_kept_and_sent_later() {
     "--live",
     "--emit",
     "--timeout",
-    "2",
+    "10",
     "--content-id",
     BOOK,
   ];
@@ -327,7 +329,7 @@ fn a_failed_push_on_the_device_is_kept_and_sent_later() {
   assert_eq!(entry["pending"]["reason"], "network");
   assert_eq!(entry["title"], "Book A");
   // Over USB a failed push is not kept: the user sees it.
-  let (_, out) = s.run_with(&down, &["push", "--timeout", "2", "--content-id", BOOK]);
+  let (_, out) = s.run_with(&down, &["push", "--timeout", "10", "--content-id", BOOK]);
   assert!(!out.contains("pending"), "{out}");
   let (_, out) = s.run(&["status", "--content-id", BOOK]);
   assert!(
@@ -336,7 +338,7 @@ fn a_failed_push_on_the_device_is_kept_and_sent_later() {
   );
 
   // Still no server: stays pending.
-  let sync = ["sync", "--pending", "--live", "--emit", "--timeout", "2"];
+  let sync = ["sync", "--pending", "--live", "--emit", "--timeout", "10"];
   let (output, out) = s.run_with(&down, &sync);
   assert!(!output.status.success());
   assert!(
