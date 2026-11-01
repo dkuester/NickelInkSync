@@ -18,7 +18,7 @@ the same progress.
 > `nickelinksync push` sends the reading position of each sideloaded book
 > to a KOSync server, `status` shows the device and server positions side by
 > side, and `pull` shows what a newer server position would change; on a
-> Tolino, `pull --write` writes it to the device (experimental, with a
+> Tolino or Kobo, `pull --write` writes it to the device (experimental, with a
 > backup first). The scope and the device-database findings it
 > rests on are in [SCOPE.md](SCOPE.md), the next steps are in
 > [ROADMAP.md](ROADMAP.md).
@@ -35,7 +35,7 @@ nickelinksync pull --device /Volumes/KOBOeReader
 |---|---|
 | `status` | Lists the sideloaded books with hash, stored position, KOReader XPointer and, if configured, the position on the server. |
 | `push` | Sends each book's position to the server. A position the server got after the book was last read on the device is never overwritten; by default it also asks before moving the server back to an earlier place in the book (see `confirm` below). `--force` sends without asking, `--dry-run` only shows what would be sent. |
-| `pull` | Shows which books have a newer position on the server, how the device would store it and where it would ask first. Only with `--write` is it written to the device (Tolino so far, experimental, see below); `--force` takes the server position without asking. |
+| `pull` | Shows which books have a newer position on the server, how the device would store it and where it would ask first. Only with `--write` is it written to the device (Tolino and Kobo, experimental, see below); `--force` takes the server position without asking. |
 | `sync --pending` | Sends the books whose push failed on the device (no network, a server error), as kept in `.adds/NickelInkSync/state.json`, if they still should be sent (see [The last agreed position](#the-last-agreed-position)). |
 
 All three take `--book <text>` to limit them to books whose title or file
