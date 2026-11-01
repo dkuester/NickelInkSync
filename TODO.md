@@ -19,12 +19,14 @@ in einem eigenen Durchgang: P1-Durchlauf mit allen Geräten,
 K4 rückwärts für kepub (`#kobo.N.M`), P2 am Kobo, N2. So geraten die
 beiden Geräte beim Testen nicht durcheinander.
 
-**Kobo jetzt auf Firmware 6.0:** Der Referenz-Clara-BW hat sich am
-2026-10-28 selbst auf **6.0.279225** (Datenbankversion 222) aktualisiert.
-Ein Kobo mit 4.x ist nicht mehr da. Der Kobo-Durchgang läuft deshalb auf
-6.0 (Qt6 wie der Tolino, die Nickel-VM nutzt ebenfalls Kobo 6.0); was nur
-4.x betrifft (Adobe-Point mit zusammengefasstem Text, Qt5-Plugin), bleibt
-im Code, ist aber nur noch über die 4.46-Fixtures geprüft.
+**Kobo auf Firmware 6.0 und 4.x:** Der Referenz-Clara-BW hat sich am
+2026-10-28 selbst auf **6.0.279225** (Datenbankversion 222) aktualisiert
+(Qt6 wie der Tolino, die Nickel-VM nutzt ebenfalls Kobo 6.0). Seit
+2026-11-01 gibt es wieder ein 4.x-Gerät: einen **Kobo Libra 2 mit
+4.38.23852** (Qt5). Kobo 4.x wird in 0.1.0 vollständig unterstützt (C8–C10
+im Abschnitt Kobo-Client); bis dahin ist 4.x nur über die 4.46-Fixtures
+geprüft. Bei Gerätetests immer das Gerät nennen: Libra 2 (4.x) oder Clara
+BW (6.0).
 
 **Danach zuerst D1, dann D2:** Sobald der Tolino-Durchgang abgeschlossen
 ist, kommt die **manuelle Buchzuordnung in der CLI (D1)**, danach der
@@ -33,7 +35,7 @@ allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
 fertig, D2 läuft (E0 bis E6b und O5 erledigt; als Nächstes E7). **Der
-Kobo-Client** (Abschnitt Kobo-Client, C0–C7, geplant am 2026-10-31) gehört
+Kobo-Client** (Abschnitt Kobo-Client, C0–C10, geplant am 2026-10-31) gehört
 seit 2026-11-01 ebenfalls zu **Release 0.1.0**.
 
 ## Release 0.1.0
@@ -45,12 +47,17 @@ Entscheidungen des Besitzers (2026-10-31):
 - **Release-Assets:** der Desktop-Client für macOS (`.dmg`) und Windows
   (App als ZIP), dazu die CLI `nickelinksync` für macOS und Windows als
   eigene ZIPs, und `SHA256SUMS`. Dazu das **Gerätepaket** für Tolino und Kobo
-  (`Kobo.tgz` und `.adds/NickelInkSync/` mit dem ARM-Programm), als
+  (`Kobo.tgz` für Kobo 6.x und Tolino, `KoboRoot.tgz` für Kobo 4.x, und
+  `.adds/NickelInkSync/` mit dem ARM-Programm), als
   **experimentell** gekennzeichnet (geändert am 2026-11-01); den Workflow
   dafür baut die D2-Session.
 - **Kein Linux:** E8 (AppImage) kommt im Release danach.
-- **Kobo-Client** (C0–C7, Kobo und Tolino) gehört zu 0.1.0 (Plan geändert
+- **Kobo-Client** (C0–C10, Kobo und Tolino) gehört zu 0.1.0 (Plan geändert
   am 2026-11-01).
+- **Kobo 4.x vollständig in 0.1.0** (von dir am 2026-11-01, Testgerät Kobo
+  Libra 2 mit 4.38.23852): Lesen und Rückschreiben per USB in CLI und
+  Desktop-Client (C8) und das Plugin als **Qt5-Fassung** (C9, C10, Paket
+  `KoboRoot.tgz`); die Qt6-Fassung für Kobo 6.x und Tolino 5.x bleibt.
 - **Kindle:** bleibt in 0.1.0 (lesen, senden), als **experimentell**
   gekennzeichnet. Vor 0.1.0 keine weitere Kindle-Arbeit und kein
   Kindle-Test; E3b „Kindle-Kopie senden“, „Kindle per MTP lesen“ und L1
@@ -486,7 +493,7 @@ Entscheidungen des Besitzers (2026-10-31):
     Span. `pull --write` schreibt in ein zugeordnetes kepub am Kobo 6.x;
     der Seiten-Cache aus PR #48 vergleicht Spans genauso wie Points.
     Kobo 4.x (Span ohne Offset, Adobe-Point mit zusammengefasstem Text)
-    wird nicht geschrieben, kein 4.x-Gerät mehr.
+    wird noch nicht geschrieben; kommt mit **C8** (Libra 2, 4.38).
   - [x] **du (Entscheidung, 2026-10-31):** Ein kepub wird **nur über eine
     Zuordnung** zu seinem EPUB synchronisiert, immer unter der Prüfsumme
     des EPUBs, nie unter der eigenen (auch ohne Bibliothek; ein
@@ -637,10 +644,11 @@ Entscheidungen des Besitzers (2026-10-31):
 
 ## Plugin
 
-- [!] **N1 Symbole für Kobo 4.46 (Qt5)** · blockiert: kein Kobo mit 4.x
-  mehr (Clara BW seit 2026-10-28 auf 6.0). Nur noch, falls ein 4.x-Gerät
-  zum Testen auftaucht.
-  - [ ] **du:** Firmware-Update 4.46 für den Clara BW besorgen (wegen `libnickel.so`).
+- [ ] **N1 Symbole für Kobo 4.x (Qt5)** · nicht mehr blockiert: Testgerät
+  Kobo Libra 2 mit 4.38.23852 (2026-11-01); geht in **C9** (Abschnitt
+  Kobo-Client) auf.
+  - [ ] **du:** Firmware-Update 4.38.23852 für den Libra 2 (wegen
+    `libnickel.so`), siehe C9.
   - [ ] **ich:** Symbole für „Buch geöffnet“, „Buch geschlossen“ und „an
     Position springen“ suchen.
 - [ ] **N2 Plugin für den Kobo 6.0** (statt Qt5 für 4.x) · geht in **C4**
@@ -974,10 +982,13 @@ Entscheidungen des Besitzers (2026-10-31):
 
 ## Kobo-Client
 
-Client auf dem Gerät (ein Plugin für Kobo 6.0 und Tolino 5.18), geplant
+Client auf dem Gerät (ein Plugin für Kobo 6.0 und Tolino 5.18, dazu eine
+Qt5-Fassung für Kobo 4.x), geplant
 am 2026-10-31 (deine Antworten auf meine Rückfragen). **Teil von Release
 0.1.0** (geändert am 2026-11-01); C0 bis C3 sind erledigt (PRs #66, #55,
-#64, #67), C4 läuft. **Kobalt-Schutz (N7):** Jeder neue Einstieg des
+#64, #67), C4 läuft. **Kobo 4.x** (seit 2026-11-01, Libra 2 mit
+4.38.23852): C8 (Rust) und C9 (Qt5-Erkundung) können sofort parallel zu C4
+laufen, C10 (Plugin in Qt5) folgt nach C4, C8 und C9. **Kobalt-Schutz (N7):** Jeder neue Einstieg des
 Plugins (Öffnen, Verlassen, Buchmenü, NickelMenu-Auslöser, Nachholen der
 Vormerkliste, Dialog) geht durch dieselbe Prüfung wie heute und bleibt
 untätig, solange Kobalt installiert ist; Gerätetests mit Kobalt daneben
@@ -1127,6 +1138,36 @@ Auf dem Kobo ist das Plugin inaktiv.
     aus dem Index (Vorschläge nach Titel und Autor); Einstieg über
     NickelMenu-Datei und Buchmenü.
   - [ ] **du:** Am Kobo: vorgemerkte Bücher senden, ein kepub zuordnen.
+- [ ] **C8 Kobo 4.x lesen und zurückschreiben** (Rust, CLI und GUI; kann
+  sofort parallel laufen) · neues Testgerät **Kobo Libra 2, Firmware
+  4.38.23852** (Qt5, von dir am 2026-11-01).
+  - [ ] **du:** Datenbankkopie des Libra 2 (`.kobo/KoboReader.sqlite`, Nickel
+    beendet bzw. per USB) mit Book P/Q/R als kepub und EPUB, P und Q markiert
+    wie zuvor, für neue Fixtures (`tools/make_db_fixture.py`).
+  - [ ] **ich:** Positionsformat auf 4.38 gegen die 4.46-Fixtures prüfen;
+    Rückrichtung für Kobo 4.x: Adobe-Point mit zusammengefasstem Text
+    (`PointFlavor::JoinText`) und kepub-Span ohne Offset (`#kobo.N.M`);
+    `pull --write` am Libra 2 per USB, in CLI und Desktop-Client; Seiten-Cache
+    (N5) auf 4.x prüfen; READMEs (heute „wird nicht geschrieben“) nachziehen.
+  - [ ] **du:** Book R vom Server per USB auf den **Libra 2** schreiben
+    (EPUB und zugeordnetes kepub), auswerfen, öffnen.
+- [ ] **C9 Qt5-Erkundung für Kobo 4.x** (ersetzt N1; kann sofort parallel
+  laufen)
+  - [ ] **du:** Zustimmung zum Download des Firmware-Updates 4.38.23852 für
+    den Libra 2 (wegen `libnickel.so`), oder die Datei bereitstellen.
+  - [ ] **ich:** Symbole des Plugins und Kobalts Qt5-Schreibweg
+    (`platforms/kobo/qt5/`) gegen `libnickel.so` von 4.38.23852 prüfen
+    (Signaturen per Disassembly); Qt5-Build des Plugins (NickelHook mit
+    `NH_QT_MAJOR=5`, Toolchain `strayrose/nickeltc`, Präfix
+    `arm-nickel-linux-gnueabihf-`), Paket `KoboRoot.tgz`, CI-Schritt mit
+    Symbolprüfung; das Gerätepaket im Release bekommt `KoboRoot.tgz` dazu
+    (mit dem Release-Workflow abstimmen). Ergebnis in
+    `docs/nickel-4.38-symbols.md`. Auf 4.x gibt es NickelMenu upstream
+    (pgaskin, Qt5).
+- [ ] **C10 Plugin auf Kobo 4.x** (braucht C4, C8, C9): dasselbe Verhalten
+  wie C4 in der Qt5-Fassung aus derselben Quelle (`#if` für Qt5/Qt6, wo
+  nötig). Ab C10 bauen C5 und C6 beide Fassungen.
+  - [ ] **du:** Dieselben Tests wie C4 am **Libra 2**.
 - [ ] **C7 Tolino** (braucht C4 bis C6)
   - [ ] **ich:** Dasselbe Plugin auf dem Shine Color; Kobalts Schreibweg
     dort prüfen (Kobalt schreibt auf `develop` seit 8b144d2 auch auf dem
