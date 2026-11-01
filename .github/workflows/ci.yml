@@ -119,9 +119,9 @@ jobs:
       - name: Build
         run: cargo build --release -p nickelinksync-gui
 
-  # The Windows build: clippy and tests on Windows, then the release files
-  # (the desktop client and the CLI as ZIPs) as an artifact. Not a required
-  # check.
+  # The Windows release files (the desktop client and the CLI as ZIPs) as an
+  # artifact, after clippy; the tests run beside it in windows-tests, so the
+  # files are there in a few minutes. Not required checks.
   windows:
     runs-on: windows-latest
     steps:
@@ -132,9 +132,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: Tests
-        # All test programs, so one run shows every Windows failure.
-        run: cargo test --workspace --no-fail-fast
       - name: Package
         shell: pwsh
         run: packaging/windows/package.ps1
@@ -142,6 +139,16 @@ jobs:
         with:
           name: NickelInkSync-windows
           path: dist/*.zip
+
+  windows-tests:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Tests
+        # All test programs, so one run shows every Windows failure.
+        run: cargo test --workspace --no-fail-fast
 
   # The macOS release files (universal .app in a .dmg, the CLI as a ZIP),
   # as an artifact; the release workflow builds them the same way. Not a
