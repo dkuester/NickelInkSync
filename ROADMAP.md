@@ -143,7 +143,7 @@ drafts the release; only the owner tags and publishes.
       `sync --pending` sends it later, with machine lines for the plugin
       (including both positions of a conflict for the dialog). The
       plugin's `not-in-line.tsv` moves into `state.json`
-- [x] Kobo client, stage C0 (Kobo 6.0.279225, in the Nickel VM): every
+- [x] Kobo client, stage C0 (Kobo 6.0.279225, in the Nickel VM, PR #66): every
       plugin symbol and Kobalt's write path through Nickel exist in 6.0,
       signatures checked by disassembly, plus a book menu entry and a
       dialog of our own. Writing through Nickel opens the book at the

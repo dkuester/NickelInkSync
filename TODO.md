@@ -1006,7 +1006,7 @@ gescheiterten Push (ohne WLAN nur ein Toast); ein ohne WLAN geöffnetes Buch
 wird beim Schließen gar nicht gesendet; der Zustand liegt nur im Speicher.
 Auf dem Kobo ist das Plugin inaktiv.
 
-- [x] **C0 Erkundung in der Kobo-VM** (6.0.279225) · Ergebnis in
+- [x] **C0 Erkundung in der Kobo-VM** (6.0.279225) · PR #66 · Ergebnis in
   [`docs/nickel-6.0-symbols.md`](docs/nickel-6.0-symbols.md)
   - [x] **ich:** Alle 23 Symbole des Plugins gibt es in 6.0 unverändert,
     ebenso Kobalts Schreibweg, Buchmenü (`setupBookListMenu`) und Dialog
