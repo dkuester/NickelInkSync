@@ -133,7 +133,8 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Tests
-        run: cargo test --workspace
+        # All test programs, so one run shows every Windows failure.
+        run: cargo test --workspace --no-fail-fast
       - name: Package
         shell: pwsh
         run: packaging/windows/package.ps1
