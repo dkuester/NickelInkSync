@@ -14,11 +14,20 @@ L = a week or more, including verification.
 
 Decided by the owner (2026-10-31): version 0.1.0, once D2 and the
 translation back into kepubs (PR #55) are done. Assets: the desktop client
-for macOS (`.dmg`) and Windows (ZIP), the CLI for macOS and Windows as
-files of their own, and `SHA256SUMS`; the Tolino plugin package and the
-ARM device build stay CI artifacts. No Linux yet: the AppImage (E8) and
-the Kobo client (C0–C7) follow in the release after. Release notes in
-English, then German. A workflow builds the assets on a `v*` tag and
+for macOS (`.dmg`) and Windows (the app as a ZIP), the CLI for macOS and
+Windows as ZIPs of their own, and `SHA256SUMS`; plus the device package for the
+Tolino and the Kobo (`Kobo.tgz` and `.adds/NickelInkSync/` with the ARM
+build), marked experimental. Changed on 2026-11-01: the on-device client
+(C0–C7) is part of 0.1.0. No Linux yet: the AppImage (E8) follows in the
+release after. The Kindle stays in 0.1.0 (reading, sending), marked
+experimental; no further Kindle work or test before 0.1.0, and sending the
+Kindle copy, reading over MTP and the rest of L1 wait until the Kobo and
+the Tolino are stable. A kepub syncs only through a valid mapping, under
+the MD5 of the mapped EPUB, never under its own checksum (PRs #55, #60);
+on the device the mappings come with `device prepare` (C3, PR #67), and
+without it the device sends nothing, the Tolino included (to say in the
+release notes). The same holds for the Kindle (mapped KFX only). Release notes in English,
+then German. A workflow builds the assets on a `v*` tag and
 drafts the release; only the owner tags and publishes.
 
 ## Recently completed
@@ -176,9 +185,10 @@ Order: everything the Tolino Shine Color (5.18) can test on its own comes
 first (reverse translation for plain EPUB, USB write-back, Qt6 symbols and
 plugin). **Now, before anything else: the desktop client with a graphical UI**
 (the manual book mapping in the CLI is done, see "Recently completed").
-Maintenance and bug fixes may be slotted in at any time. After the
-desktop client comes the **on-device client** for the Kobo and the Tolino
-(kepub reverse translation, write-back, mappings on the device, plugin,
+Maintenance and bug fixes may be slotted in at any time. Release 0.1.0
+brings the desktop client, the kepub reverse translation and the
+**on-device client** for the Kobo and the Tolino
+(mappings on the device, a base position and a pending list, plugin,
 dialog), planned in eight stages (C0–C7 in [TODO.md](TODO.md)). The
 reference Clara BW updated itself to firmware **6.0.279225** on
 2026-10-28, so the Kobo targets Kobo 6.0 (Qt6, like the Tolino); there is
@@ -249,8 +259,10 @@ fixtures only.
   `config.ini` (`all`, `errors`, `none`). Verified on the Tolino, also
   opening within the chapter last read. Still to do: English texts (the
   plugin logs `QLocale()`, `de_DE` so far).
-- **On-device client for the Kobo 6.0 and the Tolino** (L): one plugin
-  for both devices, after the desktop client. Opening a book takes a
+- **On-device client for the Kobo 6.0 and the Tolino** (L, release
+  0.1.0, experimental): one plugin for both devices; stages C0–C3 are
+  done (PRs #66, #55, #64, #67), the plugin itself (C4–C7) is next. Like today's plugin
+  it stays idle while Kobalt is installed (N7). Opening a book takes a
   newer server position, written through Nickel itself as Kobalt (MIT)
   does (`VolumeManager::updateBookmark`/`updateFields` in Nickel's
   transaction, which keeps Nickel's book cache in step), dropping the
