@@ -1056,7 +1056,7 @@ Auf dem Kobo ist das Plugin inaktiv.
     Update `Session::agreed_sent`, bei „gleich“ `Session::agreed`, am Ende
     `save_state`; auch nach einer beantworteten Rückfrage. Der Kindle
     führt keine Basis.
-- [~] **C3 Zuordnungen auf dem Gerät** (ersetzt N6; braucht C1) · PR folgt
+- [~] **C3 Zuordnungen auf dem Gerät** (ersetzt N6; braucht C1) · PR #67
   - [x] **ich:** `nickelinksync device prepare --device … [--library …]`
     (`src/prepare.rs`) schreibt nach `.adds/NickelInkSync/`: `library.json`
     (Index: Prüfsumme, Titel, Autoren je Original), `mappings.json` (die

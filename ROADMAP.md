@@ -152,7 +152,7 @@ drafts the release; only the owner tags and publishes.
       cached; dropping that chapter's pages in the same transaction fixes
       it ([docs/nickel-6.0-symbols.md](docs/nickel-6.0-symbols.md))
 - [x] Mappings on the device (stage C3 of the on-device client, library and
-      CLI): `device prepare` puts a library index, the device's mappings and
+      CLI, PR #67): `device prepare` puts a library index, the device's mappings and
       a translation table per mapped book into `.adds/NickelInkSync/`
       (never an EPUB), and takes mappings made or removed on the device
       over into the desktop's store. On the device a mapped kepub or EPUB
