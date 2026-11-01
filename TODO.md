@@ -1124,8 +1124,9 @@ Auf dem Kobo ist das Plugin inaktiv.
   Tabellen, übernommenen und entfernten Zuordnungen und allem, was nicht
   ging; darunter „Vorbereitet: <Zeit>“ oder der Hinweis „Gerät nicht
   vorbereitet“.
-  - [ ] **du:** „Gerät vorbereiten“ am Tolino oder Kobo, dann ein Buch
-    über das Plugin synchronisieren.
+  - [x] **du:** „Gerät vorbereiten“ am Tolino oder Kobo (2026-11-01):
+    Vorbereiten ist einfach, der Zeitpunkt der letzten Vorbereitung gut
+    lesbar.
 
 ## Optional (später)
 
