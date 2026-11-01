@@ -406,12 +406,21 @@ Entscheidungen des Besitzers (2026-10-31):
   - [ ] **du:** E7: ZIP aus der CI auf dem Windows-Rechner entpacken,
     SmartScreen „Trotzdem ausführen“, Tolino anstecken, Einstellungen,
     ein Buch senden; Icon in Taskleiste und Explorer ansehen.
-  - [ ] **ich:** **Release-Workflow** (nach E7): GitHub-Actions-Workflow,
+  - [x] **ich:** **Release-Workflow** (nach E7): GitHub-Actions-Workflow,
     der bei einem Tag `v*` die Release-Assets baut und als **Entwurf**
     eines GitHub-Release anlegt; Versionsprüfung Tag ↔ `Cargo.toml`
     beider Crates; `SHA256SUMS` mit hochladen; Release-Notes englisch,
     darunter deutsch, mit Hinweisen zu Gatekeeper und SmartScreen. Den Tag
     setzt und das Release veröffentlicht nur der Besitzer.
+    Umgesetzt: `.github/workflows/release.yml` (Jobs `version`, `macos`,
+    `windows`, `device`, `draft`); Notes-Vorlage `.github/release-notes.md`
+    mit Download-Tabelle, Installation (Gatekeeper, SmartScreen,
+    Gerätepaket experimentell, Kobalt), kepub- und Kindle-Hinweis. Das
+    Gerätepaket `NickelInkSync-<Version>-device.zip` (`Kobo.tgz`,
+    `.adds/NickelInkSync/`, Lizenz) ist dabei. Von Hand gestartet ein
+    Probelauf ohne Entwurf. Mit actionlint (und shellcheck) geprüft.
+  - [ ] **du:** nach dem Merge einen Probelauf starten (Actions → Release
+    → Run workflow) und die Artefakte ansehen.
   - [ ] **du:** E7 auf dem Windows-PC mit Tolino oder Kobo.
   - [ ] **ich (optional):** **E8** Linux als **AppImage**, gebaut auf einer
     alten glibc-Basis (ältestes noch unterstütztes Ubuntu LTS), damit es auf
