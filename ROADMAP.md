@@ -14,13 +14,19 @@ L = a week or more, including verification.
 
 Decided by the owner (2026-10-31): version 0.1.0, once D2 and the
 translation back into kepubs (PR #55) are done. Assets: the desktop client
-for macOS (`.dmg`) and Windows (ZIP), the CLI for macOS and Windows as
-files of their own, and `SHA256SUMS`; plus the device package for the
+for macOS (`.dmg`) and Windows (the app as a ZIP), the CLI for macOS and
+Windows as ZIPs of their own, and `SHA256SUMS`; plus the device package for the
 Tolino and the Kobo (`Kobo.tgz` and `.adds/NickelInkSync/` with the ARM
 build), marked experimental. Changed on 2026-11-01: the on-device client
 (C0–C7) is part of 0.1.0. No Linux yet: the AppImage (E8) follows in the
-release after. Release notes in
-English, then German. A workflow builds the assets on a `v*` tag and
+release after. The Kindle stays in 0.1.0 (reading, sending), marked
+experimental; no further Kindle work or test before 0.1.0, and sending the
+Kindle copy, reading over MTP and the rest of L1 wait until the Kobo and
+the Tolino are stable. A kepub syncs only through a valid mapping, under
+the MD5 of the mapped EPUB, never under its own checksum (PRs #55, #60);
+the plugin has no mappings until stage C3, so it syncs no kepub yet. The
+same holds for the Kindle (mapped KFX only). Release notes in English,
+then German. A workflow builds the assets on a `v*` tag and
 drafts the release; only the owner tags and publishes.
 
 ## Recently completed

@@ -43,14 +43,23 @@ Entscheidungen des Besitzers (2026-10-31):
 - Version **0.1.0**; Voraussetzung: D2 und die kepub-Rückübersetzung (PR #55)
   sind abgeschlossen.
 - **Release-Assets:** der Desktop-Client für macOS (`.dmg`) und Windows
-  (ZIP), dazu die CLI `nickelinksync` für macOS und Windows als eigene
-  Dateien, und `SHA256SUMS`. Dazu das **Gerätepaket** für Tolino und Kobo
+  (App als ZIP), dazu die CLI `nickelinksync` für macOS und Windows als
+  eigene ZIPs, und `SHA256SUMS`. Dazu das **Gerätepaket** für Tolino und Kobo
   (`Kobo.tgz` und `.adds/NickelInkSync/` mit dem ARM-Programm), als
   **experimentell** gekennzeichnet (geändert am 2026-11-01); den Workflow
   dafür baut die D2-Session.
 - **Kein Linux:** E8 (AppImage) kommt im Release danach.
 - **Kobo-Client** (C0–C7, Kobo und Tolino) gehört zu 0.1.0 (Plan geändert
   am 2026-11-01).
+- **Kindle:** bleibt in 0.1.0 (lesen, senden), als **experimentell**
+  gekennzeichnet. Vor 0.1.0 keine weitere Kindle-Arbeit und kein
+  Kindle-Test; E3b „Kindle-Kopie senden“, „Kindle per MTP lesen“ und L1
+  ruhen, bis Kobo und Tolino stabil sind.
+- **kepub:** synchronisiert nur über eine gültige Zuordnung, unter der MD5
+  der zugeordneten EPUB, nie unter der eigenen Prüfsumme, mit oder ohne
+  Bibliothek (PRs #55, #60). Das Plugin hat bis C3 keine Zuordnungen und
+  synchronisiert deshalb kein kepub („kepub ohne Zuordnung“). Beim Kindle
+  gilt dasselbe (nur zugeordnete KFX).
 - Release-Notes **englisch, darunter deutsch**, wie die READMEs.
 - Ein Workflow baut die Assets bei einem Tag `v*` und legt einen Entwurf an;
   den Tag setzt und das Release veröffentlicht nur der Besitzer.
