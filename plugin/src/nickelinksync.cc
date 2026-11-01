@@ -71,6 +71,12 @@
  *
  * Symbols and signatures: docs/nickel-5.18-symbols.md.
  *
+ * Qt 5 (Kobo firmware 4.x, Qt 5.2.1, NickelTC with GCC 4.9): the same source
+ * builds with NH_QT_MAJOR=5 (`just plugin-qt5`, KoboRoot.tgz). It loads,
+ * resolves the 4.38 names of its symbols and logs that it runs on 4.x, but
+ * stays inactive until the 4.x behaviour follows (stage C10); the symbols
+ * 4.38 lacks and their replacements are in docs/nickel-4.38-symbols.md.
+ *
  * Tolino only for now: init() leaves the plugin inactive on a Kobo (the
  * position formats differ, see SCOPE.md), and without the CLI or config.ini.
  * Log: NickelInkSync.log next to the CLI.
@@ -102,7 +108,16 @@ typedef void WirelessWorkflowManager;
 typedef void MainWindowController;
 typedef void ContentLocation;
 
-static const char kDir[]    = "/mnt/onboard/.adds/NickelInkSync";
+// Qt 5.2 on firmware 4.x lacks a few newer spellings. Every Qt 5/Qt 6
+// difference is an `#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)` block, so
+// tools/check_plugin_symbols.py can pick the symbols of either build.
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+static const auto kSkipEmpty = Qt::SkipEmptyParts;
+#else
+static const auto kSkipEmpty = QString::SkipEmptyParts;
+#endif
+
+static const char kDir[]    ="/mnt/onboard/.adds/NickelInkSync";
 static const char kCli[]    = "/mnt/onboard/.adds/NickelInkSync/nickelinksync";
 static const char kConfig[] = "/mnt/onboard/.adds/NickelInkSync/config.ini";
 static const char kLog[]    = "/mnt/onboard/.adds/NickelInkSync/NickelInkSync.log";
@@ -166,8 +181,12 @@ static Device *(*Device__getCurrentDevice)();  // returns Device& (r0)
 static bool (*Device__isTolino)(const Device *);
 // QString is returned through a hidden pointer (r0), `this` follows in r1;
 // declaring the return type as QString gives exactly that ABI. The argument
-// is unused by 5.18.
+// is unused by 5.18; 4.x has none.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
 static QString (*Content__getId)(const Volume *, const QString &);
+#else
+static QString (*Content__getId)(const Volume *);
+#endif
 static bool (*Bookmark__isNull)(const Bookmark *);
 static void (*Volume__copy)(Volume *, const Volume *);  // Volume(Volume const&)
 static void (*Volume__dtor)(Volume *);
@@ -445,7 +464,8 @@ static void when_online(int seconds, F fn, G failed)
     }
     log_line(QStringLiteral("no network: switching Wi-Fi on, waiting up to %1 s").arg(seconds));
     QTimer *t = new QTimer(qApp);
-    QObject::connect(t, &QTimer::timeout, t, [t, fn, failed, seconds, n = 0]() mutable {
+    int n = 0;
+    QObject::connect(t, &QTimer::timeout, t, [t, fn, failed, seconds, n]() mutable {
         if (online()) {
             t->deleteLater();
             log_line(QStringLiteral("network is there after %1 s").arg(n + 1));
@@ -492,7 +512,7 @@ static void set_not_in_line(const QString &id, const QString &at)
     QFile f(QString::fromLatin1(kNotInLine));
     QStringList lines;
     if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        for (const QString &line : QString::fromUtf8(f.readAll()).split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
+        for (const QString &line : QString::fromUtf8(f.readAll()).split(QLatin1Char('\n'), kSkipEmpty)) {
             if (line.section(QLatin1Char('\t'), 0, 0) != id) {
                 lines << line;
             }
@@ -520,7 +540,7 @@ static QList<int> point_path(const QString &position)
 {
     QList<int> path;
     const QString point = position.section(QStringLiteral("#point("), 1).section(QLatin1Char(':'), 0, 0);
-    for (const QString &step : point.split(QLatin1Char('/'), Qt::SkipEmptyParts)) {
+    for (const QString &step : point.split(QLatin1Char('/'), kSkipEmpty)) {
         path << step.toInt();
     }
     return path;
@@ -750,7 +770,11 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
         notice_kobalt(kOpenToastDelayMs);
         return;
     }
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     const QString id = Content__getId(volume, QString());
+#else
+    const QString id = Content__getId(volume);
+#endif
     g_open_id = id;
     g_not_synced.clear();
     g_taken_id.clear();
@@ -870,11 +894,18 @@ static void start_push(const QString &id)
     args << QStringLiteral("--emit") << QStringLiteral("--timeout") << QString::fromLatin1(kPushTimeout);
     QProcess *p = new QProcess(qApp);
     p->setProcessChannelMode(QProcess::MergedChannels);
-    QObject::connect(p, &QProcess::finished, p, [id, p](int, QProcess::ExitStatus) {
+    // Qt 5 has a second finished(int); the cast picks the one both have.
+    QObject::connect(p, static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished), p,
+                     [id, p](int, QProcess::ExitStatus) {
         push_finished(id, p);
         p->deleteLater();
     });
-    QObject::connect(p, &QProcess::errorOccurred, p, [p](QProcess::ProcessError error) {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    const auto failed_signal = &QProcess::errorOccurred;
+#else
+    const auto failed_signal = static_cast<void (QProcess::*)(QProcess::ProcessError)>(&QProcess::error);
+#endif
+    QObject::connect(p, failed_signal, p, [p](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart) {
             log_line(QStringLiteral("push: could not start the CLI: %1").arg(p->errorString()));
             toast(true, QStringLiteral("Senden fehlgeschlagen"),
@@ -946,6 +977,14 @@ void _nh_ReadingView__leavingReadingExperience(ReadingView *self)
 
 static int nickelinksync_init()
 {
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    // Firmware 4.x: loaded and its symbols resolved; the Kobalt guard runs
+    // as everywhere, and nothing more until the 4.x behaviour follows (C10).
+    kobalt_blocks();
+    log_line(QStringLiteral("inactive: Kobo firmware 4.x (Qt %1), plugin loaded; syncing on 4.x follows later")
+                 .arg(QString::fromLatin1(qVersion())));
+    return 0;
+#endif
     if (!Device__isTolino(Device__getCurrentDevice())) {
         log_line(QStringLiteral("inactive: not a Tolino (the Kobo follows later)"));
         return 0;
@@ -1012,17 +1051,25 @@ static struct nh_hook NickelInkSyncHook[] = {
 static struct nh_dlsym NickelInkSyncDlsym[] = {
     {.name = "_ZN6Device16getCurrentDeviceEv", .out = nh_symoutptr(Device__getCurrentDevice), .desc = "Tolino check"},
     {.name = "_ZNK6Device8isTolinoEv", .out = nh_symoutptr(Device__isTolino), .desc = "Tolino check"},
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     {.name = "_ZNK7Content5getIdERK7QString", .out = nh_symoutptr(Content__getId), .desc = "Book ID"},
     {.name = "_ZNK8Bookmark6isNullEv", .out = nh_symoutptr(Bookmark__isNull), .desc = "Opened without a bookmark"},
     {.name = "_ZN6VolumeC1ERKS_", .out = nh_symoutptr(Volume__copy), .desc = "Copy of the book to open"},
+#else
+    // 4.38 has no Bookmark::isNull, no exported Volume copy constructor and
+    // no ContentLocation (docs/nickel-4.38-symbols.md); C10 replaces them.
+    {.name = "_ZNK7Content5getIdEv", .out = nh_symoutptr(Content__getId), .desc = "Book ID"},
+#endif
     {.name = "_ZN6VolumeD1Ev", .out = nh_symoutptr(Volume__dtor), .desc = "Copy of the book to open"},
     {.name = "_ZN7Content22setChapterIdBookmarkedERK8QVariant", .out = nh_symoutptr(Content__setChapterIdBookmarked), .desc = "Pulled position"},
     {.name = "_ZN7Content14setPercentReadERK8QVariant", .out = nh_symoutptr(Content__setPercentRead), .desc = "Pulled percentage"},
     {.name = "_ZN20MainWindowController14sharedInstanceEv", .out = nh_symoutptr(MainWindowController__sharedInstance), .desc = "Reading view"},
     {.name = "_ZNK20MainWindowController11currentViewEv", .out = nh_symoutptr(MainWindowController__currentView), .desc = "Reading view"},
     {.name = "_ZN11ReadingView26bookmarkForCurrentLocationEv", .out = nh_symoutptr(ReadingView__bookmarkForCurrentLocation), .desc = "Current position"},
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     {.name = "_ZNK8Bookmark16getStartLocationEv", .out = nh_symoutptr(Bookmark__getStartLocation), .desc = "Current position"},
     {.name = "_ZNK15ContentLocation8toStringEv", .out = nh_symoutptr(ContentLocation__toString), .desc = "Current position"},
+#endif
     {.name = "_ZN8BookmarkD1Ev", .out = nh_symoutptr(Bookmark__dtor), .desc = "Current position"},
     {.name = "_ZN23WirelessWorkflowManager14sharedInstanceEv", .out = nh_symoutptr(WirelessWorkflowManager__sharedInstance), .desc = "Wi-Fi", .optional = true},
     {.name = "_ZN23WirelessWorkflowManager20isInternetAccessibleEv", .out = nh_symoutptr(WirelessWorkflowManager__isInternetAccessible), .desc = "Wi-Fi", .optional = true},
