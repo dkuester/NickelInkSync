@@ -38,6 +38,7 @@ nickelinksync pull --device /Volumes/KOBOeReader
 | `status` | Listet die seitengeladenen Bücher mit Prüfsumme, gespeicherter Position, KOReader-XPointer und, falls eingerichtet, der Position auf dem Server. |
 | `push` | Überträgt die Position jedes Buchs zum Server. Eine Position, die der Server erst nach dem letzten Lesen auf dem Gerät bekommen hat, wird nie überschrieben; außerdem fragt `push` standardmäßig nach, bevor es den Server an eine frühere Stelle im Buch zurücksetzt (siehe `confirm` unten). `--force` überträgt ohne Rückfrage, `--dry-run` zeigt nur, was gesendet würde. |
 | `pull` | Zeigt, für welche Bücher der Server eine neuere Position hat, wie das Gerät sie speichern würde und wo es nachfragen würde. Nur mit `--write` wird sie aufs Gerät geschrieben (bisher nur Tolino, experimentell, siehe unten); `--force` übernimmt die Server-Position ohne Rückfrage. |
+| `sync --pending` | Sendet die Bücher, deren Push auf dem Gerät gescheitert ist (kein Netz, Server-Fehler), wie sie in `.adds/NickelInkSync/state.json` vorgemerkt sind, sofern sie noch gesendet werden sollen (siehe [Zuletzt abgeglichene Position](#zuletzt-abgeglichene-position)). |
 
 Alle drei nehmen `--book <Text>` (nur Bücher, deren Titel oder Dateipfad den
 Text enthält), `--config <Datei>` für eine andere Konfigurationsdatei und
@@ -45,7 +46,33 @@ Text enthält), `--config <Datei>` für eine andere Konfigurationsdatei und
 [Buchzuordnung](#buchzuordnung-im-aufbau)); sie entscheidet mit, welche
 Bücher synchronisiert werden. Das
 Gerät wird nur gelesen, nie beschrieben, außer von `pull --write` (und vom
-Plugin, siehe unten).
+Plugin, siehe unten); `push`, `pull --write` und `sync --pending` vermerken
+außerdem die mit dem Server abgeglichene Position in
+`.adds/NickelInkSync/state.json`.
+
+### Zuletzt abgeglichene Position
+
+Für jedes Buch merkt sich das Gerät die Position, auf die es sich zuletzt
+mit dem Server geeinigt hat (nach einem `push`, einem `pull --write` oder
+wenn beide schon dieselbe hatten), in `.adds/NickelInkSync/state.json`,
+gemeinsam für Plugin und CLI per USB. Damit schauen `push` und `pull`, was
+sich seitdem bewegt hat:
+
+- nur der Server: Seine Position gewinnt, auch wenn „zuletzt gelesen“ auf
+  dem Gerät neuer ist (Nickel setzt es schon beim Öffnen eines Buchs);
+- nur das Gerät: Seine Position gewinnt, auch wenn sie weiter vorn im Buch
+  liegt;
+- beide: Die neuere gewinnt, und `confirm` entscheidet, wann gefragt wird,
+  wie ohne Basis (siehe [Konfiguration](#konfiguration)).
+
+`status` zeigt die Basis (`base`) und was sich seitdem bewegt hat
+(`since`). Ein Buch, das zum ersten Mal abgeglichen wird, hat noch keine
+Basis und folgt der Regel ohne. Scheitert ein Push auf dem Gerät
+(`push --live`), weil kein Netz da ist oder der Server einen Fehler meldet,
+wird das Buch vorgemerkt; `sync --pending` fragt für jedes vorgemerkte Buch
+den Server erneut und sendet es, wenn es noch gesendet werden soll
+(`status` zeigt `pending`). `confirm = always` fragt weiterhin bei jedem
+Unterschied.
 
 `pull --write` kopiert zuerst `.kobo/KoboReader.sqlite` nach
 `~/.local/share/nickelinksync/backups/KoboReader-<UTC-Zeit>.sqlite` (oder
@@ -271,6 +298,10 @@ ein auf dem E-Reader nur geöffnetes Buch wirkt also neuer als die Seite, die
 du in KOReader erreicht hast. Im Terminal antwortest du mit `d` (Gerät) oder
 `s` (Server), Enter überspringt das Buch. Ohne Terminal wird nichts
 überschrieben und das Buch gemeldet. `--force` überschreibt ohne Rückfrage.
+Hat ein Buch eine [zuletzt abgeglichene
+Position](#zuletzt-abgeglichene-position), gewinnt die Seite, die sich als
+einzige bewegt hat, ohne Rückfrage; `confirm` entscheidet dann nur, wenn
+sich beide bewegt haben (`always` fragt weiterhin jedes Mal).
 
 Das Passwort steht nur in dieser Datei, nie in der Befehlszeile. Halte die
 Datei privat (`chmod 600`); NickelInkSync warnt, wenn andere sie lesen
@@ -318,7 +349,9 @@ Sekunden mit dem WLAN-Dialog des Tolino.
 
 Öffnet Nickel ein Buch nicht an der Position, die das Plugin geschrieben
 hat (beobachtet beim ersten Öffnen nach dem Start des Tolino), vermerkt
-das Plugin es in `.adds/NickelInkSync/not-in-line.tsv`. Ein solches Buch
+das Plugin es in `.adds/NickelInkSync/not-in-line.tsv`; die CLI übernimmt
+den Vermerk beim nächsten Speichern in `state.json` (`not_in_line`) und
+löscht die Datei. Ein solches Buch
 wird nie gesendet, weder vom Plugin noch mit `push` am Rechner (außer mit
 `--force`), weil die Stelle, die Nickel gespeichert hat, nicht deine ist;
 der nächste `pull`, beim Öffnen oder per USB, übernimmt wieder die

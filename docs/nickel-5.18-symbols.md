@@ -257,9 +257,9 @@ backups differ only in the usual fields (position, percentage, times,
 estimates, `CurrentChapterProgress`).
 
 Meanwhile a book Nickel opened elsewhere goes on
-`.adds/NickelInkSync/not-in-line.tsv` (`src/not_in_line.rs`): never
-pushed, and the next pull takes the server's position regardless of the
-`DateLastRead` Nickel saved.
+`.adds/NickelInkSync/not-in-line.tsv` (since C2 taken over into
+`state.json` by `src/state.rs`): never pushed, and the next pull takes
+the server's position regardless of the `DateLastRead` Nickel saved.
 
 ### Step 5: Nickel's Volume cache
 

@@ -177,6 +177,7 @@ fn pull_step_take_and_write() {
     remote,
     local: Some(local),
     plugin: None,
+    moved: None,
     action: Action::Apply,
   } = &step.outcome
   else {

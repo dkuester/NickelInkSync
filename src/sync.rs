@@ -12,6 +12,11 @@
 //! place in the chapter, then percentage), never from the timestamps. Nickel sets `DateLastRead` as
 //! soon as a book is opened, so after merely opening a book on the device
 //! the device looks newer than a position read further on elsewhere.
+//!
+//! With a base, the position both last agreed on (`state.json`, see
+//! [`crate::state`]), the rule is three-way instead ([`Moved`]): the side
+//! that moved since wins over the one that did not, whatever the times
+//! say; only when both moved do the times and `confirm` decide as above.
 
 use std::cmp::Ordering;
 use std::fmt;
@@ -117,7 +122,78 @@ pub enum Decision {
   },
 }
 
-/// What `direction` should do with a book both sides hold.
+/// Which sides moved since the base, the position both last agreed on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Moved {
+  /// Neither: both still hold the base (the device only opened the book).
+  Neither,
+  /// Only the device: it wins.
+  Device,
+  /// Only the server: it wins.
+  Server,
+  /// Both: a conflict, decided by [`decide`].
+  Both,
+}
+
+impl Moved {
+  /// From whether each side still holds the base.
+  pub fn from(device_unchanged: bool, server_unchanged: bool) -> Self {
+    match (device_unchanged, server_unchanged) {
+      (true, true) => Moved::Neither,
+      (false, true) => Moved::Device,
+      (true, false) => Moved::Server,
+      (false, false) => Moved::Both,
+    }
+  }
+}
+
+/// What `direction` should do with a book both sides hold, given what moved
+/// since the base (`None`: there is no base, so [`decide`]). A side that
+/// moved alone wins without asking, also backwards; `confirm = always`
+/// still asks.
+pub fn decide_since(
+  direction: Direction,
+  local: &Local,
+  server: &Progress,
+  moved: Option<Moved>,
+  confirm: Confirm,
+) -> Decision {
+  let device_moved = match moved {
+    None | Some(Moved::Both) => return decide(direction, local, server, confirm),
+    _ if server.progress == local.xpointer => return Decision::InSync,
+    // Both still at the base, only told apart by how the positions are
+    // translated: nothing to do.
+    Some(Moved::Neither) => return Decision::InSync,
+    Some(Moved::Device) => true,
+    Some(Moved::Server) => false,
+  };
+  let newer = device_moved == (direction == Direction::Push);
+  match confirm {
+    Confirm::Always => Decision::Ask {
+      backwards: goes_backwards(direction, local, server),
+      newer,
+    },
+    _ if newer => Decision::Apply,
+    _ => Decision::Keep,
+  }
+}
+
+/// The position `direction` would write lies before the one it overwrites.
+fn goes_backwards(direction: Direction, local: &Local, server: &Progress) -> bool {
+  let device = order_in_book(
+    &local.xpointer,
+    local.percentage,
+    &server.progress,
+    server.percentage,
+  );
+  match direction {
+    Direction::Push => device == Ordering::Less,
+    Direction::Pull => device == Ordering::Greater,
+  }
+}
+
+/// What `direction` should do with a book both sides hold, without a base:
+/// the newer side wins, and `confirm` says when to ask.
 pub fn decide(
   direction: Direction,
   local: &Local,
@@ -129,16 +205,7 @@ pub fn decide(
     (Compare::DeviceNewer, Direction::Push) | (Compare::ServerNewer, Direction::Pull) => true,
     _ => false,
   };
-  let device = order_in_book(
-    &local.xpointer,
-    local.percentage,
-    &server.progress,
-    server.percentage,
-  );
-  let backwards = match direction {
-    Direction::Push => device == Ordering::Less,
-    Direction::Pull => device == Ordering::Greater,
-  };
+  let backwards = goes_backwards(direction, local, server);
   match confirm {
     Confirm::Always => Decision::Ask { backwards, newer },
     Confirm::Backwards if newer && backwards => Decision::Ask { backwards, newer },
@@ -234,11 +301,21 @@ pub enum Outlook {
 /// The outlook for a book: the device position against the server's, if
 /// it has one.
 pub fn outlook(local: &Local, server: Option<&Progress>, confirm: Confirm) -> Outlook {
+  outlook_since(local, server, None, confirm)
+}
+
+/// [`outlook`] with what moved since the base ([`decide_since`]).
+pub fn outlook_since(
+  local: &Local,
+  server: Option<&Progress>,
+  moved: Option<Moved>,
+  confirm: Confirm,
+) -> Outlook {
   let Some(server) = server else {
     return Outlook::Push;
   };
-  let push = decide(Direction::Push, local, server, confirm);
-  let pull = decide(Direction::Pull, local, server, confirm);
+  let push = decide_since(Direction::Push, local, server, moved, confirm);
+  let pull = decide_since(Direction::Pull, local, server, moved, confirm);
   // Otherwise one of them asks: the one moving to the newer position.
   let (direction, ask) = match (push, pull) {
     (Decision::InSync, _) => return Outlook::InSync,
@@ -616,6 +693,60 @@ mod tests {
       }
     );
     assert_eq!(decide(Pull, &d, &server(&d.xpointer, 1), c), InSync);
+  }
+
+  #[test]
+  fn the_side_that_moved_since_the_base_wins() {
+    use Decision::*;
+    use Direction::*;
+    // Nickel's DateLastRead from merely opening the book (1000) is newer
+    // than KOReader's position further on (999), but the device did not
+    // move: the server wins, without asking.
+    let d = device();
+    let b = Confirm::Backwards;
+    let server = Some(Moved::Server);
+    assert_eq!(decide_since(Pull, &d, &sp(15, 999), server, b), Apply);
+    assert_eq!(decide_since(Push, &d, &sp(15, 999), server, b), Keep);
+    assert_eq!(decide_since(Pull, &d, &sp(5, 999), server, b), Apply);
+    // The device moved alone: it wins, also backwards and with an older time.
+    let device_moved = Some(Moved::Device);
+    assert_eq!(
+      decide_since(Push, &d, &sp(15, 5000), device_moved, b),
+      Apply
+    );
+    assert_eq!(decide_since(Pull, &d, &sp(15, 5000), device_moved, b), Keep);
+    // Neither moved: nothing to do, also if the positions look different.
+    assert_eq!(
+      decide_since(Push, &d, &sp(15, 1), Some(Moved::Neither), b),
+      InSync
+    );
+    assert_eq!(decide_since(Push, &d, &sp(10, 1), server, b), InSync);
+    // Both moved: the rule without a base.
+    for (dir, s) in [(Push, sp(15, 999)), (Pull, sp(5, 1001)), (Push, sp(5, 999))] {
+      assert_eq!(
+        decide_since(dir, &d, &s, Some(Moved::Both), b),
+        decide(dir, &d, &s, b)
+      );
+      assert_eq!(decide_since(dir, &d, &s, None, b), decide(dir, &d, &s, b));
+    }
+    // `always` still asks the side that moved.
+    assert_eq!(
+      decide_since(Pull, &d, &sp(5, 1), server, Confirm::Always),
+      Ask {
+        backwards: true,
+        newer: true
+      }
+    );
+    assert_eq!(
+      outlook_since(&d, Some(&sp(15, 999)), server, b),
+      Outlook::Pull
+    );
+    assert_eq!(
+      outlook_since(&d, Some(&sp(15, 5000)), device_moved, b),
+      Outlook::Push
+    );
+    assert_eq!(Moved::from(true, false), Moved::Server);
+    assert_eq!(Moved::from(false, false), Moved::Both);
   }
 
   #[test]

@@ -653,11 +653,24 @@ fn pull_takes_the_server_position_where_nickel_left_the_book() {
   assert!(output.status.success(), "{out}");
   assert!(out.contains("  plugin    Nickel opened here"), "{out}");
   assert_eq!(s.row(BOOK).0, AHEAD_ON_DEVICE);
-  // Written: off the list, the other book stays.
+  // Written: the old list is taken over into state.json and goes; the
+  // other book stays not in line, book-a has the server's position as base.
+  assert!(!list.exists());
+  let state = state_json(&s);
   assert_eq!(
-    fs::read_to_string(&list).unwrap(),
-    "file:///mnt/onboard/other.epub\tx.xhtml\n"
+    state["books"]["file:///mnt/onboard/other.epub"],
+    serde_json::json!({"not_in_line": "x.xhtml"})
   );
+  let base = &state["books"][BOOK]["base"];
+  assert_eq!(base["device"], AHEAD_ON_DEVICE);
+  assert_eq!(base["xpointer"], AHEAD);
+  assert_eq!(base["timestamp"], LAST_READ - 3600);
+  assert!(state["books"][BOOK].get("not_in_line").is_none(), "{state}");
+}
+
+fn state_json(s: &Setup) -> serde_json::Value {
+  let path = s.root.join(".adds/NickelInkSync/state.json");
+  serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
 }
 
 #[test]

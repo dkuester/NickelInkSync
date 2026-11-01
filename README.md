@@ -36,13 +36,39 @@ nickelinksync pull --device /Volumes/KOBOeReader
 | `status` | Lists the sideloaded books with hash, stored position, KOReader XPointer and, if configured, the position on the server. |
 | `push` | Sends each book's position to the server. A position the server got after the book was last read on the device is never overwritten; by default it also asks before moving the server back to an earlier place in the book (see `confirm` below). `--force` sends without asking, `--dry-run` only shows what would be sent. |
 | `pull` | Shows which books have a newer position on the server, how the device would store it and where it would ask first. Only with `--write` is it written to the device (Tolino so far, experimental, see below); `--force` takes the server position without asking. |
+| `sync --pending` | Sends the books whose push failed on the device (no network, a server error), as kept in `.adds/NickelInkSync/state.json`, if they still should be sent (see [The last agreed position](#the-last-agreed-position)). |
 
 All three take `--book <text>` to limit them to books whose title or file
 path contains the text, `--config <file>` for another configuration
 file and `--library <folder>` for the library of originals (see [Book
 mapping](#book-mapping-in-progress)), which decides which books are
 synced. The device is only read, never written, except by `pull --write`
-(and by the plugin, see below).
+(and by the plugin, see below); `push`, `pull --write` and `sync --pending`
+also note the position they agreed on with the server in
+`.adds/NickelInkSync/state.json`.
+
+### The last agreed position
+
+For each book the device keeps the position it last agreed on with the
+server (after a `push`, a `pull --write`, or when both already held the
+same), in `.adds/NickelInkSync/state.json`, shared by the plugin and the
+CLI over USB. With it, `push` and `pull` look at what moved since:
+
+- only the server moved: the server's position wins, even though the
+  device's "last read" is newer (Nickel sets it as soon as you open a
+  book);
+- only the device moved: the device's position wins, also when it lies
+  further back in the book;
+- both moved: the newer one wins and `confirm` decides when to ask, as
+  without a base (see [Configuration](#configuration)).
+
+`status` shows the base (`base`) and what moved since (`since`). A book
+synced for the first time has no base yet and follows the rule without
+one. When a push on the device (`push --live`) fails for lack of a network
+or because of a server error, the book is kept as pending;
+`sync --pending` asks the server again for each such book and sends it if
+it still should (`status` shows `pending`). `confirm = always` still asks
+whenever the positions differ.
 
 `pull --write` first copies `.kobo/KoboReader.sqlite` to
 `~/.local/share/nickelinksync/backups/KoboReader-<UTC time>.sqlite` (or
@@ -271,7 +297,10 @@ password = your password
   it, so a book you only opened on the e-reader looks newer than the page
   you reached in KOReader. In a terminal you answer `d` (device) or `s`
   (server), Enter skips the book. Without a terminal nothing is overwritten
-  and the book is reported. `--force` overwrites without asking.
+  and the book is reported. `--force` overwrites without asking. Once a
+  book has a [last agreed position](#the-last-agreed-position), the side
+  that moved alone wins without asking, and `confirm` only decides when
+  both moved (`always` still asks every time).
 - `notify` is only read by the Tolino plugin (see below): which messages
   it shows on the screen.
 - `library` is used by the `map` commands and decides which books
@@ -333,7 +362,9 @@ Wi-Fi is up, after 15 seconds with the Tolino's Wi-Fi dialog.
 
 If Nickel does not open a book at the position the plugin wrote (seen on
 the first opening after the Tolino starts), the plugin notes it in
-`.adds/NickelInkSync/not-in-line.tsv`. Such a book is never sent, not by
+`.adds/NickelInkSync/not-in-line.tsv`; the CLI moves that note into
+`state.json` (`not_in_line`) the next time it saves and removes the file.
+Such a book is never sent, not by
 the plugin and not by `push` on the computer (unless `--force`), because
 the place Nickel saved is not yours; the next `pull`, on opening or over
 USB, takes the server's position again, even though the Tolino's

@@ -1,6 +1,7 @@
 //! With Kobalt installed on a fake Tolino, nothing is written into the
 //! device database: `pull --write` is refused over USB, and on the device
-//! (`--live`) `pull` and `push` stop before the database is opened.
+//! (`--live`) `pull`, `push` and `sync --pending` stop before the database
+//! is opened.
 
 mod common;
 
@@ -124,10 +125,18 @@ fn pull_without_write_and_push_only_warn() {
 fn live_pull_and_push_stop_with_a_kobalt_error() {
   let s = Setup::new("live");
   s.install_kobalt();
+  // A push kept for later is not sent either.
+  s.touch(".adds/NickelInkSync/state.json");
+  fs::write(
+    s.root.join(".adds/NickelInkSync/state.json"),
+    format!("{{\"version\": 1, \"books\": {{\"{BOOK}\": {{\"pending\": {{\"since\": 1, \"reason\": \"network\"}}}}}}}}"),
+  )
+  .unwrap();
   let before = s.position();
   for args in [
     &["pull", "--live", "--write", "--emit", "--content-id", BOOK][..],
     &["push", "--live", "--emit", "--content-id", BOOK][..],
+    &["sync", "--pending", "--live", "--emit"][..],
   ] {
     let (output, out, _) = s.run(args);
     assert!(!output.status.success());
