@@ -3,7 +3,7 @@
 #   NickelInkSync-<version>-macos.dmg   the desktop client as a universal
 #                                       .app (arm64 + x86_64, macOS 11+),
 #                                       with kepubify inside
-#   nickelinksync-<version>-macos.zip   the CLI, universal, with the licence
+#   nickelinksync-cli-<version>-macos.zip   the CLI, universal, with the licence
 # Needs Xcode's command line tools (lipo, iconutil, hdiutil, codesign),
 # rsvg-convert (`brew install librsvg`), both Rust targets
 # (`rustup target add aarch64-apple-darwin x86_64-apple-darwin`) and curl.
@@ -91,14 +91,14 @@ rm -f "$dmg"
 hdiutil create -quiet -volname "NickelInkSync $version" -srcfolder "$work/dmg" -ov -format UDZO "$dmg"
 
 # The CLI, zipped so it keeps its executable bit.
-cli=$work/cli/nickelinksync-$version-macos
+cli=$work/cli/nickelinksync-cli-$version-macos
 mkdir -p "$cli"
 cp "$work/nickelinksync" "$cli/"
 codesign --force --sign - "$cli/nickelinksync"
 cp LICENSE "$cli/LICENSE.txt"
-zip=$dist/nickelinksync-$version-macos.zip
+zip=$dist/nickelinksync-cli-$version-macos.zip
 rm -f "$zip"
-(cd "$work/cli" && ditto -c -k --norsrc --keepParent "nickelinksync-$version-macos" "$zip")
+(cd "$work/cli" && ditto -c -k --norsrc --keepParent "nickelinksync-cli-$version-macos" "$zip")
 
 echo "$dmg"
 echo "$zip"

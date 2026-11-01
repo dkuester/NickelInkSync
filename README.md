@@ -195,7 +195,7 @@ shared with the desktop client.
 Applications. The app is not notarized (no Apple Developer ID), so macOS
 blocks it the first time: open it once, then System Settings → Privacy &
 Security → "Open Anyway" (since macOS 15 a right-click → "Open" no longer
-does it). The CLI comes as `nickelinksync-<version>-macos.zip`; after
+does it). The CLI comes as `nickelinksync-cli-<version>-macos.zip`; after
 unpacking, `xattr -d com.apple.quarantine nickelinksync` lets it run. The
 app ships [kepubify](https://github.com/pgaskin/kepubify) (MIT) inside;
 its licence is in the app and on the disk image. `packaging/macos/package.sh`
@@ -205,7 +205,7 @@ builds both files (CI: job `package-macos`).
 `NickelInkSync-<version>-windows-x64.zip` anywhere and start
 `NickelInkSync.exe`; `kepubify.exe` stays next to it. The program is not
 code-signed, so SmartScreen warns the first time: "More info" → "Run
-anyway". The CLI comes as `nickelinksync-<version>-windows-x64.zip`. The
+anyway". The CLI comes as `nickelinksync-cli-<version>-windows-x64.zip`. The
 key goes into the Windows Credential Manager, and a Kobo or Tolino is
 found by its drive letter. `packaging/windows/package.ps1` builds both
 files (CI: job `windows`).

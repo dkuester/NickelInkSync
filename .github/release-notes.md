@@ -11,9 +11,9 @@ Syncs the reading position of sideloaded books between Kobo, Tolino, Kindle (exp
 | File | For |
 |---|---|
 | `NickelInkSync-@VERSION@-macos.dmg` | Desktop client, macOS 11 or later (Apple silicon and Intel) |
-| `nickelinksync-@VERSION@-macos.zip` | Command line, macOS |
+| `nickelinksync-cli-@VERSION@-macos.zip` | Command line, macOS |
 | `NickelInkSync-@VERSION@-windows-x64.zip` | Desktop client, Windows 10 or later (x64) |
-| `nickelinksync-@VERSION@-windows-x64.zip` | Command line, Windows |
+| `nickelinksync-cli-@VERSION@-windows-x64.zip` | Command line, Windows |
 | `NickelInkSync-@VERSION@-device.zip` | **Experimental:** the program and plugin for the Tolino and Kobo |
 | `SHA256SUMS` | Checksums of all files (`shasum -a 256 -c SHA256SUMS`) |
 
@@ -40,9 +40,9 @@ Gleicht die Leseposition seitengeladener Bücher zwischen Kobo, Tolino, Kindle (
 | Datei | Für |
 |---|---|
 | `NickelInkSync-@VERSION@-macos.dmg` | Desktop-Client, macOS ab 11 (Apple Silicon und Intel) |
-| `nickelinksync-@VERSION@-macos.zip` | Kommandozeile, macOS |
+| `nickelinksync-cli-@VERSION@-macos.zip` | Kommandozeile, macOS |
 | `NickelInkSync-@VERSION@-windows-x64.zip` | Desktop-Client, Windows ab 10 (x64) |
-| `nickelinksync-@VERSION@-windows-x64.zip` | Kommandozeile, Windows |
+| `nickelinksync-cli-@VERSION@-windows-x64.zip` | Kommandozeile, Windows |
 | `NickelInkSync-@VERSION@-device.zip` | **Experimentell:** Programm und Plugin für Tolino und Kobo |
 | `SHA256SUMS` | Prüfsummen aller Dateien (`shasum -a 256 -c SHA256SUMS`) |
 

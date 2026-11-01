@@ -209,7 +209,7 @@ den sich CLI und Desktop-Client teilen.
 notarisiert (keine Apple Developer ID), daher blockiert macOS sie beim
 ersten Start: einmal öffnen, dann Systemeinstellungen → Datenschutz &
 Sicherheit → „Dennoch öffnen“ (seit macOS 15 genügt Rechtsklick → „Öffnen“
-nicht mehr). Die CLI kommt als `nickelinksync-<Version>-macos.zip`; nach
+nicht mehr). Die CLI kommt als `nickelinksync-cli-<Version>-macos.zip`; nach
 dem Entpacken lässt `xattr -d com.apple.quarantine nickelinksync` sie
 laufen. In der App steckt [kepubify](https://github.com/pgaskin/kepubify)
 (MIT); seine Lizenz liegt in der App und auf dem Disk-Image.
@@ -219,7 +219,7 @@ laufen. In der App steckt [kepubify](https://github.com/pgaskin/kepubify)
 irgendwohin entpacken und `NickelInkSync.exe` starten; `kepubify.exe` bleibt
 daneben liegen. Das Programm ist nicht signiert, daher warnt SmartScreen
 beim ersten Start: „Weitere Informationen“ → „Trotzdem ausführen“. Die CLI
-kommt als `nickelinksync-<Version>-windows-x64.zip`. Der Schlüssel liegt in
+kommt als `nickelinksync-cli-<Version>-windows-x64.zip`. Der Schlüssel liegt in
 der Windows-Anmeldeinformationsverwaltung, Kobo und Tolino findet die App
 über ihren Laufwerksbuchstaben. `packaging/windows/package.ps1` baut beide
 Dateien (CI: Job `windows`).

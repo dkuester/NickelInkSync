@@ -368,7 +368,7 @@ Entscheidungen des Besitzers (2026-10-31):
   - [x] **ich:** **E6a** macOS-Paket: `packaging/macos/package.sh` baut
     `NickelInkSync-<Version>-macos.dmg` (Universal-App arm64 + x86_64,
     ab macOS 11, ad hoc signiert, nicht notarisiert, mit `/Applications`-
-    Verknüpfung und Lizenzen) und `nickelinksync-<Version>-macos.zip`
+    Verknüpfung und Lizenzen) und `nickelinksync-cli-<Version>-macos.zip`
     (Universal-CLI). kepubify 4.0.4 (MIT) liegt neben dem Programm in der
     App, SHA-256 der beiden macOS-Binaries im Skript fest; die App sucht
     kepubify zuerst neben sich. Icon-Entwurf `packaging/icon.svg`. CI-Job
@@ -400,7 +400,7 @@ Entscheidungen des Besitzers (2026-10-31):
     (`packaging/windows/icon.ico`, bis 32 Pixel das kleine) und Version in
     der exe (`gui/build.rs`, `winresource`). `packaging/windows/package.ps1`
     baut `NickelInkSync-<Version>-windows-x64.zip` (mit kepubify 4.0.4,
-    SHA-256 geprüft) und `nickelinksync-<Version>-windows-x64.zip`; CI-Job
+    SHA-256 geprüft) und `nickelinksync-cli-<Version>-windows-x64.zip`; CI-Job
     `windows` (clippy, Tests, Paket, kein Pflicht-Check). Lokal quer
     gebaut und mit clippy geprüft (`x86_64-pc-windows-gnu` über zig).
   - [ ] **du:** E7: ZIP aus der CI auf dem Windows-Rechner entpacken,
