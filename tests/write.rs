@@ -297,24 +297,33 @@ fn pull_write_refuses_with_a_journal() {
   assert!(s.backups().is_empty());
 }
 
+/// Kobo firmware 4.x (the Clara BW on 4.46): a plain EPUB gets the Adobe
+/// point as 4.x counts it, after a backup; an unmapped kepub is left alone.
 #[test]
-fn pull_write_leaves_the_kobo_alone() {
-  // Back to the Kobo's positions is not translated yet.
+fn pull_write_on_kobo_4() {
   let s = Setup::new(
     "write-kobo",
     "kobo-clarabw-4.46-placeholder-books.sql",
     KOBO_VERSION,
   );
-  let before = fs::read(s.db()).unwrap();
+  let kepub = "file:///mnt/onboard/Books/book-a.kepub.epub";
+  let kepub_before = s.row(kepub);
   for file in ["book-a.epub", "book-a.kepub.epub"] {
     s.server.store(&hash(file), AHEAD, 0.9, 2_000_000_000);
   }
   let (output, out) = s.run(&["pull", "--write"]);
   assert!(output.status.success(), "{out}");
-  assert!(out.contains("  skipped   not translated: "), "{out}");
+  assert!(out.contains("Wrote 1 position(s) to the device."), "{out}");
+  assert!(
+    out.contains("not mapped: a kepub syncs only under its original EPUB"),
+    "{out}"
+  );
+  assert_eq!(s.row(BOOK).0, AHEAD_ON_DEVICE);
+  assert_eq!(s.row(kepub), kepub_before);
+  assert_eq!(s.backups().len(), 1);
+  assert!(s.journals().is_empty(), "{:?}", s.journals());
+  let (_, out) = s.run(&["pull", "--book", "book-a.epub", "--write"]);
   assert!(out.contains("Nothing to write to the device."), "{out}");
-  assert_eq!(fs::read(s.db()).unwrap(), before);
-  assert!(s.backups().is_empty());
 }
 
 /// The database as Nickel holds it while it runs: WAL mode, the latest

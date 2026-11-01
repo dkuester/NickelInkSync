@@ -327,6 +327,37 @@ fn pull_write_puts_a_span_into_a_mapped_kepub() {
   assert!(out.contains("in sync"), "{out}");
 }
 
+/// Kobo firmware 4.x stores the span only: the place within it is lost,
+/// and after the pull both sides still agree.
+#[test]
+fn pull_write_puts_a_span_without_offset_into_a_mapped_kepub_on_kobo_4() {
+  let s = Setup::new(
+    "map-kepub-pull-4",
+    "kobo-clarabw-4.46-placeholder-books.sql",
+    KOBO_VERSION,
+  );
+  let kepub = "file:///mnt/onboard/Books/book-a.kepub.epub";
+  fs::copy(
+    fixtures().join("epub/book-r.kepub.epub"),
+    s.root.join("Books/book-a.kepub.epub"),
+  )
+  .unwrap();
+  let original = fixtures().join("epub/book-r.epub");
+  s.map("book-a.kepub.epub", &original);
+  let r_hash = partial_md5(&original).unwrap();
+  s.server.store(
+    &r_hash,
+    "/body[1]/DocFragment[3]/body[1]/p[63]/text()[1].13",
+    0.8,
+    1_900_000_000,
+  );
+  let (output, out) = s.run(&["pull", "--book", "book-a.kepub", "--write", "--force"]);
+  assert!(output.status.success(), "{out}");
+  assert_eq!(s.stored(kepub), "OEBPS/text/chapter2.xhtml#kobo.64.1");
+  let (_, out) = s.run(&["status", "--book", "book-a.kepub"]);
+  assert!(out.contains("in sync"), "{out}");
+}
+
 #[test]
 fn an_unmapped_kepub_is_never_synced() {
   let s = Setup::new(

@@ -545,6 +545,7 @@ impl Firmware {
   /// Model name for the IDs seen on the reference devices.
   pub fn model_name(&self) -> Option<&'static str> {
     match self.model_id.rsplit('-').next()?.trim_start_matches('0') {
+      "388" => Some("Kobo Libra 2"),
       "391" => Some("Kobo Clara BW"),
       "693" => Some("Tolino Shine Color"),
       _ => None,
@@ -691,6 +692,11 @@ mod tests {
     .unwrap();
     assert_eq!(fw.version, "5.18.264769");
     assert_eq!(fw.model_name(), Some("Tolino Shine Color"));
+    let fw = Firmware::parse(
+      "N000000000000,4.1.15,4.38.23852,4.1.15,4.1.15,00000000-0000-0000-0000-000000000388\n",
+    )
+    .unwrap();
+    assert_eq!(fw.model_name(), Some("Kobo Libra 2"));
     assert!(Firmware::parse("garbage").is_none());
   }
 
