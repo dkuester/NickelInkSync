@@ -1016,7 +1016,7 @@ Auf dem Kobo ist das Plugin inaktiv.
   - [x] **ich:** Übersetzung, Tests (PR #55; siehe K4).
   - [x] **du:** Book R vom Server per USB auf den Kobo schreiben, auswerfen,
     öffnen: geprüft 2026-10-31, öffnet an der Stelle (siehe K4).
-- [x] **C2 Basis-Stand und Vormerkliste** (nur Bibliothek und CLI)
+- [x] **C2 Basis-Stand und Vormerkliste** (nur Bibliothek und CLI) · PR #64
   - [x] **ich:** `.adds/NickelInkSync/state.json` (`src/state.rs`): je Buch
     Basis (Dokument, Nickels Stelle, XPointer, Prozent, Server-Zeit),
     `not_in_line` und `pending`; geschrieben nach `push`, `pull --write`
