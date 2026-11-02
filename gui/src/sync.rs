@@ -935,6 +935,64 @@ mod tests {
     let _ = fs::remove_dir_all(&root);
   }
 
+  /// Kobo firmware 4.x: "Get" writes the Adobe point as 4.x counts it into
+  /// an EPUB and the span without offset into a mapped kepub.
+  #[test]
+  fn a_kobo_4_takes_epubs_and_mapped_kepubs() {
+    let _data = isolate();
+    let root = fake_device(
+      "gui-pull-kobo-4",
+      "kobo-clarabw-4.46-placeholder-books.sql",
+      KOBO_VERSION,
+    );
+    let server = MockServer::start();
+    let options = Options {
+      device: root.clone(),
+      config: Some(server.config(&root, PASSWORD)),
+      book: None,
+      content_id: None,
+      live: false,
+      timeout: Duration::from_secs(5),
+      library: None,
+    };
+    server.store(&book_hash(), AHEAD, 0.9, LAST_READ + 60);
+    let report = pull(&options, &[BOOK_A.to_string()]).unwrap();
+    assert_eq!(report.books, [("Book A".to_string(), Outcome::Written)]);
+    assert!(report.backup.is_some());
+    // The kepub's row holds Book R as kepub, mapped to Book R as EPUB;
+    // KOReader in R2-63 at "schließen".
+    let kepub = "file:///mnt/onboard/Books/book-a.kepub.epub";
+    fs::copy(
+      fixtures().join("epub/book-r.kepub.epub"),
+      root.join("Books/book-a.kepub.epub"),
+    )
+    .unwrap();
+    let original = fixtures().join("epub/book-r.epub");
+    crate::model::map_book(&root, kepub, &original).unwrap();
+    server.store(
+      &partial_md5(&original).unwrap(),
+      "/body[1]/DocFragment[3]/body[1]/p[63]/text()[1].13",
+      0.8,
+      2_000_000_000,
+    );
+    let report = pull(&options, &[kepub.to_string()]).unwrap();
+    assert_eq!(report.books.len(), 1);
+    assert_eq!(report.books[0].1, Outcome::Written, "{report:?}");
+    let stored = |id: &str| -> String {
+      rusqlite::Connection::open(root.join(".kobo/KoboReader.sqlite"))
+        .unwrap()
+        .query_row(
+          "SELECT ChapterIDBookmarked FROM content WHERE ContentID = ?1",
+          [id],
+          |r| r.get(0),
+        )
+        .unwrap()
+    };
+    assert_eq!(stored(BOOK_A), AHEAD_ON_DEVICE);
+    assert_eq!(stored(kepub), "OEBPS/text/chapter2.xhtml#kobo.64.1");
+    let _ = fs::remove_dir_all(&root);
+  }
+
   #[test]
   fn the_overview_puts_one_book_on_two_devices_in_one_line() {
     let s = Setup::new("overview");

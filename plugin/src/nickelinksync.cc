@@ -91,6 +91,12 @@
  * Symbols and signatures: docs/nickel-6.0-symbols.md (Kobo 6.0, the write
  * path) and docs/nickel-5.18-symbols.md (Tolino 5.18).
  *
+ * Qt 5 (Kobo firmware 4.x, Qt 5.2.1, NickelTC with GCC 4.9): the same source
+ * builds with NH_QT_MAJOR=5 (`just plugin-qt5`, KoboRoot.tgz). It loads,
+ * resolves the 4.38 names of its symbols and logs that it runs on 4.x, but
+ * stays inactive until the 4.x behaviour follows (stage C10); the symbols
+ * 4.38 lacks and their replacements are in docs/nickel-4.38-symbols.md.
+ *
  * Inactive without the CLI or config.ini, and on a Kobo without Nickel's
  * write path. Log: NickelInkSync.log next to the CLI.
  */
@@ -130,7 +136,16 @@ typedef void MainWindowController;
 typedef void ContentLocation;
 typedef void Repository;
 
-static const char kDir[]    = "/mnt/onboard/.adds/NickelInkSync";
+// Qt 5.2 on firmware 4.x lacks a few newer spellings. Every Qt 5/Qt 6
+// difference is an `#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)` block, so
+// tools/check_plugin_symbols.py can pick the symbols of either build.
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+static const auto kSkipEmpty = Qt::SkipEmptyParts;
+#else
+static const auto kSkipEmpty = QString::SkipEmptyParts;
+#endif
+
+static const char kDir[]    ="/mnt/onboard/.adds/NickelInkSync";
 static const char kCli[]    = "/mnt/onboard/.adds/NickelInkSync/nickelinksync";
 static const char kConfig[] = "/mnt/onboard/.adds/NickelInkSync/config.ini";
 static const char kLog[]    = "/mnt/onboard/.adds/NickelInkSync/NickelInkSync.log";
@@ -199,8 +214,12 @@ static Device *(*Device__getCurrentDevice)();  // returns Device& (r0)
 static bool (*Device__isTolino)(const Device *);
 // QString is returned through a hidden pointer (r0), `this` follows in r1;
 // declaring the return type as QString gives exactly that ABI. The argument
-// is unused by 5.18.
+// is unused by 5.18; 4.x has none.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
 static QString (*Content__getId)(const Volume *, const QString &);
+#else
+static QString (*Content__getId)(const Volume *);
+#endif
 static bool (*Bookmark__isNull)(const Bookmark *);
 static void (*Volume__copy)(Volume *, const Volume *);  // Volume(Volume const&)
 static void (*Volume__dtor)(Volume *);
@@ -658,7 +677,7 @@ static QList<int> point_path(const QString &position)
 {
     QList<int> path;
     const QString point = position.section(QStringLiteral("#point("), 1).section(QLatin1Char(':'), 0, 0);
-    for (const QString &step : point.split(QLatin1Char('/'), Qt::SkipEmptyParts)) {
+    for (const QString &step : point.split(QLatin1Char('/'), kSkipEmpty)) {
         path << step.toInt();
     }
     return path;
@@ -1139,7 +1158,11 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
         notice_kobalt(kOpenToastDelayMs);
         return;
     }
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     const QString id = Content__getId(volume, QString());
+#else
+    const QString id = Content__getId(volume);
+#endif
     g_open_id = id;
     g_not_synced.clear();
     g_unasked_id.clear();
@@ -1383,6 +1406,14 @@ void _nh_ReadingView__leavingReadingExperience(ReadingView *self)
 
 static int nickelinksync_init()
 {
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    // Firmware 4.x: loaded and its symbols resolved; the Kobalt guard runs
+    // as everywhere, and nothing more until the 4.x behaviour follows (C10).
+    kobalt_blocks();
+    log_line(QStringLiteral("inactive: Kobo firmware 4.x (Qt %1), plugin loaded; syncing on 4.x follows later")
+                 .arg(QString::fromLatin1(qVersion())));
+    return 0;
+#endif
     g_kobo = !Device__isTolino(Device__getCurrentDevice());
     if (!QFileInfo(QString::fromLatin1(kCli)).isExecutable()) {
         log_line(QStringLiteral("inactive: %1 is missing or not executable").arg(QString::fromLatin1(kCli)));
@@ -1451,17 +1482,25 @@ static struct nh_hook NickelInkSyncHook[] = {
 static struct nh_dlsym NickelInkSyncDlsym[] = {
     {.name = "_ZN6Device16getCurrentDeviceEv", .out = nh_symoutptr(Device__getCurrentDevice), .desc = "Kobo or Tolino"},
     {.name = "_ZNK6Device8isTolinoEv", .out = nh_symoutptr(Device__isTolino), .desc = "Kobo or Tolino"},
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     {.name = "_ZNK7Content5getIdERK7QString", .out = nh_symoutptr(Content__getId), .desc = "Book ID"},
     {.name = "_ZNK8Bookmark6isNullEv", .out = nh_symoutptr(Bookmark__isNull), .desc = "Opened without a bookmark"},
     {.name = "_ZN6VolumeC1ERKS_", .out = nh_symoutptr(Volume__copy), .desc = "Copy of the book to open"},
+#else
+    // 4.38 has no Bookmark::isNull, no exported Volume copy constructor and
+    // no ContentLocation (docs/nickel-4.38-symbols.md); C10 replaces them.
+    {.name = "_ZNK7Content5getIdEv", .out = nh_symoutptr(Content__getId), .desc = "Book ID"},
+#endif
     {.name = "_ZN6VolumeD1Ev", .out = nh_symoutptr(Volume__dtor), .desc = "Copy of the book to open"},
     {.name = "_ZN7Content22setChapterIdBookmarkedERK8QVariant", .out = nh_symoutptr(Content__setChapterIdBookmarked), .desc = "Pulled position"},
     {.name = "_ZN7Content14setPercentReadERK8QVariant", .out = nh_symoutptr(Content__setPercentRead), .desc = "Pulled percentage"},
     {.name = "_ZN20MainWindowController14sharedInstanceEv", .out = nh_symoutptr(MainWindowController__sharedInstance), .desc = "Reading view"},
     {.name = "_ZNK20MainWindowController11currentViewEv", .out = nh_symoutptr(MainWindowController__currentView), .desc = "Reading view"},
     {.name = "_ZN11ReadingView26bookmarkForCurrentLocationEv", .out = nh_symoutptr(ReadingView__bookmarkForCurrentLocation), .desc = "Current position"},
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     {.name = "_ZNK8Bookmark16getStartLocationEv", .out = nh_symoutptr(Bookmark__getStartLocation), .desc = "Current position"},
     {.name = "_ZNK15ContentLocation8toStringEv", .out = nh_symoutptr(ContentLocation__toString), .desc = "Current position"},
+#endif
     {.name = "_ZN8BookmarkD1Ev", .out = nh_symoutptr(Bookmark__dtor), .desc = "Current position"},
     {.name = "_ZN23WirelessWorkflowManager14sharedInstanceEv", .out = nh_symoutptr(WirelessWorkflowManager__sharedInstance), .desc = "Wi-Fi", .optional = true},
     {.name = "_ZN23WirelessWorkflowManager20isInternetAccessibleEv", .out = nh_symoutptr(WirelessWorkflowManager__isInternetAccessible), .desc = "Wi-Fi", .optional = true},
@@ -1470,6 +1509,9 @@ static struct nh_dlsym NickelInkSyncDlsym[] = {
     {.name = "_ZN13VolumeManager7getByIdERK7QStringS2_", .out = nh_symoutptr(VolumeManager__getById), .desc = "Log", .optional = true},
     {.name = "_ZNK6Volume7isValidEv", .out = nh_symoutptr(Volume__isValid), .desc = "Log", .optional = true},
     {.name = "_ZNK7Content11getDbValuesEv", .out = nh_symoutptr(Content__getDbValues), .desc = "Log", .optional = true},
+    // Nickel's write path (Kobo 6.0, docs/nickel-6.0-symbols.md); 4.38 has
+    // other signatures and no ContentLocation (C10).
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     {.name = "_ZNK6Device9getDbNameEv", .out = nh_symoutptr(Device__getDbName), .desc = "Write (Kobo)", .optional = true},
     {.name = "_ZN15DatabaseAdapter16beginTransactionE7QString", .out = nh_symoutptr(DatabaseAdapter__beginTransaction), .desc = "Write (Kobo)", .optional = true},
     {.name = "_ZN15DatabaseAdapter14endTransactionE7QStringb", .out = nh_symoutptr(DatabaseAdapter__endTransaction), .desc = "Write (Kobo)", .optional = true},
@@ -1481,6 +1523,7 @@ static struct nh_dlsym NickelInkSyncDlsym[] = {
     {.name = "_ZN13VolumeManager14updateBookmarkER6VolumeRK7QStringiRK9QDateTimei", .out = nh_symoutptr(VolumeManager__updateBookmark), .desc = "Write (Kobo)", .optional = true},
     {.name = "_ZN13VolumeManager12updateFieldsERK7QStringRK4QMapIS0_8QVariantES7_S2_", .out = nh_symoutptr(VolumeManager__updateFields), .desc = "Write (Kobo)", .optional = true},
     {.name = "_ZN10Repository12refreshCacheI6VolumeEEP5CacheIT_ERK7QString", .out = nh_symoutptr(Repository__refreshCache_Volume), .desc = "Write (Kobo)", .optional = true},
+#endif
     {0},
 };
 

@@ -2,9 +2,9 @@
 //!
 //! Converts a Nickel position (kepub span or Adobe point inside a chapter) to
 //! a KOReader XPointer and back, using the EPUB itself. Back is done for the
-//! Adobe point as the Tolino and Kobo 6.x count it ([`from_xpointer`]) and
-//! for the kepub span with offset of Kobo 6.x ([`from_xpointer_kepub`]); the
-//! 4.x point and span are not.
+//! Adobe point as each firmware line counts it ([`from_xpointer`]) and for
+//! the kepub span, with the offset on Kobo 6.x and without it on 4.x
+//! ([`from_xpointer_kepub`]).
 //!
 //! The rules come from highlights of the same words on a Kobo 4.46, a Tolino
 //! 5.18 and in KOReader (probe books Book P and Book Q, see SCOPE.md):
@@ -150,8 +150,6 @@ pub enum Error {
   UnknownChapter(String),
   /// Not `/body[1]/DocFragment[n]…`, or `n` is not in the spine.
   BadXPointer(String),
-  /// No translation back for this device yet.
-  Unsupported(&'static str),
 }
 
 impl fmt::Display for Error {
@@ -160,7 +158,6 @@ impl fmt::Display for Error {
       Error::Epub(e) => write!(f, "{e}"),
       Error::UnknownChapter(c) => write!(f, "chapter {c} is not in the spine"),
       Error::BadXPointer(x) => write!(f, "not a KOReader position in this book: {x}"),
-      Error::Unsupported(e) => write!(f, "{e}"),
     }
   }
 }
@@ -212,8 +209,10 @@ pub struct Translated {
 }
 
 /// Converts a KOReader XPointer to an Adobe point in `epub`, the inverse of
-/// [`to_xpointer`] for the Tolino ([`PointFlavor::AllNodes`]). A path that
-/// does not resolve in the chapter falls back to the chapter's first text.
+/// [`to_xpointer`]: every node counted for the Tolino and Kobo 6.x
+/// ([`PointFlavor::AllNodes`]), text joined across comments and CDATA for
+/// Kobo 4.x ([`PointFlavor::JoinText`]). A path that does not resolve in the
+/// chapter falls back to the chapter's first text.
 ///
 /// In a run of spaces KOReader counts one character, so an offset in or
 /// after a run maps to the end of the run, the next visible character.
@@ -222,11 +221,6 @@ pub fn from_xpointer(
   xpointer: &str,
   flavor: PointFlavor,
 ) -> Result<Translated, Error> {
-  if flavor != PointFlavor::AllNodes {
-    return Err(Error::Unsupported(
-      "positions back to Kobo firmware 4.x are not translated yet",
-    ));
-  }
   let (spine_index, below) = split_xpointer(xpointer)
     .filter(|&(i, _)| i < epub.spine.len())
     .ok_or_else(|| Error::BadXPointer(xpointer.to_string()))?;
@@ -252,40 +246,72 @@ pub fn from_xpointer(
       (inner, 0, false)
     }
   };
-  let mut steps = vec![1];
-  steps.extend(path.iter().map(|i| i + 1));
+  let (steps, offset) = match flavor {
+    PointFlavor::AllNodes => (path.iter().map(|i| i + 1).collect(), bytes),
+    PointFlavor::JoinText => {
+      joined_steps(&html, &path, bytes).ok_or_else(|| Error::BadXPointer(xpointer.to_string()))?
+    }
+  };
   Ok(Translated {
     position: Position {
       chapter,
       anchor: Anchor::Point {
-        steps,
-        offset: bytes,
+        steps: [vec![1], steps].concat(),
+        offset,
       },
     },
     exact,
   })
 }
 
+/// The steps below `html` (1-based) and the byte offset of the Kobo 4.x
+/// point for `bytes` into the text node at `path`: each element counts as
+/// one node, each run of text, CDATA and comments as one more, and the
+/// offset runs through the text and CDATA of the run. The inverse of
+/// [`joined_point`].
+fn joined_steps(html: &Element, path: &[usize], bytes: usize) -> Option<(Vec<usize>, usize)> {
+  let mut element = html;
+  let mut steps = Vec::new();
+  for (depth, &i) in path.iter().enumerate() {
+    let groups = joined_children(element);
+    let group = groups.iter().position(|g| g.contains(&i))?;
+    steps.push(group + 1);
+    match &element.children[i] {
+      Node::Element(e) => element = e,
+      Node::Text(_) | Node::CData(_) if depth + 1 == path.len() => {
+        let before: usize = groups[group]
+          .iter()
+          .take_while(|&&j| j != i)
+          .map(|&j| match &element.children[j] {
+            Node::Text(t) | Node::CData(t) => t.len(),
+            _ => 0,
+          })
+          .sum();
+        return Some((steps, before + bytes));
+      }
+      _ => return None,
+    }
+  }
+  None
+}
+
 /// Converts a KOReader XPointer in a kepub to the span Nickel stores for a
-/// kepub on firmware 6.x, `#kobo.N.M:offset` (offset in UTF-16 units into
-/// the span's text), the inverse of [`to_xpointer`] for a `KoboSpan`.
+/// kepub reading position, the inverse of [`to_xpointer`] for a `KoboSpan`:
+/// `#kobo.N.M:offset` on firmware 6.x (offset in UTF-16 units into the
+/// span's text), `#kobo.N.M` on 4.x ([`PointFlavor::JoinText`]), which
+/// stores the span only, so the place within the span is lost and Nickel
+/// opens at its start. The result still counts as exact: chapter and span
+/// are right.
 ///
 /// A place outside any span (whitespace between paragraphs, text kepubify
 /// left unwrapped) moves to the start of the next span in the chapter, or
-/// the end of the last one. A path that does not resolve in the chapter
-/// falls back to the chapter's first span (not exact). Firmware 4.x
-/// ([`PointFlavor::JoinText`]) stores the span without the offset and is
-/// not translated, as there is no 4.x device left to check it on.
+/// the end of the last one (its start on 4.x). A path that does not resolve
+/// in the chapter falls back to the chapter's first span (not exact).
 pub fn from_xpointer_kepub(
   epub: &mut Epub,
   xpointer: &str,
   flavor: PointFlavor,
 ) -> Result<Translated, Error> {
-  if flavor != PointFlavor::AllNodes {
-    return Err(Error::Unsupported(
-      "positions back into a kepub on Kobo firmware 4.x are not translated yet",
-    ));
-  }
   let (spine_index, below) = split_xpointer(xpointer)
     .filter(|&(i, _)| i < epub.spine.len())
     .ok_or_else(|| Error::BadXPointer(xpointer.to_string()))?;
@@ -297,7 +323,13 @@ pub fn from_xpointer_kepub(
     .and_then(|b| node_for(&html, b))
     .and_then(|(path, chars)| span_for(&html, &spans, &path, chars));
   let (anchor, exact) = match resolved {
-    Some((id, offset)) => (Anchor::KoboSpan { id, offset }, true),
+    Some((id, offset)) => {
+      let offset = match flavor {
+        PointFlavor::AllNodes => offset,
+        PointFlavor::JoinText => 0,
+      };
+      (Anchor::KoboSpan { id, offset }, true)
+    }
     None => match spans.first() {
       Some((_, id)) => (
         Anchor::KoboSpan {
@@ -810,5 +842,40 @@ mod tests {
       resolve(&html, &kobo, PointFlavor::JoinText).as_deref(),
       Some("/body[1]/p[1]/text()[2].1")
     );
+  }
+
+  #[test]
+  fn joined_steps_invert_joined_point() {
+    let html =
+      parse("<html><body>\n<p>ab <!--c--> d<![CDATA[é]]>f<em>g</em> h</p>\n</body></html>")
+        .unwrap();
+    // body is child 0 of html, p child 1 of body. In p: "ab ", comment,
+    // " d", CDATA "é" (two bytes), "f" join to one node, then em, then " h".
+    for (path, bytes, steps, offset) in [
+      (vec![0, 1, 0], 1, vec![1, 2, 1], 1),
+      (vec![0, 1, 2], 1, vec![1, 2, 1], 4),
+      (vec![0, 1, 3], 0, vec![1, 2, 1], 5),
+      (vec![0, 1, 4], 0, vec![1, 2, 1], 7),
+      (vec![0, 1, 5, 0], 0, vec![1, 2, 2, 1], 0),
+      (vec![0, 1, 6], 1, vec![1, 2, 3], 1),
+    ] {
+      let got = joined_steps(&html, &path, bytes).unwrap();
+      assert_eq!(got, (steps.clone(), offset), "{path:?}");
+      let there = joined_point(&html, &steps, offset).unwrap();
+      assert_eq!(
+        there,
+        (path.clone(), bytes_to_chars_at(&html, &path, bytes))
+      );
+    }
+    // A comment is not a place.
+    assert_eq!(joined_steps(&html, &[0, 1, 1], 0), None);
+  }
+
+  /// Characters in the first `bytes` of the text node at `path`.
+  fn bytes_to_chars_at(html: &Element, path: &[usize], bytes: usize) -> usize {
+    match html.node_at(path) {
+      Some(Node::Text(t) | Node::CData(t)) => bytes_to_chars(t, bytes),
+      _ => panic!("no text at {path:?}"),
+    }
   }
 }
