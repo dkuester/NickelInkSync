@@ -24,7 +24,7 @@ everything else is still an assumption.
 
 | | |
 |---|---|
-| Devices | Kobo on firmware 4.x (Qt5) and 6.x (Qt6, not checked yet), Tolino Shine 5, Shine Color and Vision Color on firmware 5.x (Qt6) |
+| Devices | Kobo on firmware 4.x (Qt5) and 6.x (Qt6), Tolino Shine 5, Shine Color and Vision Color on firmware 5.x (Qt6) |
 | Formats | kepub (`.kepub.epub`) and plain EPUB |
 | Books | Sideloaded only (`ContentID` starting with `file:///mnt/onboard/`) |
 | Server | Any KOSync-compatible server (koreader-sync-server, self-hosted forks) |
@@ -34,10 +34,13 @@ reference Tolino (Shine Color) runs 5.18. The Rust core is unaffected; the
 NickelHook plugin is built twice (Qt5 and Qt6).
 
 On 2026-10-28 the reference Clara BW updated itself to firmware
-**6.0.279225** (database version 222). There is no 4.x device left: the
-4.46 findings below stay verified, but 4.x-only behaviour can be checked
-against the fixtures only, and the Kobo pass targets 6.0 (see
-[Open technical questions](#open-technical-questions)).
+**6.0.279225** (database version 222). Since 2026-11-01 the 4.x line has a
+test device again, a **Kobo Libra 2 on 4.38.23852** (Qt5); the 4.46
+findings below come from the Clara BW before its update. On the Libra 2
+(database version 174, model ID 388) they hold unchanged: all 32
+highlights of Book P and Book Q are stored exactly as on 4.46, a kepub
+reading position is the span only, and there is no page cache
+(`CachePersistence*`) on 4.38 (stage C8 in [TODO.md](TODO.md)).
 
 ## Book identity
 
@@ -88,7 +91,7 @@ with the device file's checksum needs no mapping. The Kindle's
 book; it does not appear in the library, so it adds nothing to the score.
 
 **Syncing through the mapping** (`src/transfer.rs`, `status`/`push`/`pull`
-on the desktop; the plugin does not read mappings): a mapped book syncs
+on the desktop; on the device through tables, below): a mapped book syncs
 under the original's checksum; a broken mapping, and with a library
 configured a book that is neither mapped, nor in the library, nor the
 original of a mapping, does not sync at all; without a library every
@@ -119,9 +122,29 @@ Kobo 6.0's `#kobo.17.1:204` in the Book R kepub lands on
 position in the EPUB; a calibre-like conversion of Book R (cover page,
 split chapter, changed text) moves both ways (`tests/transfer.rs`,
 `tests/sync_mapping.rs`). `pull --write` translates back into a mapped
-EPUB on the Tolino and into a mapped kepub on a Kobo 6.x (as a span with
-offset, `position::from_xpointer_kepub`). A kepub syncs only through a
+EPUB on the Tolino and into a mapped kepub on a Kobo (as a span with
+offset on 6.x, without on 4.x, `position::from_xpointer_kepub`). A kepub syncs only through a
 mapping, never under its own checksum.
+
+**Mappings on the device** (C3, `src/prepare.rs`, `src/table.rs`):
+`device prepare` puts the library index (`library.json`: checksum, title,
+authors of each original), the mappings of the books on the device
+(`mappings.json`, plus `added`/`removed` for mappings made on the device,
+taken over by checksum) and one translation table per mapped book
+(`tables/<device checksum>.json`) into `.adds/NickelInkSync/`; never an
+EPUB or its text. A table holds per original spine item the text nodes
+(KOReader path, visible start and length, collapsed length, paragraph
+start, and the collapsed offset of the first character and of each
+sentence start), the sentence starts, and for chapters whose text
+differs pairs of (device, original) indices found at build time. That is
+what `transfer` and `step_back` need for `position = paragraph` and
+`sentence`: the device sends exactly what the desktop sends
+(`tests/table.rs` compares both ways for Book A, Book R and a
+calibre-like conversion). Other places (`exact`, the server's position
+on the way back) are put between two anchors in proportion. `--live`
+reads these files; without `library.json`, `push` and `sync --pending`
+send nothing (`NICKELINKSYNC_NO_INDEX`), and only an original from the
+index or a book with a mapping and table is sent.
 
 **Place to send** (`position`, `transfer::step_back`): a device stores
 its page start, often mid-sentence; KOReader opens the page holding that
@@ -329,9 +352,18 @@ span's text before the place, stored as `#kobo.N.M:offset` as Kobo 6.0
 does. A place outside every span (whitespace between paragraphs) moves to
 the next span. All 16 Kobo kepub highlights in Book P and Book Q come back
 unchanged, KOReader's highlights of the same words give exactly the
-Kobo's spans, and so do the Book R reading positions. Not done yet: the
-4.x point that joins text around comments, and the 4.x kepub span (no 4.x
-device left to check either).
+Kobo's spans, and so do the Book R reading positions.
+
+Back to **Kobo 4.x** (stage C8, `PointFlavor::JoinText`): the Adobe point
+is the Tolino's, but in each element a run of text, CDATA and comments is
+one node, and the offset runs through its text and CDATA in UTF-8 bytes
+(comments add nothing). Into a kepub, 4.x stores the span only
+(`#kobo.N.M`), so the place within the span is lost and Nickel opens at
+the span's start; chapter and span still count as exact. All 16 Kobo 4.46
+EPUB highlights come back unchanged, and KOReader's highlights of the same
+words give exactly the Kobo's points (p7w03 after the comment at
+`/1/4/16/1:13`, q5w04 after the CDATA at `/1/4/12/1:20`); KOReader's
+kepub highlights give the Kobo's spans.
 
 CDATA behaves like a comment in the Adobe point (skipped on Kobo 4.46, a
 node on Tolino 5.18), is a `text()` node of its own in KOReader's XPointer,
@@ -608,7 +640,8 @@ real books sent from the Calibre library:
    the plugin sets the pulled position in the `Volume` passed to
    `setVolume` and in the one `VolumeManager::getById` loads while opening
    ([docs/nickel-5.18-symbols.md](docs/nickel-5.18-symbols.md)). The Qt5
-   symbols for 4.46 are still open, and on hold without a 4.x device.
+   symbols for 4.x are still open; they are checked against 4.38.23852
+   for the Libra 2 (stage C9).
 4. **Kobo firmware 6.0.** Not checked yet: the position format (kepub
    span, and whether the Adobe point counts comments and CDATA as nodes
    like the Tolino; the CLI assumes so from firmware 5 on), the chapter

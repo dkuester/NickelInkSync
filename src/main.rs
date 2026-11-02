@@ -12,6 +12,7 @@ use nickelinksync::kosync::{self, Client, Progress, Update};
 use nickelinksync::library::{self, Library, LibraryBook};
 use nickelinksync::map::{self, candidates, DeviceChapters, OnDevice, Outcome};
 use nickelinksync::mapping::{DeviceBook, EpubState, Store};
+use nickelinksync::prepare;
 use nickelinksync::session::{
   self, Action, Identity, KindleSession, Options, Plugin, PullOutcome, PushOutcome, Server,
   Session, Written,
@@ -51,7 +52,9 @@ enum Command {
     /// `NICKELINKSYNC_CONFLICT<tab>…` and `NICKELINKSYNC_UNANSWERED<tab>n`
     /// for a position that needs an answer, `NICKELINKSYNC_ERROR<tab>kind<tab>
     /// message`, and `NICKELINKSYNC_PENDING<tab>ContentID<tab>marked<tab>kind`
-    /// when a failed push is kept for `sync --pending` (with --live)
+    /// when a failed push is kept for `sync --pending` (with --live);
+    /// `NICKELINKSYNC_NO_INDEX<tab>message` and nothing sent if the device
+    /// was not prepared (`device prepare`, with --live)
     #[arg(long)]
     emit: bool,
   },
@@ -88,9 +91,16 @@ enum Command {
     /// For the plugin: one line `NICKELINKSYNC_PENDING<tab>ContentID<tab>
     /// result<tab>detail` per book (sent, in-sync, server-newer, conflict,
     /// not-sent, error, gone), `NICKELINKSYNC_CONFLICT<tab>…` for a conflict,
-    /// and `NICKELINKSYNC_PENDING_LEFT<tab>n` at the end
+    /// and `NICKELINKSYNC_PENDING_LEFT<tab>n` at the end;
+    /// `NICKELINKSYNC_NO_INDEX<tab>message` before it if the device was
+    /// not prepared (with --live)
     #[arg(long)]
     emit: bool,
+  },
+  /// Prepare a Kobo or Tolino for syncing on its own
+  Device {
+    #[command(subcommand)]
+    command: DeviceCommand,
   },
   /// Link books on a device to their original EPUB, so they sync under its
   /// checksum (kepub, a differently converted EPUB, a Kindle KFX)
@@ -151,6 +161,20 @@ enum MapCommand {
   },
   /// Remove a mapping, given by its key (or the start of it) from `map list`
   Remove { key: String },
+}
+
+#[derive(Subcommand)]
+enum DeviceCommand {
+  /// Put the library index, the mappings of the books on the device and a
+  /// translation table for each into .adds/NickelInkSync on the device,
+  /// and take over mappings made or removed there; never the EPUBs
+  Prepare {
+    /// Mount point of the device (Kobo or Tolino)
+    #[arg(long)]
+    device: PathBuf,
+    #[command(flatten)]
+    library: LibraryArgs,
+  },
 }
 
 #[derive(Args)]
@@ -215,6 +239,7 @@ fn main() -> ExitCode {
       emit,
     } => (sync_pending(&target, emit), emit),
     Command::Map { command } => (map(command), false),
+    Command::Device { command } => (device(command), false),
     Command::Restore { device, backup } => (restore(&device, backup.as_deref()), false),
   };
   match result {
@@ -296,10 +321,34 @@ fn open_session(options: &Options) -> Result<Session> {
       session.store.path.display()
     );
   }
+  if session.device.live {
+    match &session.prepared {
+      Some(p) => println!(
+        "Prepared  {} originals, {} mappings, at {}",
+        p.index.books.len(),
+        p.mappings.holding().count(),
+        p.index.created
+      ),
+      None => println!("Prepared  no (run `nickelinksync device prepare` on the computer)"),
+    }
+  }
   if session.books.is_empty() {
     println!("\nNo sideloaded books.");
   }
   Ok(session)
+}
+
+/// On the device without a library index: says so and `true`; nothing
+/// may be sent.
+fn no_index(session: &Session, emit: bool) -> bool {
+  let Some(why) = session.push_blocked() else {
+    return false;
+  };
+  eprintln!("nickelinksync: {why}");
+  if emit {
+    emit_line("NO_INDEX", &[why]);
+  }
+  true
 }
 
 /// [`Server::open`], with its warning printed.
@@ -664,6 +713,9 @@ fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool>
     return kindle_push(&options, force, dry_run);
   }
   let session = open_session(&options)?;
+  if no_index(&session, emit) {
+    return Ok(false);
+  }
   if session.kobalt.blocks() {
     // Sending touches only the server; Kobalt's own KOSync may send too.
     eprintln!("nickelinksync: warning: sending anyway; if Kobalt syncs with KOSync itself, it may send these books as well");
@@ -846,6 +898,12 @@ fn sync_pending(target: &Target, emit: bool) -> Result<bool> {
       emit_line("PENDING_LEFT", &["0"]);
     }
     return Ok(true);
+  }
+  if no_index(&session, emit) {
+    if emit {
+      emit_line("PENDING_LEFT", &[&pending.len().to_string()]);
+    }
+    return Ok(false);
   }
   let server = require_server(&options)?;
   let (device, device_id) = server.config.identity(&session.model);
@@ -1431,6 +1489,45 @@ fn open_library(args: &LibraryArgs) -> Result<Option<Library>> {
 }
 
 /// Says which library is used, and what in it was skipped.
+fn device(command: DeviceCommand) -> Result<bool> {
+  let DeviceCommand::Prepare { device, library } = command;
+  let path = Store::default_path().ok_or("no data directory (HOME is not set)")?;
+  let mut store = Store::load(&path)?;
+  let library = map::open_library(library.library.as_deref(), library.config.as_deref())?
+    .ok_or("no library: give --library or set `library` in the configuration file")?;
+  print_library(&library);
+  let report = prepare::prepare(&device, &library, &mut store, &mut |_, _| {})?;
+  for m in &report.imported {
+    println!(
+      "Imported  {} → {} (mapped on the device)",
+      m.device.title().unwrap_or(m.device.key()),
+      m.epub.path
+    );
+  }
+  for m in &report.removed {
+    println!(
+      "Removed   {} (mapping removed on the device)",
+      m.device.title().unwrap_or(m.device.key())
+    );
+  }
+  for (what, why) in &report.unresolved {
+    println!("Kept      {what}: {why}");
+  }
+  for (what, why) in &report.failed {
+    eprintln!("nickelinksync: {what}: {why}");
+  }
+  println!(
+    "Prepared  {} originals in the index, {} mappings on the device",
+    report.originals, report.mappings
+  );
+  println!(
+    "Tables    {} written, {} up to date, {} removed",
+    report.tables_written, report.tables_kept, report.tables_removed
+  );
+  println!("          in {}", device.join(prepare::DIR).display());
+  Ok(report.failed.is_empty())
+}
+
 fn print_library(library: &Library) {
   let kind = match library.kind {
     library::Kind::Calibre => "Calibre library",

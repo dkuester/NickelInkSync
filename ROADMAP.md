@@ -14,11 +14,22 @@ L = a week or more, including verification.
 
 Decided by the owner (2026-10-31): version 0.1.0, once D2 and the
 translation back into kepubs (PR #55) are done. Assets: the desktop client
-for macOS (`.dmg`) and Windows (ZIP), the CLI for macOS and Windows as
-files of their own, and `SHA256SUMS`; the Tolino plugin package and the
-ARM device build stay CI artifacts. No Linux yet: the AppImage (E8) and
-the Kobo client (C0–C7) follow in the release after. Release notes in
-English, then German. A workflow builds the assets on a `v*` tag and
+for macOS (`.dmg`) and Windows (the app as a ZIP), the CLI for macOS and
+Windows as ZIPs of their own, and `SHA256SUMS`; plus the device package for the
+Tolino and the Kobo (`Kobo.tgz` and `.adds/NickelInkSync/` with the ARM
+build; `KoboRoot.tgz` as well for Kobo 4.x), marked experimental.
+Changed on 2026-11-01: the on-device client (C0–C10) is part of 0.1.0,
+and so is full Kobo 4.x support (reading, USB write-back, the Qt5
+plugin), tested on a Kobo Libra 2 with 4.38.23852. No Linux yet: the AppImage (E8) follows in the
+release after. The Kindle stays in 0.1.0 (reading, sending), marked
+experimental; no further Kindle work or test before 0.1.0, and sending the
+Kindle copy, reading over MTP and the rest of L1 wait until the Kobo and
+the Tolino are stable. A kepub syncs only through a valid mapping, under
+the MD5 of the mapped EPUB, never under its own checksum (PRs #55, #60);
+on the device the mappings come with `device prepare` (C3, PR #67), and
+without it the device sends nothing, the Tolino included (to say in the
+release notes). The same holds for the Kindle (mapped KFX only). Release notes in English,
+then German. A workflow builds the assets on a `v*` tag and
 drafts the release; only the owner tags and publishes.
 
 ## Recently completed
@@ -151,6 +162,17 @@ drafts the release; only the owner tags and publishes.
       start Nickel's page cache still wins when the chapter start is
       cached; dropping that chapter's pages in the same transaction fixes
       it ([docs/nickel-6.0-symbols.md](docs/nickel-6.0-symbols.md))
+- [x] Mappings on the device (stage C3 of the on-device client, library and
+      CLI, PR #67): `device prepare` puts a library index, the device's mappings and
+      a translation table per mapped book into `.adds/NickelInkSync/`
+      (never an EPUB), and takes mappings made or removed on the device
+      over into the desktop's store. On the device a mapped kepub or EPUB
+      syncs under its original's checksum, the sent paragraph start the
+      same as on the desktop; without the index nothing is sent
+      (`NICKELINKSYNC_NO_INDEX`), and only originals and mapped books are.
+      Checked on the Clara BW (6.0) on 2026-11-01: a Calibre kepub read on
+      the Kobo, its progress opens in KOReader in the original EPUB.
+      Replaces N6
 
 ## Quick wins
 
@@ -165,14 +187,15 @@ Order: everything the Tolino Shine Color (5.18) can test on its own comes
 first (reverse translation for plain EPUB, USB write-back, Qt6 symbols and
 plugin). **Now, before anything else: the desktop client with a graphical UI**
 (the manual book mapping in the CLI is done, see "Recently completed").
-Maintenance and bug fixes may be slotted in at any time. After the
-desktop client comes the **on-device client** for the Kobo and the Tolino
-(kepub reverse translation, write-back, mappings on the device, plugin,
-dialog), planned in eight stages (C0–C7 in [TODO.md](TODO.md)). The
-reference Clara BW updated itself to firmware **6.0.279225** on
-2026-10-28, so the Kobo targets Kobo 6.0 (Qt6, like the Tolino); there is
-no 4.x device left, and 4.x-only behaviour is checked against the 4.46
-fixtures only.
+Maintenance and bug fixes may be slotted in at any time. Release 0.1.0
+brings the desktop client, the kepub reverse translation and the
+**on-device client** for the Kobo and the Tolino
+(mappings on the device, a base position and a pending list, plugin,
+dialog), planned in stages C0–C10 ([TODO.md](TODO.md)). The reference
+Clara BW updated itself to firmware **6.0.279225** on 2026-10-28 (Qt6,
+like the Tolino). Since 2026-11-01 there is a 4.x device again, a **Kobo
+Libra 2 on 4.38.23852** (Qt5): Kobo 4.x is fully supported in 0.1.0,
+reading and USB write-back (C8) and the plugin as a Qt5 build (C9, C10).
 
 - **Desktop client with a graphical UI** (L): right after the CLI
   mapping, on the same library: devices and books, creating mappings,
@@ -232,19 +255,25 @@ fixtures only.
   and Shine Color databases in `tests/fixtures/db/`.
 - **Position translation, back to the Kobo** (S–M, stage C1 of the
   on-device client): KOReader XPointer → Kobo span with offset (kepub) is
-  done and checked on 6.0 (see "Recently completed"); the
-  4.x Adobe point only against the fixtures. Back to the Tolino is done.
+  done and checked on 6.0 (see "Recently completed"); Kobo 4.x (the
+  Adobe point that joins text, the span without an offset) is done
+  against the 4.46 fixtures (stage C8), the device test on the Libra 2
+  (4.38) is open. Back to the Tolino is done.
 - **USB write-back on the Kobo** (S–M): `pull --write` works on the
   Tolino and for EPUBs on the Kobo 6.0; into a mapped kepub it writes the
   span with offset (see "Recently completed"), checked on the Clara BW. The desktop client's "Get" and "Get all" take mapped
-  kepubs too.
+  kepubs too. On Kobo 4.x (C8) both write the 4.x point and the span
+  without offset; to be checked on the Libra 2.
 - **Messages in the Tolino plugin** (S): each outcome of opening and
   leaving a book as one of Nickel's toasts, chosen by `notify` in
   `config.ini` (`all`, `errors`, `none`). Verified on the Tolino, also
   opening within the chapter last read. Still to do: English texts (the
   plugin logs `QLocale()`, `de_DE` so far).
-- **On-device client for the Kobo 6.0 and the Tolino** (L): one plugin
-  for both devices, after the desktop client. Opening a book takes a
+- **On-device client for the Kobo 6.0 and the Tolino** (L, release
+  0.1.0, experimental): one plugin for both devices, plus a Qt5 build
+  (`KoboRoot.tgz`) for Kobo 4.x (C9, C10); stages C0–C3 are done (PRs
+  #66, #55, #64, #67), the plugin itself (C4–C7) is next. Like today's plugin
+  it stays idle while Kobalt is installed (N7). Opening a book takes a
   newer server position, written through Nickel itself as Kobalt (MIT)
   does (`VolumeManager::updateBookmark`/`updateFields` in Nickel's
   transaction, which keeps Nickel's book cache in step), dropping the

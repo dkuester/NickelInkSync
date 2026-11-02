@@ -51,6 +51,25 @@ pub fn fake_device(name: &str, sql: &str, version: &str) -> PathBuf {
   root
 }
 
+/// A library index on the fake device, as `device prepare` leaves it,
+/// with the device's own `Books/` files as the originals: `push --live`
+/// sends only with one.
+pub fn index(root: &Path, books: &[&str]) {
+  let books: Vec<Value> = books
+    .iter()
+    .map(
+      |b| json!({"hash": nickelinksync::hash::partial_md5(&root.join("Books").join(b)).unwrap()}),
+    )
+    .collect();
+  let dir = root.join(".adds/NickelInkSync");
+  fs::create_dir_all(&dir).unwrap();
+  fs::write(
+    dir.join("library.json"),
+    json!({"format": 1, "created": "2026-01-01T00:00:00Z", "books": books}).to_string(),
+  )
+  .unwrap();
+}
+
 /// A fake Kindle: the Kindle fixtures where Send-to-Kindle puts them.
 pub fn fake_kindle(name: &str) -> PathBuf {
   let root = std::env::temp_dir().join(format!("nickelinksync-{}-{name}", std::process::id()));

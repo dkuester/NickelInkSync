@@ -69,6 +69,9 @@ pub struct Loaded {
   /// Kobalt is installed: nothing is written (`writable` is false), and
   /// sending may meet Kobalt's own KOSync.
   pub kobalt: bool,
+  /// When the device was last prepared for syncing on its own (the index's
+  /// time); `None` if it never was, or for a Kindle.
+  pub prepared: Option<String>,
 }
 
 pub(crate) fn options(root: &Path) -> Options {
@@ -181,6 +184,10 @@ fn load_nickel(
     rows,
     writable: !session.kobalt.blocks(),
     family: Some(session.family),
+    prepared: nickelinksync::prepare::Prepared::load(&session.device.root)
+      .ok()
+      .flatten()
+      .map(|p| p.index.created),
     kobalt: session.kobalt.blocks(),
   })
 }
@@ -260,6 +267,7 @@ fn load_kindle(
     rows,
     writable: false,
     family: None,
+    prepared: None,
     kobalt: false,
   })
 }
@@ -404,6 +412,20 @@ mod tests {
       .unwrap();
     }
     root
+  }
+
+  #[test]
+  fn the_view_shows_whether_the_device_is_prepared() {
+    let _data = isolate();
+    let root = fake_tolino("prepared");
+    let loaded = load(&root, Kind::Nickel, &mut |_, _| {}).unwrap();
+    assert_eq!(loaded.prepared, None);
+    let library = Library::open(&fixtures().join("epub")).unwrap();
+    let mut store = nickelinksync::session::load_store().unwrap();
+    nickelinksync::prepare::prepare(&root, &library, &mut store, &mut |_, _| {}).unwrap();
+    let loaded = load(&root, Kind::Nickel, &mut |_, _| {}).unwrap();
+    assert!(loaded.prepared.is_some(), "{:?}", loaded.prepared);
+    fs::remove_dir_all(&root).unwrap();
   }
 
   #[test]

@@ -18,7 +18,7 @@ the same progress.
 > `nickelinksync push` sends the reading position of each sideloaded book
 > to a KOSync server, `status` shows the device and server positions side by
 > side, and `pull` shows what a newer server position would change; on a
-> Tolino, `pull --write` writes it to the device (experimental, with a
+> Tolino or Kobo, `pull --write` writes it to the device (experimental, with a
 > backup first). The scope and the device-database findings it
 > rests on are in [SCOPE.md](SCOPE.md), the next steps are in
 > [ROADMAP.md](ROADMAP.md).
@@ -35,7 +35,7 @@ nickelinksync pull --device /Volumes/KOBOeReader
 |---|---|
 | `status` | Lists the sideloaded books with hash, stored position, KOReader XPointer and, if configured, the position on the server. |
 | `push` | Sends each book's position to the server. A position the server got after the book was last read on the device is never overwritten; by default it also asks before moving the server back to an earlier place in the book (see `confirm` below). `--force` sends without asking, `--dry-run` only shows what would be sent. |
-| `pull` | Shows which books have a newer position on the server, how the device would store it and where it would ask first. Only with `--write` is it written to the device (Tolino so far, experimental, see below); `--force` takes the server position without asking. |
+| `pull` | Shows which books have a newer position on the server, how the device would store it and where it would ask first. Only with `--write` is it written to the device (Tolino and Kobo, experimental, see below); `--force` takes the server position without asking. |
 | `sync --pending` | Sends the books whose push failed on the device (no network, a server error), as kept in `.adds/NickelInkSync/state.json`, if they still should be sent (see [The last agreed position](#the-last-agreed-position)). |
 
 All three take `--book <text>` to limit them to books whose title or file
@@ -143,9 +143,9 @@ found by the 32 characters after it), *chapter start only* (the place in
 the chapter was not found), *from the percentage only* (the chapter is not
 in the other file, for example calibre's `titlepage.xhtml`). `pull
 --write` moves the server position back into a mapped EPUB on the Tolino
-the same way, and into a mapped kepub on a Kobo with firmware 6.x as the
-span Nickel stores (`#kobo.N.M:offset`); a kepub on Kobo firmware 4.x is
-not written.
+the same way, and into a mapped kepub on a Kobo as the span Nickel stores:
+`#kobo.N.M:offset` on firmware 6.x, `#kobo.N.M` on 4.x (which stores no
+offset, so the book opens at the start of that span, usually a sentence).
 
 **Kindle (experimental).** Kindle support stays as it is until Kobo and
 Tolino are stable: no further work on it, and no device test before 0.1.0.
@@ -165,8 +165,48 @@ nickelinksync map add --device ~/Kindle-copy --book "Good Boy" --library ~/Calib
 nickelinksync push --device ~/Kindle-copy
 ```
 
-The mappings are only read on the computer: the Tolino plugin syncs every
-book under its own checksum, as before.
+**Mappings on the device.** The plugin on the device has no library
+and no original EPUBs, so the computer prepares the device for it:
+
+```sh
+nickelinksync device prepare --device /Volumes/KOBOeReader --library ~/Calibre\ Library
+```
+
+`device prepare` writes three things into `.adds/NickelInkSync/` on the
+Kobo or Tolino, and nothing else on it (never an EPUB):
+
+- `library.json`, the **library index**: title, authors and checksum of
+  every original EPUB in the library;
+- `mappings.json`, the mappings of the books on this device, the same as
+  in `map list`;
+- `tables/<checksum>.json`, a **translation table** for each mapped book:
+  for each chapter of the original its path, where its paragraphs and
+  sentences start and KOReader's path to each text node (no text of the
+  book), and where the device file's text differs from the original's.
+
+With them the CLI on the device (`--live`, run by the plugin) syncs a
+mapped book under its original's checksum and translates its position as
+the computer does with the original EPUB: the paragraph or sentence start
+it sends (`position = paragraph` or `sentence`) is the same; with
+`position = exact`, and for the server's position on the way back, the
+place inside a sentence may be a few characters off ("placed between the
+table's anchors"). On the device:
+
+| Book | Synced |
+|---|---|
+| mapped, with its table | under the original EPUB's checksum, the position translated |
+| mapped, table missing (mapped on the device, not prepared since) | not at all ("no-table") |
+| a kepub that is not mapped | not at all ("not-mapped") |
+| in the index as an original, or the original of a mapping | under its own checksum |
+| none of these | not at all ("not-mapped") |
+| device not prepared (no `library.json`) | `pull` under its own checksum; **`push` sends nothing** |
+
+Run `device prepare` again after mapping, adding or converting books. A
+mapping made or removed on the device (planned in the plugin) is taken
+over into `mappings.json` on the computer: the original is found by its
+checksum in the library. A kepub that the desktop client copies to a
+prepared Kobo gets its table at once. A table is written again only when
+the device file or its original changed.
 
 **Library.** The original EPUBs come from a folder given with `--library`
 or as `library` in the configuration file. If it holds a Calibre library
@@ -228,7 +268,11 @@ backup of it in the data directory, as `pull --write` does; a `confirm`
 question comes as the same dialog (keep the device's, or take the
 server's), and the device is read again afterwards. Eject the device
 before you open the book, and restart it when the notice says so. "History" lists what the CLI and the window
-sent and wrote (`history.jsonl` in the data directory). "Restore a backup …" puts back
+sent and wrote (`history.jsonl` in the data directory). "Prepare device" does what
+`device prepare` does, with its progress: the library's index, the mappings
+and their translation tables go onto a Kobo or Tolino, so the plugin can
+sync there without the computer; until then the window says the device is
+not prepared. "Restore a backup …" puts back
 one of the device's database backups (as `restore` does). "Add from
 library" copies books of the library to `Books/` on a Kobo or Tolino,
 never over a file that is there or an EPUB already on the device; on a
@@ -415,7 +459,7 @@ Tolino starts).
 
 ## Devices and books
 
-- Kobo on firmware 4.x and Tolino Shine 5, Shine Color and Vision Color on
+- Kobo on firmware 4.x and 6.x, and Tolino Shine 5, Shine Color and Vision Color on
   firmware 5.x
 - Sideloaded kepub and EPUB books without DRM
 - For now, put the **same file** on every device. The sync server tells

@@ -41,6 +41,7 @@ impl Setup {
       "tolino-shinecolor-5.18-placeholder-books.sql",
       TOLINO_VERSION,
     );
+    common::index(&root, &["book-a.epub"]);
     let server = MockServer::start();
     let config = server.config(&root, common::PASSWORD);
     Setup {
