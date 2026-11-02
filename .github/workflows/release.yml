@@ -76,8 +76,11 @@ jobs:
           path: dist/*.zip
           if-no-files-found: error
 
-  # The device package (experimental): Kobo.tgz for .kobo/ and the folder
-  # for .adds/, built as in ci.yml.
+  # The device package (experimental): Kobo.tgz for .kobo/ (Kobo 6.x,
+  # Tolino 5.x), kobo-4.x/KoboRoot.tgz for .kobo/ on Kobo 4.x, and the
+  # folder for .adds/, built as in ci.yml. KoboRoot.tgz sits in a folder of
+  # its own so it is clear which file is for which firmware (6.0's
+  # /etc/init.d/ota applies only Kobo.tgz).
   device:
     needs: version
     runs-on: ubuntu-latest
@@ -97,14 +100,19 @@ jobs:
           docker run --rm --volume="$PWD:$PWD" --workdir="$PWD" ghcr.io/dkuester/nickelstorygraph-toolchain:latest \
             'make -C plugin && make -C plugin kobo'
           test "$(tar -tzf plugin/Kobo.tgz)" = "imageformats/libnickelinksync.so" || { echo "::error::Unexpected Kobo.tgz layout"; exit 1; }
+      - name: Plugin build (Qt 5, KoboRoot.tgz)
+        run: |
+          tools/build_plugin_qt5.sh
+          test "$(tar -tzf plugin/KoboRoot.tgz)" = "./usr/local/Kobo/imageformats/libnickelinksync.so" || { echo "::error::Unexpected KoboRoot.tgz layout"; exit 1; }
       - name: Package
         env:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           name="NickelInkSync-$VERSION-device"
           d="dist/$name"
-          mkdir -p "$d/.adds/NickelInkSync"
+          mkdir -p "$d/.adds/NickelInkSync" "$d/kobo-4.x"
           cp plugin/Kobo.tgz "$d/"
+          cp plugin/KoboRoot.tgz "$d/kobo-4.x/"
           install -m 755 target/armv7-unknown-linux-musleabihf/release/nickelinksync "$d/.adds/NickelInkSync/"
           cp plugin/config.ini.example "$d/.adds/NickelInkSync/"
           cp LICENSE "$d/LICENSE.txt"
