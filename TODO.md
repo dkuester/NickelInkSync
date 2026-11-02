@@ -912,10 +912,12 @@ Entscheidungen des Besitzers (2026-10-31):
     Sitzung schon offen war. CLI, Desktop-Client und READMEs sagen jetzt
     „auswerfen“, den Neustart nur als Rückfall
     (`docs/nickel-6.0-symbols.md`, „Restart after a USB write“).
-  - [ ] **du:** Gerätetest ohne Neustart am Clara BW und am Tolino:
-    Kapitelanfang von Book R lesen, verlassen, in KOReader weiter ins
-    selbe Kapitel, `pull --write` über USB („Dropped …“), nur auswerfen,
-    öffnen.
+  - [x] **du:** Gerätetest ohne Neustart am Tolino (2.11., 5.18.279364,
+    Book R EPUB, Plugin aus): Kapitel 2 ab Anfang gelesen, in KOReader
+    R2-178, `pull --write` verwarf 27 Seiten, nur ausgeworfen: öffnete bei
+    R2-178. (Ein erster Lauf mit R2-121 lag in einer gespeicherten Seite,
+    nichts verworfen, ebenfalls richtig.)
+  - [ ] **du:** Derselbe Gerätetest am Clara BW (6.0).
   - [ ] **ich (falls das Plugin ohne Neustart nicht reicht):** die Seiten
     über Nickel selbst verwerfen (`PersistedCacheManager`); als letzter
     Ausweg `deleteAllRelatedToBookInfo`. Früherer Plan, falls auch das

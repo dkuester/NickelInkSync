@@ -218,8 +218,14 @@ then is open.
 **Consequence.** The CLI and the desktop client say "eject" after dropping
 pages, with a restart only as the fallback if the book still opens at the
 chapter start. Restoring a backup still asks for a restart (the whole
-database is replaced; not checked). Not checked: the Tolino VM (same code
-path) and a device test without a restart on the Clara BW and the Tolino.
+database is replaced; not checked).
+
+**Device test, Tolino 5.18.279364 (2 November).** Book R EPUB, plugin off,
+Kobalt removed. Chapter 2 read from its start, KOReader at R2-178;
+`pull --write` dropped 27 cached pages of chapter 2 (its first page among
+them), the device was only ejected, and Book R opened at R2-178. An
+earlier run with R2-121, which lay in a cached page, dropped nothing and
+opened right too. Not checked yet: the same on the Clara BW.
 Kobo 4.x: whether 4.38 has the `CachePersistence*` tables is open; the
 CLI drops pages only when they exist.
 
