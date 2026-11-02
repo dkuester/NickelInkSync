@@ -400,6 +400,13 @@ vorbereitet“). Ein kepub ohne Zuordnung synchronisiert nie.
 4. `Kobo.tgz` in den versteckten Ordner `.kobo/` kopieren und auswerfen.
    Der E-Reader installiert das Plugin und startet neu.
 
+Ein Kobo mit Firmware **4.x** braucht stattdessen die Qt-5-Fassung:
+`KoboRoot.tgz` (im Gerätepaket des Releases unter `kobo-4.x/`, aus CI als
+`NickelInkSync-kobo4-KoboRoot` oder mit `just plugin-qt5`) kommt statt
+`Kobo.tgz` nach `.kobo/` (jede Firmware installiert nur ihre eigene
+Datei). Auf 4.x lädt das Plugin und
+meldet das im Log, synchronisiert aber noch nicht.
+
 Das Log steht in `.adds/NickelInkSync/NickelInkSync.log`. Das Plugin schaltet
 das WLAN selbst ein, wenn es es braucht; „Jetzt synchronisieren“ des
 E-Readers ist nicht nötig (das ist die Kobo- bzw. Tolino-Cloud). Beim Öffnen
@@ -507,7 +514,9 @@ Es liegt dann unter `target/armv7-unknown-linux-musleabihf/release/nickelinksync
 Das Plugin (`plugin/`, NickelHook als Submodul) wird für Qt 6.5.2 im
 Toolchain-Image `ghcr.io/dkuester/nickelstorygraph-toolchain` gebaut
 (Docker, amd64): `just plugin` erzeugt `plugin/Kobo.tgz`, `just package`
-legt es mit dem Geräteprogramm in `dist/NickelInkSync/` zusammen. Mit
+legt es mit dem Geräteprogramm in `dist/NickelInkSync/` zusammen. Die
+Qt-5-Fassung für Kobo 4.x entsteht aus derselben Quelle in NickelTC
+(`strayrose/nickeltc`): `just plugin-qt5` erzeugt `plugin/KoboRoot.tgz`. Mit
 `--recurse-submodules` klonen oder `git submodule update --init` ausführen.
 
 ### Release

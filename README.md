@@ -411,6 +411,12 @@ without a mapping never syncs.
 4. Copy `Kobo.tgz` into the hidden `.kobo/` folder and eject. The
    e-reader installs the plugin and restarts.
 
+A Kobo on firmware **4.x** needs the Qt 5 build instead: `KoboRoot.tgz`
+(in the release's device package under `kobo-4.x/`, from CI as
+`NickelInkSync-kobo4-KoboRoot`, or `just plugin-qt5`) goes into `.kobo/`
+in place of `Kobo.tgz` (each firmware installs only its own file). On 4.x the plugin loads and says so in its log, but
+does not sync yet.
+
 The log is `.adds/NickelInkSync/NickelInkSync.log`. The plugin switches
 Wi-Fi on when it needs it; there is no need for the e-reader's own
 "Sync now" (that is the Kobo or Tolino cloud). Opening a book waits at
@@ -513,7 +519,9 @@ The binary is `target/armv7-unknown-linux-musleabihf/release/nickelinksync`.
 The plugin (`plugin/`, NickelHook as a submodule) is built for Qt 6.5.2 in
 the toolchain image `ghcr.io/dkuester/nickelstorygraph-toolchain` (Docker,
 amd64): `just plugin` gives `plugin/Kobo.tgz`, `just package` puts it
-together with the device binary into `dist/NickelInkSync/`. Clone with
+together with the device binary into `dist/NickelInkSync/`. The Qt 5 build
+for Kobo 4.x comes from the same source in NickelTC (`strayrose/nickeltc`):
+`just plugin-qt5` gives `plugin/KoboRoot.tgz`. Clone with
 `--recurse-submodules`, or run `git submodule update --init`.
 Each CI run uploads the same file as the artifact `nickelinksync-armv7-musleabihf`.
 

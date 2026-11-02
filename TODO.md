@@ -1262,10 +1262,12 @@ Auf dem Kobo ist das Plugin inaktiv.
     Klassen), Build, ARM, Qt 5, Handler, Layout; Artefakt
     `NickelInkSync-kobo4-KoboRoot`. Jedes Symbol des gebauten Plugins
     löst gegen libnickel, Qt und libc von 4.38 auf. Auf 4.x gibt es
-    NickelMenu upstream (pgaskin, Qt5) für C6. **Offen:** Das Gerätepaket
-    im Release-Workflow (PR #62, die D2-Session ist archiviert) bekommt
-    `KoboRoot.tgz` erst nach dem Merge von #62 (Schritt in der Notiz
-    `2026-11-01-kobo-c9-handover.md`).
+    NickelMenu upstream (pgaskin, Qt5) für C6. Nach dem Merge von #62
+    (2026-11-02) baut der Release-Workflow die Qt5-Fassung mit und legt
+    sie als `kobo-4.x/KoboRoot.tgz` ins Gerätepaket (eigener Ordner,
+    damit klar ist, welche Datei wofür ist; 6.0 wendet laut
+    `/etc/init.d/ota` nur `Kobo.tgz` an); Release-Notes und READMEs sagen,
+    welche Datei für welche Firmware ist.
   - [x] **du:** Am Libra 2 geprüft (2026-11-02, 4.38.23852): `KoboRoot.tgz`
     installiert, das Plugin lädt und meldet im Log `inactive: Kobo firmware
     4.x (Qt 5.2.1), plugin loaded; syncing on 4.x follows later`; Öffnen und
