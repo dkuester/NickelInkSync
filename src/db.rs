@@ -111,7 +111,8 @@ impl Device {
   /// `-wal` file into the database, so the device holds one file again.
   ///
   /// Returns how many of Nickel's cached pages it dropped (see
-  /// [`drop_stale_pages`]); Nickel only lets go of them after a restart.
+  /// [`drop_stale_pages`]). Nickel looks them up in the database at every
+  /// opening, so ejecting is enough.
   pub fn write_positions(&self, writes: &[Write], backup: &Path) -> Result<usize, Error> {
     if self.live {
       return Err(Error::Refused(
@@ -343,9 +344,9 @@ fn update_rows(conn: &mut Connection, writes: &[Write]) -> Result<usize, Error> 
 /// Since Kobo 6.0 and Tolino 5.18.279364 Nickel opens a book from its cache
 /// of rendered pages (`CachePersistence*` tables, see
 /// docs/nickel-5.18-symbols.md): if no cached page holds the bookmarked
-/// place, it takes the first cached page of that chapter
-/// (`getByChapterInPersistence` in the log), which is the chapter start in
-/// practice. So when no cached page holds `position`, this drops the cached
+/// place, it takes the chapter's first page if that one is cached
+/// (`getByChapterInPersistence` in the log). It looks the pages up in the
+/// database at every opening, so dropping them needs no restart. So when no cached page holds `position`, this drops the cached
 /// pages of its chapter, and Nickel renders the page at the place. The other
 /// chapters keep theirs. Returns how many pages it dropped; 0 without those
 /// tables (older firmware).

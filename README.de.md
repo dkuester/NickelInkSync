@@ -86,11 +86,11 @@ dann mit). Wirf das Gerät aus, bevor
 du das Buch öffnest. Auf dem Kobo 6.0 und dem Tolino 5.18.279364 öffnet
 Nickel ein Buch aus seinem Zwischenspeicher fertig gezeichneter Seiten und,
 wenn keine gespeicherte Seite die geschriebene Stelle enthält, auf der
-ersten gespeicherten Seite dieses Kapitels. Deshalb verwirft das Schreiben
-auch die gespeicherten Seiten dieses Kapitels (nur dieses Kapitels und nur,
-wenn keine die Stelle enthält); es meldet das, und dann musst du das Gerät
-neu starten, nicht nur auswerfen, weil Nickel diese Seiten im Speicher
-hält.
+ersten Seite dieses Kapitels, wenn diese gespeichert ist. Deshalb verwirft
+das Schreiben auch die gespeicherten Seiten dieses Kapitels (nur dieses
+Kapitels und nur, wenn keine die Stelle enthält) und meldet das. Nickel
+sucht diese Seiten bei jedem Öffnen in der Datenbank, deshalb reicht das
+Auswerfen; öffnet das Buch trotzdem am Kapitelanfang, starte das Gerät neu.
 
 Rückgängig machen: `nickelinksync restore --device /Volumes/KOBOeReader`
 listet die Sicherungen dieses Geräts, die neueste zuerst, und `--backup
@@ -283,8 +283,7 @@ installiertem Kobalt) schreiben „Holen“ und „Alle holen“ die Stelle vom 
 Gerätedatenbank, vorher legt es eine Sicherung im Datenordner an, wie
 `pull --write`; eine Rückfrage kommt im selben Dialog (Gerät behalten oder
 Server übernehmen), danach liest es das Gerät neu ein. Wirf das Gerät
-aus, bevor du das Buch öffnest, und starte es neu, wenn die Meldung das
-verlangt. „Verlauf“ zeigt, was CLI und Fenster
+aus, bevor du das Buch öffnest. „Verlauf“ zeigt, was CLI und Fenster
 gesendet und geschrieben haben (`history.jsonl` im Datenordner).
 „Aus Bibliothek hinzufügen“ kopiert Bücher der Bibliothek nach `Books/`
 auf einem Kobo oder Tolino, nie über eine vorhandene Datei und nicht, wenn

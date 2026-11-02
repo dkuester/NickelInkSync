@@ -351,19 +351,20 @@ pub fn report(lang: Lang, report: &crate::sync::Report) -> String {
       Lang::De => format!("\nSicherung der Gerätedatenbank: {}", backup.display()),
       Lang::En => format!("\nBackup of the device database: {}", backup.display()),
     });
-    // Nickel keeps the dropped pages in memory until it restarts.
+    // Nickel looks its cached pages up in the database at every opening, so
+    // ejecting is enough; the restart is only the fallback.
     line.push_str(&match (lang, n) {
       (Lang::De, 0) => "\nGerät auswerfen, bevor du das Buch öffnest.".to_string(),
       (Lang::En, 0) => "\nEject the device before you open the book.".to_string(),
       (Lang::De, n) => format!(
         "\n{n} zwischengespeicherte Seiten von Nickel verdeckten die Stelle und wurden entfernt. \
-         Gerät auswerfen und neu starten, bevor du das Buch öffnest: Nickel hält diese Seiten \
-         bis zum Neustart im Speicher."
+         Gerät auswerfen, bevor du das Buch öffnest; öffnet es trotzdem am Kapitelanfang, das \
+         Gerät neu starten."
       ),
       (Lang::En, n) => format!(
-        "\nDropped {n} of Nickel's cached pages that hid the place. Eject the device and \
-         restart it before you open the book: Nickel keeps those pages in memory until it \
-         restarts."
+        "\nDropped {n} of Nickel's cached pages that hid the place. Eject the device before \
+         you open the book; should it still open at the start of the chapter, restart the \
+         device."
       ),
     });
   }

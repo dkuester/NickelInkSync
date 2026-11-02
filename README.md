@@ -80,10 +80,11 @@ rollback journal (`-journal`) lies next to the database. The `-wal` and
 into the database (the backup then holds their content too). Eject the device before you open
 the book. On Kobo 6.0 and Tolino 5.18.279364 Nickel opens a book from its
 cache of rendered pages and, when no cached page holds the written place,
-at the first cached page of that chapter. So the write also drops the
-cached pages of that chapter (only of that chapter, and only when none
-holds the place); it then says so, and the device has to be restarted, not
-only ejected, because Nickel keeps those pages in memory.
+at the first page of that chapter if that page is cached. So the write also
+drops the cached pages of that chapter (only of that chapter, and only when
+none holds the place) and says so. Nickel looks these pages up in the
+database each time it opens a book, so ejecting is enough; should the book
+still open at the start of the chapter, restart the device.
 
 To undo, `nickelinksync restore --device /Volumes/KOBOeReader` lists the
 backups of that device, newest first, and `--backup PATH` puts one back:
@@ -267,7 +268,7 @@ write the server's position into the device database, after a
 backup of it in the data directory, as `pull --write` does; a `confirm`
 question comes as the same dialog (keep the device's, or take the
 server's), and the device is read again afterwards. Eject the device
-before you open the book, and restart it when the notice says so. "History" lists what the CLI and the window
+before you open the book. "History" lists what the CLI and the window
 sent and wrote (`history.jsonl` in the data directory). "Prepare device" does what
 `device prepare` does, with its progress: the library's index, the mappings
 and their translation tables go onto a Kobo or Tolino, so the plugin can
