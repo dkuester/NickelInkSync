@@ -560,13 +560,20 @@ static void when_online(int seconds, F fn)
     }
     log_line(QStringLiteral("no network: switching Wi-Fi on, waiting up to %1 s").arg(seconds));
     QTimer *t = new QTimer(qApp);
-    int n = 0;  // C++11 for the Qt 5 build: no init-capture
-    QObject::connect(t, &QTimer::timeout, t, [t, fn, seconds, n]() mutable {
+    // No state in the lambda: Qt 5.2 calls a connected functor through a
+    // copy (QtPrivate::FunctorCall takes it by value), so a counter in a
+    // mutable lambda stayed 0 and the wait never ended on 4.x (device test
+    // on the Libra 2).
+    const qint64 start = QDateTime::currentMSecsSinceEpoch();
+    QObject::connect(t, &QTimer::timeout, t, [t, fn, seconds, start] {
+        const qint64 waited_s = (QDateTime::currentMSecsSinceEpoch() - start + 500) / 1000;
         if (online()) {
+            t->stop();
             t->deleteLater();
-            log_line(QStringLiteral("network is there after %1 s").arg(n + 1));
+            log_line(QStringLiteral("network is there after %1 s").arg(waited_s));
             fn();
-        } else if (++n >= seconds) {
+        } else if (waited_s >= seconds) {
+            t->stop();
             t->deleteLater();
             log_line(QStringLiteral("still no network after %1 s: trying anyway").arg(seconds));
             fn();

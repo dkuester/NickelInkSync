@@ -119,6 +119,10 @@ The differences are `#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)` blocks:
   signal; `finished` through a cast to `(int, QProcess::ExitStatus)`, which
   both have.
 - No C++14 lambda capture initialiser (GCC 4.9 in C++11 mode).
+- No state in a lambda connected to a signal: Qt 5.2 calls it through a
+  copy (`QtPrivate::FunctorCall::call(Function f, …)` takes it by value),
+  so a counter in a `mutable` lambda never changes (found on the Libra 2,
+  C10).
 
 Since C10 the Qt5 build behaves on 4.x as the Qt6 build on a Kobo 6.0
 (opening, leaving, pending list, Kobalt guard: Kobalt installs into the

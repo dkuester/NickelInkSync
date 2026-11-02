@@ -1331,7 +1331,18 @@ Auf dem Kobo ist das Plugin inaktiv.
     geht dieser Aufruf direkt an Nickels `setVolume` (`g_in_original`),
     sonst entstünde eine Endlosschleife (Befund der Session
     „Hook-Konflikt NickelStorygraph auf 5.18/6.x prüfen“).
-  - [ ] **du:** Dieselben Tests wie C4 am **Libra 2** (Anleitung im PR).
+  - [x] **du/ich:** Zweiter Gerätetest am Libra 2 (2026-11-02, kepub):
+    Öffnen übernimmt den Server-Stand (R1-27, „Fortschritt übernommen“),
+    nicht zugeordnete Bücher melden „Buch nicht zugeordnet“. Aber offline
+    gelesen und geschlossen kam keine Meldung und nichts wurde vorgemerkt;
+    gesendet wurde erst, als später WLAN da war. Ursache: Qt 5.2 ruft ein
+    verbundenes Lambda über eine Kopie auf, der Zähler im `mutable`-Lambda
+    von `when_online()` blieb 0, das Warten endete nie. Jetzt mit fester
+    Startzeit statt Zähler. Der „Konflikt“ blieb aus, weil `config.ini`
+    dort `confirm = never` hat (dann gewinnt der neuere Stand, kein
+    Konflikt).
+  - [ ] **du:** Dieselben Tests wie C4 am **Libra 2** (Anleitung im PR),
+    ab „offline lesen → vorgemerkt“, dann EPUB.
 - [ ] **C7 Tolino** (braucht C4 bis C6)
   - [ ] **ich:** Dasselbe Plugin auf dem Shine Color; Kobalts Schreibweg
     dort prüfen (Kobalt schreibt auf `develop` seit 8b144d2 auch auf dem
