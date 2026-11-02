@@ -1348,8 +1348,14 @@ Auf dem Kobo ist das Plugin inaktiv.
     Buch“; KOReader R2-130, Libra 2 offline R2-197 → „Konflikt, nicht
     geladen“, beim Verlassen „Nicht gesendet“. Ohne `library.json` meldet
     das Plugin beim Öffnen „Buch nicht zugeordnet“ statt „Gerät nicht
-    vorbereitet“: `pull` meldet ohne Index `not-mapped`, `NO_INDEX` kommt
-    nur von `push`, und der wird danach nicht mehr versucht (wie bei C4).
+    vorbereitet“: `pull` meldete ohne Index `not-mapped`, `NO_INDEX` kam
+    nur von `push`, und der wurde danach nicht mehr versucht (wie bei C4).
+    Behoben (von dir gewünscht, in PR #77): `pull --live --emit` meldet
+    ohne `library.json` zuerst `NICKELINKSYNC_NO_INDEX` (Holen bleibt
+    erlaubt, `tests/prepare.rs`), das Plugin nennt dann beim Öffnen „Gerät
+    nicht vorbereitet“ (einmal pro Start mit dem Hinweis „Am Rechner
+    ‚Gerät vorbereiten‘“), auf Kobo 6.0 und Tolino ebenso. Am Gerät noch
+    nicht geprüft.
   - [x] **du:** Dieselben Tests mit dem EPUB von Book R am **Libra 2**
     (2026-11-02): KOReader R3-10 → Libra 2 öffnet bei R3-10 („Fortschritt
     übernommen“, `chapter3.xhtml#point(/1/4/20/1:208)` geschrieben, Nickel
@@ -1361,6 +1367,13 @@ Auf dem Kobo ist das Plugin inaktiv.
     einmal erst beim Öffnen von Book P: das Warten auf WLAN dauerte dort
     35 s statt 15 (Nickel war beschäftigt) und der Push ohne DNS noch 8 s,
     die Meldung gehörte zu Book R.
+  - [ ] **du:** Kobalt-Schutz am **Libra 2**: Kobalt (Qt5) installieren,
+    ohne `.adds/NickelInkSync/ignore-kobalt`; Öffnen und Schließen ändern
+    nichts, das Log meldet `inactive: Kobalt is installed`, die Meldung
+    „NickelInkSync ist aus“ kommt einmal (aus Zeitgründen am 2026-11-02
+    nicht mehr getestet).
+  - [ ] **du:** Ohne `library.json` öffnen: „Gerät nicht vorbereitet“
+    statt „Buch nicht zugeordnet“ (Änderung nach dem Gerätetest).
 - [ ] **C7 Tolino** (braucht C4 bis C6)
   - [ ] **ich:** Dasselbe Plugin auf dem Shine Color; Kobalts Schreibweg
     dort prüfen (Kobalt schreibt auf `develop` seit 8b144d2 auch auf dem

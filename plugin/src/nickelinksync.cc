@@ -64,8 +64,10 @@
  * sends them in the background.
  *
  * Not prepared: without the library index from `nickelinksync device
- * prepare` (on the computer) the CLI sends nothing (NICKELINKSYNC_NO_INDEX);
- * the plugin says so once per start. A kepub without a mapping never syncs.
+ * prepare` (on the computer) the CLI sends nothing and knows no mapped
+ * book (NICKELINKSYNC_NO_INDEX, from pull and push); the plugin says so
+ * once per start, and names it instead of "not mapped" when a book opens.
+ * A kepub without a mapping never syncs.
  *
  * Network: Nickel switches Wi-Fi off when idle. The plugin asks it to connect
  * without a dialog (WirelessWorkflowManager::connectWireless(false, true),
@@ -455,6 +457,9 @@ static QString skip_reason(const QByteArray &reason)
 }
 
 static const QString kUnansweredReason = QStringLiteral("Braucht Bestätigung (confirm)");
+// A device without `device prepare` (NICKELINKSYNC_NO_INDEX).
+static const QString kNotPrepared = QStringLiteral("Gerät nicht vorbereitet");
+static const QString kPrepareHint = QStringLiteral("Am Rechner „Gerät vorbereiten“");
 
 static bool exists(const char *path)
 {
@@ -931,7 +936,7 @@ static void notice_no_index(const QByteArray &out)
         return;
     }
     g_no_index_noticed = true;
-    toast(true, QStringLiteral("Gerät nicht vorbereitet"), QStringLiteral("Am Rechner „Gerät vorbereiten“"));
+    toast(true, kNotPrepared, kPrepareHint);
 }
 
 // NICKELINKSYNC_CONFLICT (ContentID, why, device percent, time, position,
@@ -958,6 +963,9 @@ struct Pulled {
     bool conflict = false;
     // The server's position cannot be taken (NICKELINKSYNC_NOT_TAKEN): why.
     QByteArray not_taken;
+    // The device was not prepared (NICKELINKSYNC_NO_INDEX): a mapped book is
+    // unknown then, and nothing is sent.
+    bool no_index = false;
     bool found = false;
     int percent = 0;
     QByteArray position;
@@ -1011,6 +1019,7 @@ static Pulled pull(const QString &id)
         return result;
     }
     result.ok = true;
+    result.no_index = !machine_lines(out, "NO_INDEX").isEmpty();
     result.unanswered = !machine_lines(out, "UNANSWERED").isEmpty();
     result.conflict = !machine_lines(out, "CONFLICT").isEmpty();
     log_conflicts(out);
@@ -1344,11 +1353,19 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
         return;
     }
     if (!p.not_taken.isEmpty()) {
+        // Without `device prepare` a mapped book reads as not mapped; the
+        // missing preparation is the reason to name.
+        const bool unprepared = p.no_index && p.not_taken == "not-mapped";
         g_not_synced = id;
-        g_not_synced_why = skip_reason(p.not_taken);
+        g_not_synced_why = unprepared ? kNotPrepared : skip_reason(p.not_taken);
         log_line(QStringLiteral("open %1 unchanged: the server's position cannot be taken; leaving it will not push").arg(id));
         open_original(self, volume, bookmark);
-        toast(true, QStringLiteral("Nicht übernommen"), skip_reason(p.not_taken), kOpenToastDelayMs);
+        if (unprepared && !g_no_index_noticed) {
+            g_no_index_noticed = true;
+            toast(true, kNotPrepared, kPrepareHint, kOpenToastDelayMs);
+        } else {
+            toast(true, QStringLiteral("Nicht übernommen"), g_not_synced_why, kOpenToastDelayMs);
+        }
         return;
     }
     if (!p.found) {

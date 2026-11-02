@@ -86,7 +86,10 @@ enum Command {
     /// `NICKELINKSYNC_UNANSWERED<tab>n` if positions need an answer,
     /// `NICKELINKSYNC_NOT_TAKEN<tab>reason<tab>
     /// message` for one that cannot be taken, and `NICKELINKSYNC_ERROR<tab>
-    /// kind<tab>message` if the server could not be asked
+    /// kind<tab>message` if the server could not be asked;
+    /// `NICKELINKSYNC_NO_INDEX<tab>message` first if the device was not
+    /// prepared (with --live: taking stays allowed, but mapped books are
+    /// unknown and nothing is sent later)
     #[arg(long)]
     emit: bool,
   },
@@ -1112,6 +1115,12 @@ fn pull(
   let mut session = open_session(&options)?;
   if write || nickel_writes {
     session.kobalt.check()?;
+  }
+  if emit {
+    // Taking stays allowed; the plugin says why a mapped book is unknown.
+    if let Some(why) = session.push_blocked() {
+      emit_line("NO_INDEX", &[why]);
+    }
   }
   let server = require_server(&options)?;
   println!("Server {} as {}", server.config.server, server.config.user);
