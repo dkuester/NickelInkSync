@@ -1028,7 +1028,7 @@ am 2026-10-31 (deine Antworten auf meine Rückfragen). **Teil von Release
 0.1.0** (geändert am 2026-11-01); C0 bis C3 sind erledigt (PRs #66, #55,
 #64, #67), C4 läuft. **Kobo 4.x** (seit 2026-11-01, Libra 2 mit
 4.38.23852): C8 (Rust, PR #70) und C9 (Qt5-Erkundung und -Build) sind
-erledigt, C10 (Plugin in Qt5) folgt nach C4. **Kobalt-Schutz (N7):** Jeder neue Einstieg des
+erledigt, C10 (Plugin in Qt5) ist gebaut, der Gerätetest am Libra 2 steht aus. **Kobalt-Schutz (N7):** Jeder neue Einstieg des
 Plugins (Öffnen, Verlassen, Buchmenü, NickelMenu-Auslöser, Nachholen der
 Vormerkliste, Dialog) geht durch dieselbe Prüfung wie heute und bleibt
 untätig, solange Kobalt installiert ist; Gerätetests mit Kobalt daneben
@@ -1291,7 +1291,31 @@ Auf dem Kobo ist das Plugin inaktiv.
 - [ ] **C10 Plugin auf Kobo 4.x** (braucht C4, C8, C9): dasselbe Verhalten
   wie C4 in der Qt5-Fassung aus derselben Quelle (`#if` für Qt5/Qt6, wo
   nötig). Ab C10 bauen C5 und C6 beide Fassungen.
-  - [ ] **du:** Dieselben Tests wie C4 am **Libra 2**.
+  - [x] **ich:** Die Qt5-Fassung (`just plugin-qt5` → `KoboRoot.tgz`) ist
+    auf 4.x aktiv und macht dasselbe wie C4 (Öffnen, Schließen,
+    Vormerkliste, Toasts, `NO_INDEX`, `not_in_line`, Kobalt-Schutz in
+    jedem Einstieg). Unterschiede nur in `#if QT_VERSION`-Blöcken und
+    kleinen Adaptern, die Qt6-Fassung verhält sich unverändert:
+    `Bookmark::isNull` → Vergleich mit einem leeren `Bookmark`
+    (`operator==`); Nickels Stelle aus `Bookmark::getStartContainerPath()`
+    statt `ContentLocation` (der kepub-Leser füllt sie mit genau dem
+    String, den `saveBookmark` als `ChapterIDBookmarked` speichert, laut
+    Disassembly von `KepubBookReaderBase::initializeBookmark`; ohne
+    Kapiteldatei kommt sie aus `getChapterFilePath()`, die erste Stelle
+    steht im Log); Schreibweg mit `dbConnection(QString, bool)`,
+    `updateBookmark` ohne letztes `int`, Position als String ohne
+    `ContentLocation::create`; kein Seitenverwerfen (4.38 hat keinen
+    Seiten-Cache, die CLI nennt keine Seiten). Die CLI liefert mit `pull
+    --live --nickel-writes --emit` auf 4.x dieselben Strings wie `pull
+    --write` (kepub-Span ohne Offset, EPUB-Point mit zusammengefasstem
+    Text; `tests/sync_mapping.rs::live_pull_hands_nickel_the_kobo_4_forms`).
+    Jedes Symbol der Qt5-Bibliothek löst gegen libnickel, Qt 5.2.1 (auch
+    QtSql), libstdc++ und libc von 4.38 auf; Symbolprüfung gegen 4.38,
+    5.18 und 6.0 in der CI (unverändert, die Referenz deckt die neuen
+    Symbole ab). Nicht ohne Gerät prüfbar: ob die Stelle aus dem
+    `Bookmark` beim EPUB (Adobe-Leser) dieselbe Form hat (das Log zeigt
+    es beim ersten Öffnen).
+  - [ ] **du:** Dieselben Tests wie C4 am **Libra 2** (Anleitung im PR).
 - [ ] **C7 Tolino** (braucht C4 bis C6)
   - [ ] **ich:** Dasselbe Plugin auf dem Shine Color; Kobalts Schreibweg
     dort prüfen (Kobalt schreibt auf `develop` seit 8b144d2 auch auf dem

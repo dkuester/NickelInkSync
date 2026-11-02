@@ -35,7 +35,7 @@ The plugin has 23 symbols (two hooks, 21 `dlsym`). **18 are exported by
 | `_ZNK7Content5getIdERK7QString` | missing | `_ZNK7Content5getIdEv`: `QString Content::getId() const`, by value (result pointer in `r0`, `this` in `r1`, ends in `QString::fromUtf8_helper` into the result); no argument. In the Qt5 build now. |
 | `_ZNK8Bookmark6isNullEv` | missing | none. On 5.x/6.0 `isNull()` is `*this == Bookmark()` against a static empty `Bookmark` (tail call to `operator==`). 4.38 has both parts: `_ZN8BookmarkC1Ev` and `_ZNK8BookmarkeqERKS_` (`bool operator==(Bookmark const&) const`, compares the shared data pointers, then the fields). C10: compare with one default-constructed `Bookmark`. |
 | `_ZN6VolumeC1ERKS_` (copy) | missing (only `C1Ev`, `C2Ev`, `D0`–`D2`) | C4 drops the copy anyway (a fresh `VolumeManager::getById` instead, see the C0 recommendation). Otherwise `QtMetaTypePrivate::QMetaTypeFunctionHelper<Volume, true>::Create(void const*)` copy-constructs onto the heap (`operator new(8)`, vtable, shared data with its reference count raised), `…::Delete(void*)` frees it. |
-| `_ZNK8Bookmark16getStartLocationEv` | missing | 4.38 has no `ContentLocation` class at all. A `Bookmark` keeps the place as strings: `getChapterFilePath()` (`QString` by value) and `getStartContainerPath()` (a reference, `d + 0x1c`), plus `getStartContainerChildIndex()`. Which of them gives Nickel's `ChapterIDBookmarked` form (`OEBPS/x.xhtml#point(...)`, kepub `#kobo.N.M` without an offset) is for C10 to log on the Libra 2. |
+| `_ZNK8Bookmark16getStartLocationEv` | missing | 4.38 has no `ContentLocation` class at all. A `Bookmark` keeps the place as strings: `getChapterFilePath()` (`QString` by value) and `getStartContainerPath()` (a reference, `d + 0x1c`), plus `getStartContainerChildIndex()`. `getStartContainerPath()` it is (C10): the kepub reader's `bookmarkForCurrentLocation` → `initializeBookmark` sets it to `calculateBookmark(shortcover)`, the very string `saveBookmark` passes to `VolumeManager::updateBookmark` as `ChapterIDBookmarked` (`OEBPS/x.xhtml#kobo.N.M`); EPUB highlights in the `Bookmark` table hold the full `OEBPS/x.xhtml#point(...)` there too. A place without the chapter file (`span#kobo\.N\.M`, as kepub highlights store it) gets it from `getChapterFilePath()`. The plugin logs the first place it reads on a device. |
 | `_ZNK15ContentLocation8toStringEv` | missing | as above |
 
 The 18 that stay, with what differs on 4.38:
@@ -112,19 +112,21 @@ The differences are `#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)` blocks:
 - `Content::getId` with or without the `QString` argument, and the
   `dlsym` names: the Qt5 table has the 4.38 name for `getId` and leaves out
   the four symbols 4.38 does not export (see the first table). Until C10
-  replaces them, the Qt5 build must not reach code that calls them.
+  replaced them, the Qt5 build must not reach code that calls them; C10
+  added the 4.38 replacements to the Qt5 table.
 - `Qt::SkipEmptyParts` (Qt 5.14) or `QString::SkipEmptyParts`.
 - `QProcess::errorOccurred` (Qt 5.6) or Qt5's `error(QProcess::ProcessError)`
   signal; `finished` through a cast to `(int, QProcess::ExitStatus)`, which
   both have.
 - No C++14 lambda capture initialiser (GCC 4.9 in C++11 mode).
 
-On 4.x `init()` runs the Kobalt guard (Kobalt installs into the same
-`imageformats/` and parks itself as `/usr/local/Kobo/libkobalt.so.failsafe`
-like on 6.0, so `src/kobalt.rs`' paths hold), logs
-`inactive: Kobo firmware 4.x (Qt 5.2.1), plugin loaded; syncing on 4.x
-follows later` and returns; the hooks only call the originals. Behaviour
-(opening, leaving, pending list) follows in C10 after C4.
+Since C10 the Qt5 build behaves on 4.x as the Qt6 build on a Kobo 6.0
+(opening, leaving, pending list, Kobalt guard: Kobalt installs into the
+same `imageformats/` and parks itself as
+`/usr/local/Kobo/libkobalt.so.failsafe` like on 6.0, so `src/kobalt.rs`'
+paths hold). Until C10 it logged `inactive: Kobo firmware 4.x (Qt 5.2.1),
+plugin loaded; syncing on 4.x follows later` and only called the
+originals.
 
 Every undefined symbol of the built library resolves against 4.38's
 `libnickel.so.1.0.0`, `libQt5Core`/`libQt5Gui` and its C library (checked

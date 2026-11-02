@@ -644,9 +644,9 @@ real books sent from the Calibre library:
    ([docs/nickel-5.18-symbols.md](docs/nickel-5.18-symbols.md)). On Kobo
    4.38.23852 (Libra 2, Qt5) the opening and leaving hooks exist under the
    same names; five of the plugin's helpers do not (`Content::getId` takes
-   no argument, there is no `ContentLocation`), and a Qt5 build of the same
-   source loads there but stays idle until stage C10
-   ([docs/nickel-4.38-symbols.md](docs/nickel-4.38-symbols.md)).
+   no argument, there is no `ContentLocation`); a Qt5 build of the same
+   source replaces them and behaves there as on 6.0 (stage C10,
+   [docs/nickel-4.38-symbols.md](docs/nickel-4.38-symbols.md)).
 4. **Kobo firmware 6.0.** Not checked yet: the position format (kepub
    span, and whether the Adobe point counts comments and CDATA as nodes
    like the Tolino; the CLI assumes so from firmware 5 on), the chapter
