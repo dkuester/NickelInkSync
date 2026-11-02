@@ -1179,8 +1179,10 @@ Auf dem Kobo ist das Plugin inaktiv.
     im Release-Workflow (PR #62, die D2-Session ist archiviert) bekommt
     `KoboRoot.tgz` erst nach dem Merge von #62 (Schritt in der Notiz
     `2026-11-01-kobo-c9-handover.md`).
-  - [ ] **du:** `KoboRoot.tgz` auf dem **Libra 2** installieren, Log
-    prüfen (Anleitung im PR).
+  - [x] **du:** Am Libra 2 geprüft (2026-11-02, 4.38.23852): `KoboRoot.tgz`
+    installiert, das Plugin lädt und meldet im Log `inactive: Kobo firmware
+    4.x (Qt 5.2.1), plugin loaded; syncing on 4.x follows later`; Öffnen und
+    Schließen eines Buchs ändern nichts.
 - [ ] **C10 Plugin auf Kobo 4.x** (braucht C4, C8, C9): dasselbe Verhalten
   wie C4 in der Qt5-Fassung aus derselben Quelle (`#if` für Qt5/Qt6, wo
   nötig). Ab C10 bauen C5 und C6 beide Fassungen.
