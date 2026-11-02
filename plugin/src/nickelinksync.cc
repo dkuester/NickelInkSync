@@ -1237,15 +1237,36 @@ static void sync_pending()
     });
 }
 
+// Nickel's own ReadingController::setVolume, once keep_open_hook() put this
+// hook in front of another mod's, and whether the hook is inside its call of
+// the original (that mod's hook, Nickel's, or one between them).
+static void (*g_setVolume_nickel)(ReadingController *, const Volume *, const Bookmark *) = nullptr;
+static bool g_in_original = false;
+
+// Hands the book to the original setVolume.
+static void open_original(ReadingController *self, const Volume *volume, const Bookmark *bookmark)
+{
+    g_in_original = true;
+    ReadingController__setVolume(self, volume, bookmark);
+    g_in_original = false;
+}
+
 extern "C" __attribute__((visibility("default")))
 void _nh_ReadingController__setVolume(ReadingController *self, const Volume *volume, const Bookmark *bookmark)
 {
+    if (g_in_original) {
+        // Called again from inside the original: a mod after this hook in
+        // the chain calls back into it (see keep_open_hook()). Nickel's own
+        // setVolume ends the round.
+        g_setVolume_nickel(self, volume, bookmark);
+        return;
+    }
     if (!g_active) {
-        ReadingController__setVolume(self, volume, bookmark);
+        open_original(self, volume, bookmark);
         return;
     }
     if (kobalt_blocks()) {
-        ReadingController__setVolume(self, volume, bookmark);
+        open_original(self, volume, bookmark);
         notice_kobalt(kOpenToastDelayMs);
         return;
     }
@@ -1260,7 +1281,7 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     g_taken_id.clear();
     g_taken_page.clear();
     if (!id.startsWith(QString::fromLatin1(kSideloaded))) {
-        ReadingController__setVolume(self, volume, bookmark);
+        open_original(self, volume, bookmark);
         return;
     }
     g_open_row = row_of(volume);
@@ -1269,7 +1290,7 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     }
     if (!bookmark_is_null(bookmark)) {
         log_line(QStringLiteral("open %1 with a bookmark (link, search): not pulled").arg(id));
-        ReadingController__setVolume(self, volume, bookmark);
+        open_original(self, volume, bookmark);
         return;
     }
     // isInternetAccessible() only reports Nickel's own connectivity check:
@@ -1287,7 +1308,7 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
         g_unasked_id = id;
         g_unasked_at.clear();
         log_line(QStringLiteral("open %1 unchanged: the server could not be asked").arg(id));
-        ReadingController__setVolume(self, volume, bookmark);
+        open_original(self, volume, bookmark);
         QTimer::singleShot(kCheckOpenMs, qApp, [id] { note_opened_page(id, kCheckOpenTries); });
         // Without Wi-Fi the CLI only sees a timeout or no route; Nickel's
         // check is not reliable either way, so the text names both.
@@ -1302,7 +1323,7 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
         g_not_synced = id;
         g_not_synced_why = QStringLiteral("Konflikt, bleibt liegen");
         log_line(QStringLiteral("open %1 unchanged: a conflict, left alone; leaving it will not push").arg(id));
-        ReadingController__setVolume(self, volume, bookmark);
+        open_original(self, volume, bookmark);
         toast(true, QStringLiteral("Konflikt, nicht geladen"), QStringLiteral("Server und Gerät bewegt, bleibt liegen"),
               kOpenToastDelayMs);
         return;
@@ -1311,7 +1332,7 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
         g_not_synced = id;
         g_not_synced_why = kUnansweredReason;
         log_line(QStringLiteral("open %1 unchanged: the position needs an answer (confirm); leaving it will not push").arg(id));
-        ReadingController__setVolume(self, volume, bookmark);
+        open_original(self, volume, bookmark);
         toast(true, QStringLiteral("Nicht übernommen"), kUnansweredReason, kOpenToastDelayMs);
         return;
     }
@@ -1319,13 +1340,13 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
         g_not_synced = id;
         g_not_synced_why = skip_reason(p.not_taken);
         log_line(QStringLiteral("open %1 unchanged: the server's position cannot be taken; leaving it will not push").arg(id));
-        ReadingController__setVolume(self, volume, bookmark);
+        open_original(self, volume, bookmark);
         toast(true, QStringLiteral("Nicht übernommen"), skip_reason(p.not_taken), kOpenToastDelayMs);
         return;
     }
     if (!p.found) {
         // The server holds nothing newer: the device is in line with it.
-        ReadingController__setVolume(self, volume, bookmark);
+        open_original(self, volume, bookmark);
         toast(false, QStringLiteral("Fortschritt ist aktuell"),
               QStringLiteral("Server hat nichts Neueres"), kOpenToastDelayMs);
         return;
@@ -1339,7 +1360,7 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
         if (!write_through_nickel(id, p)) {
             g_not_synced = id;
             g_not_synced_why = QStringLiteral("Beim Öffnen nicht abgeglichen");
-            ReadingController__setVolume(self, volume, bookmark);
+            open_original(self, volume, bookmark);
             toast(true, QStringLiteral("Nicht übernommen"), QStringLiteral("Nickel schreibt nicht, siehe Log"),
                   kOpenToastDelayMs);
             return;
@@ -1352,7 +1373,7 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
         alignas(8) unsigned char fresh[kVolumeBytes];
         VolumeManager__getById(fresh, id, Device__getDbName(Device__getCurrentDevice()));
         g_open_row = row_of(fresh);
-        ReadingController__setVolume(self, fresh, bookmark);
+        open_original(self, fresh, bookmark);
         Volume__dtor(fresh);
     } else {
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
@@ -1375,11 +1396,11 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
                      .arg(reinterpret_cast<quintptr>(shared_before), 0, 16)
                      .arg(reinterpret_cast<quintptr>(static_cast<void *const *>(volume)[1]), 0, 16)
                      .arg(reinterpret_cast<quintptr>(reinterpret_cast<void *const *>(copy)[1]), 0, 16));
-        ReadingController__setVolume(self, copy, bookmark);
+        open_original(self, copy, bookmark);
         Volume__dtor(copy);
 #else
         // No Tolino on 4.x (Device::isTolino is constant false there).
-        ReadingController__setVolume(self, volume, bookmark);
+        open_original(self, volume, bookmark);
 #endif
     }
     const QString target = QString::fromUtf8(p.position);
@@ -1509,17 +1530,29 @@ extern "C" void *nh_dlhook(void *handle, const char *symname, void *target);
 // As in the hook table below.
 static const char kSetVolumeSym[] = "_ZN17ReadingController9setVolumeERK6VolumeRK8Bookmark";
 
-// Another mod that hooks setVolume with an older NickelHook (upstream
-// pgaskin, as in the 4.x build of NickelStorygraph) and loads after this
-// one takes the slot without calling this hook: books would open without a
-// pull, while leaving still pushes (device test on the Libra 2). Once every
-// mod is loaded the plugin puts its hook in front again; the other mod's
-// hook then runs as the original, so both work.
+// A mod that hooks setVolume after this one may not call this hook: with
+// an older NickelHook (upstream pgaskin, as in NickelStorygraph's 4.x
+// builds up to 0.1.x) it takes the slot without keeping it, and
+// NickelStorygraph calls NickelHardcover's hook instead of its original
+// when that is loaded. Books would open without a pull, while leaving still
+// pushes (device test on the Libra 2). Once every mod is loaded the plugin
+// puts its hook in front again, and the other mod's hook runs as the
+// original. A mod whose NickelHook keeps the hook it found calls this one
+// back from there; the hook then hands that call to Nickel's own setVolume
+// (g_in_original), so each runs once.
 static void keep_open_hook()
 {
     void *libnickel = dlopen("libnickel.so.1.0.0", RTLD_LAZY | RTLD_NOLOAD);
     if (!libnickel) {
         return;
+    }
+    if (!g_setVolume_nickel) {
+        g_setVolume_nickel = reinterpret_cast<void (*)(ReadingController *, const Volume *, const Bookmark *)>(
+            dlsym(libnickel, kSetVolumeSym));
+    }
+    if (!g_setVolume_nickel) {
+        dlclose(libnickel);
+        return;  // without it a mod calling back would loop
     }
     void *previous = nh_dlhook(libnickel, kSetVolumeSym, reinterpret_cast<void *>(&_nh_ReadingController__setVolume));
     dlclose(libnickel);

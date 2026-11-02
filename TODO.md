@@ -1320,11 +1320,17 @@ Auf dem Kobo ist das Plugin inaktiv.
     (`OEBPS/text/chapter3.xhtml#kobo.160.1`), aber Öffnen lief am Plugin
     vorbei (keine Toasts, kein Pull). Ursache laut Disassembly und Code:
     NickelStorygraph hookt auf dem Libra 2 ebenfalls
-    `ReadingController::setVolume`, mit dem alten NickelHook (pgaskin), das
-    einen vorhandenen Hook nicht weiterreicht, und lädt nach uns. Das Plugin
-    setzt seinen Öffnen-Hook jetzt nach dem Laden aller Mods (und 20 s
+    `ReadingController::setVolume` und lädt nach uns; bis 0.1.x mit dem
+    alten NickelHook (pgaskin), das einen vorhandenen Hook nicht
+    weiterreicht, und in jeder Version ruft es statt seines Originals
+    NickelHardcovers Hook auf, wenn der geladen ist (auch auf 5.18/6.x).
+    Das Plugin setzt seinen Öffnen-Hook nach dem Laden aller Mods (und 20 s
     später noch einmal) wieder davor, der fremde Hook läuft danach als
-    Original (`keep_open_hook()`, Log: „opening hook: another mod …“).
+    Original (`keep_open_hook()`, Log: „opening hook: another mod …“). Ruft
+    ein verkettender Mod (NickelStorygraph ab 0.2.0) uns von dort zurück,
+    geht dieser Aufruf direkt an Nickels `setVolume` (`g_in_original`),
+    sonst entstünde eine Endlosschleife (Befund der Session
+    „Hook-Konflikt NickelStorygraph auf 5.18/6.x prüfen“).
   - [ ] **du:** Dieselben Tests wie C4 am **Libra 2** (Anleitung im PR).
 - [ ] **C7 Tolino** (braucht C4 bis C6)
   - [ ] **ich:** Dasselbe Plugin auf dem Shine Color; Kobalts Schreibweg
