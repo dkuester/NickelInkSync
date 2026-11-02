@@ -66,7 +66,7 @@ pub fn kepubify() -> Option<PathBuf> {
     return shipped;
   }
   let path = std::env::var_os("PATH").unwrap_or_default();
-  let go = std::env::var_os("HOME").map(|home| PathBuf::from(home).join("go/bin"));
+  let go = crate::config::home().map(|home| home.join("go").join("bin"));
   std::env::split_paths(&path)
     .chain(["/opt/homebrew/bin", "/usr/local/bin"].map(PathBuf::from))
     .chain(go)

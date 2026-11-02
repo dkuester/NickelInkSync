@@ -101,6 +101,8 @@ fn kobo_device() {
     partial_md5(&device.book_file(&books[1])).unwrap(),
     koreader_md5("book-a.kepub.sdr")
   );
+  // Close the database first: Windows does not delete an open file.
+  drop(device);
   fs::remove_dir_all(root).unwrap();
 }
 

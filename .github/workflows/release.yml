@@ -1,0 +1,149 @@
+name: Release
+
+# On a tag `v*`: checks that the tag matches the version of both crates,
+# builds the release files on their platforms, and drafts a GitHub release
+# with them, SHA256SUMS and the notes from .github/release-notes.md. Only
+# the owner tags and publishes the draft. Started by hand (Actions →
+# Release → Run workflow) it is a trial run: the same files as artifacts,
+# no draft.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag and Cargo.toml versions agree
+        id: check
+        run: |
+          if [ "$GITHUB_REF_TYPE" != tag ]; then
+            # A trial run: the version of the crates.
+            tag=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+            echo "version=$tag" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          tag="${GITHUB_REF_NAME#v}"
+          for toml in Cargo.toml gui/Cargo.toml; do
+            v=$(sed -n 's/^version = "\(.*\)"/\1/p' "$toml" | head -1)
+            if [ "$v" != "$tag" ]; then
+              echo "::error::$toml has version $v, the tag $GITHUB_REF_NAME"
+              exit 1
+            fi
+          done
+          echo "version=$tag" >> "$GITHUB_OUTPUT"
+
+  macos:
+    needs: version
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - name: rsvg-convert for the icon
+        run: brew install librsvg
+      - name: Package
+        run: packaging/macos/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: |
+            dist/*.dmg
+            dist/*.zip
+          if-no-files-found: error
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Package
+        shell: pwsh
+        run: packaging/windows/package.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: dist/*.zip
+          if-no-files-found: error
+
+  # The device package (experimental): Kobo.tgz for .kobo/ and the folder
+  # for .adds/, built as in ci.yml.
+  device:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: armv7-unknown-linux-musleabihf
+      - name: Install cargo-zigbuild and Zig
+        run: pip install cargo-zigbuild==0.23.4 ziglang==0.17.0
+      - name: Device build
+        run: cargo zigbuild --release --locked --target armv7-unknown-linux-musleabihf -p nickelinksync
+      - name: Plugin build (Qt 6, Kobo.tgz)
+        run: |
+          docker run --rm --volume="$PWD:$PWD" --workdir="$PWD" ghcr.io/dkuester/nickelstorygraph-toolchain:latest \
+            'make -C plugin && make -C plugin kobo'
+          test "$(tar -tzf plugin/Kobo.tgz)" = "imageformats/libnickelinksync.so" || { echo "::error::Unexpected Kobo.tgz layout"; exit 1; }
+      - name: Package
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          name="NickelInkSync-$VERSION-device"
+          d="dist/$name"
+          mkdir -p "$d/.adds/NickelInkSync"
+          cp plugin/Kobo.tgz "$d/"
+          install -m 755 target/armv7-unknown-linux-musleabihf/release/nickelinksync "$d/.adds/NickelInkSync/"
+          cp plugin/config.ini.example "$d/.adds/NickelInkSync/"
+          cp LICENSE "$d/LICENSE.txt"
+          (cd dist && zip -r -X "$name.zip" "$name")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-device
+          path: dist/*.zip
+          if-no-files-found: error
+
+  draft:
+    needs: [version, macos, windows, device]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: assets
+          merge-multiple: true
+      - name: SHA256SUMS
+        run: |
+          cd assets
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SHA256SUMS
+          path: assets/SHA256SUMS
+      - name: Draft the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          sed "s/@VERSION@/$VERSION/g" .github/release-notes.md > "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
+            --title "NickelInkSync $VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            assets/*

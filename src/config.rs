@@ -165,11 +165,19 @@ impl std::str::FromStr for Notify {
 impl Config {
   /// Where the configuration is looked up without `--config`:
   /// `$NICKELINKSYNC_CONFIG`, else `$XDG_CONFIG_HOME/nickelinksync/config.ini`,
-  /// else `~/.config/nickelinksync/config.ini`.
+  /// else `~/.config/nickelinksync/config.ini`; on Windows
+  /// `%APPDATA%\nickelinksync\config.ini`.
   pub fn default_path() -> Option<PathBuf> {
     let var = |name| std::env::var_os(name).filter(|v| !v.is_empty());
     if let Some(path) = var("NICKELINKSYNC_CONFIG") {
       return Some(PathBuf::from(path));
+    }
+    if cfg!(windows) {
+      return Some(
+        PathBuf::from(var("APPDATA")?)
+          .join("nickelinksync")
+          .join("config.ini"),
+      );
     }
     let base = match var("XDG_CONFIG_HOME") {
       Some(dir) => PathBuf::from(dir),
@@ -180,11 +188,16 @@ impl Config {
 
   /// Where NickelInkSync keeps its own data (book mappings, backups):
   /// `$NICKELINKSYNC_DATA_DIR`, else `$XDG_DATA_HOME/nickelinksync`, else
-  /// `~/.local/share/nickelinksync`. The CLI and the desktop client share it.
+  /// `~/.local/share/nickelinksync`; on Windows
+  /// `%LOCALAPPDATA%\nickelinksync` (the backups are large, so not in the
+  /// roaming profile). The CLI and the desktop client share it.
   pub fn data_dir() -> Option<PathBuf> {
     let var = |name| std::env::var_os(name).filter(|v| !v.is_empty());
     if let Some(dir) = var("NICKELINKSYNC_DATA_DIR") {
       return Some(PathBuf::from(dir));
+    }
+    if cfg!(windows) {
+      return Some(PathBuf::from(var("LOCALAPPDATA")?).join("nickelinksync"));
     }
     let base = match var("XDG_DATA_HOME") {
       Some(dir) => PathBuf::from(dir),
@@ -357,12 +370,23 @@ fn push_position(path: &Path, value: Option<String>) -> Result<PushPosition, Err
   }
 }
 
-/// `~/…` with the home folder.
+/// `~/…` with the home folder (`%USERPROFILE%` on Windows, also `~\…`).
 fn expand_home(path: &str) -> PathBuf {
-  match (path.strip_prefix("~/"), std::env::var_os("HOME")) {
-    (Some(rest), Some(home)) => PathBuf::from(home).join(rest),
+  let rest = path
+    .strip_prefix("~/")
+    .or_else(|| path.strip_prefix("~\\").filter(|_| cfg!(windows)));
+  match (rest, home()) {
+    (Some(rest), Some(home)) => home.join(rest),
     _ => PathBuf::from(path),
   }
+}
+
+/// The home folder: `$HOME`, on Windows `%USERPROFILE%`.
+pub fn home() -> Option<PathBuf> {
+  let name = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
+  std::env::var_os(name)
+    .filter(|v| !v.is_empty())
+    .map(PathBuf::from)
 }
 
 /// 32 uppercase hex digits like KOReader's random device IDs, but derived
@@ -775,9 +799,9 @@ mod tests {
     assert_eq!(c.library, Some(PathBuf::from("/books/Calibre Library")));
     let c = parse("server=s\nuser=u\npassword=p\nlibrary =").unwrap();
     assert_eq!(c.library, None);
-    if let Some(home) = std::env::var_os("HOME") {
+    if let Some(home) = home() {
       let c = parse("server=s\nuser=u\npassword=p\nlibrary = ~/Calibre").unwrap();
-      assert_eq!(c.library, Some(PathBuf::from(home).join("Calibre")));
+      assert_eq!(c.library, Some(home.join("Calibre")));
     }
   }
 
