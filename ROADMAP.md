@@ -194,6 +194,16 @@ drafts the release; only the owner tags and publishes.
       dialog is C5); without `device prepare` a message says nothing is
       sent. CI checks the plugin's symbols against 5.18 and 6.0.
       Replaces N2
+- [x] The conflict dialog (stage C5 of the on-device client; checked in
+      the Nickel VM on 2026-11-02, device test on the Clara BW pending):
+      when a book needs an answer on opening, the plugin asks in Nickel's
+      `ConfirmationDialog` with both sides (percent, section, device,
+      time) and three buttons, the third an `N3ButtonLabel` of its own:
+      take the server's, keep the device's, later. The answer goes back
+      to the CLI (`--answered <server time>` for `pull` and `push`), which
+      overwrites only while the server still holds what the dialog showed
+      and keeps the base as before. Built for Qt 6 and Qt 5; the dialog's
+      symbols exist on 4.38, 5.18 and 6.0
 
 ## Quick wins
 
@@ -292,10 +302,10 @@ reading and USB write-back (C8) and the plugin as a Qt5 build (C9, C10).
   plugin logs `QLocale()`, `de_DE` so far).
 - **On-device client for the Kobo 6.0 and the Tolino** (L, release
   0.1.0, experimental): one plugin for both devices, plus a Qt5 build
-  (`KoboRoot.tgz`) for Kobo 4.x (C9, C10); stages C0–C4 are done (PRs
-  #66, #55, #64, #67, #72), and so is C9 (the Qt5 symbols on 4.38.23852
-  and a Qt5 build that loads and stays idle); the conflict dialog (C5),
-  the plugin's own screens (C6), the Tolino (C7) and Kobo 4.x (C10) are
+  (`KoboRoot.tgz`) for Kobo 4.x (C9, C10); stages C0–C5 are done (PRs
+  #66, #55, #64, #67, #72 and the conflict dialog), and so is C9 (the Qt5
+  symbols on 4.38.23852 and a Qt5 build that loads and stays idle); the
+  plugin's own screens (C6), the Tolino (C7) and Kobo 4.x (C10) are
   next. Like today's plugin
   it stays idle while Kobalt is installed (N7). Opening a book takes a
   newer server position, written through Nickel itself as Kobalt (MIT)

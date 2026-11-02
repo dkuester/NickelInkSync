@@ -1204,10 +1204,35 @@ Auf dem Kobo ist das Plugin inaktiv.
     ist aktuell“. Kein Seitenverwerfen nötig: Nickel hatte das ganze
     Kapitel schon gerendert, eine Seite hielt die Stelle. Das Verwerfen
     selbst ist in der Kobo-VM geprüft (5 Seiten, richtig geöffnet).
-- [ ] **C5 Dialog bei Konflikten** (braucht C4)
-  - [ ] **ich:** Qt-Dialog beim Öffnen mit beiden Ständen und drei Knöpfen
-    (`ConfirmationDialog` hat zwei eigene; der dritte muss ein
-    Nickel-Widget sein, siehe C0).
+- [~] **C5 Dialog bei Konflikten** (braucht C4)
+  - [x] **ich:** Braucht ein Buch beim Öffnen eine Antwort
+    (`NICKELINKSYNC_CONFLICT`: beide bewegt und die alte Regel fragt,
+    `backwards` oder `confirm = always`), fragt das Plugin vor dem Öffnen
+    in Nickels `ConfirmationDialog` (`exec()` im `setVolume`-Hook): Titel,
+    Grund, „Dieses Gerät: 62 %, Abschnitt 5, 02.11. 13:36“ und „Server:
+    30 %, Abschnitt 3, KOReader, …“ (Abschnitt aus dem XPointer; die
+    CONFLICT-Zeile hat dafür ein 10. Feld, die Gerätestelle als
+    XPointer). Knöpfe: „Server übernehmen“ (accept), „Gerät behalten“
+    (eigener `N3ButtonLabel` vor dem Ablehnen-Knopf, `tapped(bool)` per
+    Name verbunden, `primaryButton` wie Nickels Knöpfe), „Später“
+    (reject, auch Schließen-Kreuz). Die Antwort geht an die CLI: neu
+    `--answered <Server-Zeit>` für `pull` und `push` (wie `--force`, aber
+    nur, solange der Server noch die Position von dieser Zeit hat, sonst
+    `NOT_TAKEN`/`NOT_SENT server-changed`; Tests in `tests/state.rs`).
+    „Server übernehmen“: WLAN abwarten (3 s), `pull … --answered`, dann
+    der normale Weg (Kobo: über Nickel schreiben, Basis nach dem
+    Commit). „Gerät behalten“: Buch öffnet unverändert, `push --live
+    --answered` im Hintergrund (nach WLAN), die CLI setzt die Basis.
+    „Später“: wie bisher, nichts gesendet. Ohne Dialog-Symbole oder wenn
+    der Knopf nicht entsteht: wie bisher nur Meldung. Die Vormerkliste
+    läuft erst nach dem Dialog. Kobalt-Schutz vor dem Dialog und vor dem
+    Senden. Qt6 und Qt5 aus derselben Quelle (Symbole auf 4.38, 5.18,
+    6.0; 4.38-Referenz um `N3ButtonLabel` ergänzt, Qt-Symbole gegen die
+    4.38-Bibliotheken geprüft); Plugin linkt jetzt `Qt*Widgets`.
+    Kobo-VM: alle drei Knöpfe (Basis, Vormerkliste, Server-Stand
+    geprüft). Befund: Nickel schaltete das WLAN der VM ab, während der
+    Dialog offen war; darum wartet das Plugin danach wieder darauf.
+    Details in [`docs/nickel-6.0-symbols.md`](docs/nickel-6.0-symbols.md).
   - [ ] **du:** Konflikt am Kobo nachstellen (KOReader und Kobo offline
     an verschiedenen Stellen), alle drei Knöpfe.
 - [ ] **C6 Oberfläche** (braucht C5)

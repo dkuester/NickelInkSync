@@ -34,8 +34,8 @@ nickelinksync pull --device /Volumes/KOBOeReader
 | Command | What it does |
 |---|---|
 | `status` | Lists the sideloaded books with hash, stored position, KOReader XPointer and, if configured, the position on the server. |
-| `push` | Sends each book's position to the server. A position the server got after the book was last read on the device is never overwritten; by default it also asks before moving the server back to an earlier place in the book (see `confirm` below). `--force` sends without asking, `--dry-run` only shows what would be sent. |
-| `pull` | Shows which books have a newer position on the server, how the device would store it and where it would ask first. Only with `--write` is it written to the device (Tolino and Kobo, experimental, see below); `--force` takes the server position without asking. |
+| `push` | Sends each book's position to the server. A position the server got after the book was last read on the device is never overwritten; by default it also asks before moving the server back to an earlier place in the book (see `confirm` below). `--force` sends without asking, `--dry-run` only shows what would be sent. `--answered <server time>` (for the plugin's conflict dialog, one book with `--content-id`) sends as `--force` does, but only while the server still holds the position it stored at that time. |
+| `pull` | Shows which books have a newer position on the server, how the device would store it and where it would ask first. Only with `--write` is it written to the device (Tolino and Kobo, experimental, see below); `--force` takes the server position without asking; `--answered <server time>` (the plugin's conflict dialog) does so only while the server still holds the position it stored at that time. |
 | `sync --pending` | Sends the books whose push failed on the device (no network, a server error), as kept in `.adds/NickelInkSync/state.json`, if they still should be sent (see [The last agreed position](#the-last-agreed-position)). |
 
 All three take `--book <text>` to limit them to books whose title or file
@@ -391,10 +391,15 @@ NickelHook plugin syncs without a computer, over Wi-Fi: when you open a
 sideloaded book it fetches a newer position from the server and the book
 opens there, when you leave the book it sends yours. It calls the same
 `nickelinksync` program on the device and follows the same `confirm` rule
-and [last agreed position](#the-last-agreed-position). It cannot ask yet:
-a position that needs an answer, or a book that moved on both sides since
-they last agreed (a conflict), is left alone and noted in the log and in a
-message. The device has to be [prepared](#book-mapping-in-progress) on the
+and [last agreed position](#the-last-agreed-position). When a position
+needs an answer, for example a book read on both sides since they last
+agreed and the server's place lies further back (a conflict), it asks
+before the book opens, in one of Nickel's dialogs with both sides
+(percent, section, device, time): "Server übernehmen" opens the book at
+the server's position, "Gerät behalten" sends the device's, "Später" (or
+closing the dialog) leaves both alone until the next opening. If the
+server changed while the dialog was open, nothing is overwritten. The
+dialog is German only, like the plugin's messages. The device has to be [prepared](#book-mapping-in-progress) on the
 computer first (`device prepare`): without it the plugin still fetches,
 but sends nothing and says so ("Gerät nicht vorbereitet"). A kepub
 without a mapping never syncs.

@@ -36,8 +36,8 @@ nickelinksync pull --device /Volumes/KOBOeReader
 | Befehl | Was er tut |
 |---|---|
 | `status` | Listet die seitengeladenen Bücher mit Prüfsumme, gespeicherter Position, KOReader-XPointer und, falls eingerichtet, der Position auf dem Server. |
-| `push` | Überträgt die Position jedes Buchs zum Server. Eine Position, die der Server erst nach dem letzten Lesen auf dem Gerät bekommen hat, wird nie überschrieben; außerdem fragt `push` standardmäßig nach, bevor es den Server an eine frühere Stelle im Buch zurücksetzt (siehe `confirm` unten). `--force` überträgt ohne Rückfrage, `--dry-run` zeigt nur, was gesendet würde. |
-| `pull` | Zeigt, für welche Bücher der Server eine neuere Position hat, wie das Gerät sie speichern würde und wo es nachfragen würde. Nur mit `--write` wird sie aufs Gerät geschrieben (Tolino und Kobo, experimentell, siehe unten); `--force` übernimmt die Server-Position ohne Rückfrage. |
+| `push` | Überträgt die Position jedes Buchs zum Server. Eine Position, die der Server erst nach dem letzten Lesen auf dem Gerät bekommen hat, wird nie überschrieben; außerdem fragt `push` standardmäßig nach, bevor es den Server an eine frühere Stelle im Buch zurücksetzt (siehe `confirm` unten). `--force` überträgt ohne Rückfrage, `--dry-run` zeigt nur, was gesendet würde. `--answered <Server-Zeit>` (für den Konfliktdialog des Plugins, ein Buch mit `--content-id`) sendet wie `--force`, aber nur, solange der Server noch die Position von dieser Zeit hat. |
+| `pull` | Zeigt, für welche Bücher der Server eine neuere Position hat, wie das Gerät sie speichern würde und wo es nachfragen würde. Nur mit `--write` wird sie aufs Gerät geschrieben (Tolino und Kobo, experimentell, siehe unten); `--force` übernimmt die Server-Position ohne Rückfrage; `--answered <Server-Zeit>` (Konfliktdialog des Plugins) tut das nur, solange der Server noch die Position von dieser Zeit hat. |
 | `sync --pending` | Sendet die Bücher, deren Push auf dem Gerät gescheitert ist (kein Netz, Server-Fehler), wie sie in `.adds/NickelInkSync/state.json` vorgemerkt sind, sofern sie noch gesendet werden sollen (siehe [Zuletzt abgeglichene Position](#zuletzt-abgeglichene-position)). |
 
 Alle drei nehmen `--book <Text>` (nur Bücher, deren Titel oder Dateipfad den
@@ -379,10 +379,15 @@ seitengeladenen Buchs holt es eine neuere Position vom Server, und das Buch
 öffnet dort; beim Verlassen des Buchs sendet es deine. Es ruft dasselbe
 Programm `nickelinksync` auf dem Gerät auf und folgt derselben Regel
 `confirm` und dem [zuletzt abgeglichenen Position](#zuletzt-abgeglichene-position).
-Fragen kann es noch nicht: Eine Position, die eine Antwort bräuchte, oder
-ein Buch, das seit dem letzten Abgleich auf beiden Seiten weitergelesen
-wurde (ein Konflikt), bleibt unverändert und steht im Log und in einer
-Meldung. Das Gerät muss vorher am Rechner
+Braucht eine Position eine Antwort, etwa bei einem Buch, das seit dem
+letzten Abgleich auf beiden Seiten weitergelesen wurde und dessen Stelle
+auf dem Server weiter vorn liegt (ein Konflikt), fragt es vor dem Öffnen
+in einem Dialog von Nickel mit beiden Ständen (Prozent, Abschnitt, Gerät,
+Zeit): „Server übernehmen“ öffnet das Buch an der Position vom Server,
+„Gerät behalten“ sendet die des Geräts, „Später“ (oder Schließen des
+Dialogs) lässt beide bis zum nächsten Öffnen unverändert. Hat sich der
+Server geändert, während der Dialog offen war, wird nichts überschrieben.
+Das Gerät muss vorher am Rechner
 [vorbereitet](#buchzuordnung-im-aufbau) sein (`device prepare`): Ohne das
 holt das Plugin weiterhin, sendet aber nichts und sagt das („Gerät nicht
 vorbereitet“). Ein kepub ohne Zuordnung synchronisiert nie.
