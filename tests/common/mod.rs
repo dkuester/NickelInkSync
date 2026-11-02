@@ -39,7 +39,10 @@ pub fn fake_device(name: &str, sql: &str, version: &str) -> PathBuf {
   fs::create_dir_all(root.join("Books")).unwrap();
   fs::write(root.join(".kobo/version"), version).unwrap();
   let db = Connection::open(root.join(".kobo/KoboReader.sqlite")).unwrap();
-  db.execute_batch(&fs::read_to_string(fixtures().join("db").join(sql)).unwrap())
+  // One transaction for the whole fixture: on its own every statement is a
+  // commit that waits for the disk, which takes seconds per device on Windows.
+  let sql = fs::read_to_string(fixtures().join("db").join(sql)).unwrap();
+  db.execute_batch(&format!("BEGIN;\n{sql}\nCOMMIT;"))
     .unwrap();
   for file in ["book-a.epub", "book-a.kepub.epub", "book-c.epub"] {
     fs::copy(

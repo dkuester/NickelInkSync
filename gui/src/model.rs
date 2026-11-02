@@ -398,11 +398,13 @@ mod tests {
     )
     .unwrap();
     let db = rusqlite::Connection::open(root.join(".kobo/KoboReader.sqlite")).unwrap();
-    db.execute_batch(
-      &fs::read_to_string(fixtures().join("db/tolino-shinecolor-5.18-placeholder-books.sql"))
-        .unwrap(),
-    )
-    .unwrap();
+    // In one transaction, as in `fake_device`: statement by statement it
+    // takes seconds on Windows.
+    let sql =
+      fs::read_to_string(fixtures().join("db/tolino-shinecolor-5.18-placeholder-books.sql"))
+        .unwrap();
+    db.execute_batch(&format!("BEGIN;\n{sql}\nCOMMIT;"))
+      .unwrap();
     drop(db);
     for file in ["book-a.epub", "book-a.kepub.epub", "book-c.epub"] {
       fs::copy(
