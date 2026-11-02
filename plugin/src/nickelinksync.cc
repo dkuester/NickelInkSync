@@ -24,9 +24,10 @@
  *   transactions VolumeManager::getById, updateBookmark, setPercentRead and
  *   updateFields with the changed columns, which also updates Nickel's
  *   Volume cache. In the same transaction it drops the cached pages the CLI
- *   names (NICKELINKSYNC_STALE_PAGES): when none of them holds the place,
- *   Nickel would open at the chapter start on the first opening after a
- *   start (docs/nickel-6.0-symbols.md). Nickel then gets a fresh Volume
+ *   names (NICKELINKSYNC_STALE_PAGES): Nickel looks the opening page up
+ *   in that table at every opening, and when the chapter's first page is
+ *   cached but none holds the place it opens at the chapter start
+ *   (docs/nickel-6.0-symbols.md). Nickel then gets a fresh Volume
  *   from getById, and once the transaction committed the book's base goes
  *   into state.json (NICKELINKSYNC_BASE).
  *
