@@ -225,7 +225,15 @@ Kobalt removed. Chapter 2 read from its start, KOReader at R2-178;
 `pull --write` dropped 27 cached pages of chapter 2 (its first page among
 them), the device was only ejected, and Book R opened at R2-178. An
 earlier run with R2-121, which lay in a cached page, dropped nothing and
-opened right too. Not checked yet: the same on the Clara BW.
+opened right too.
+
+**Device test, Clara BW 6.0.279225 (2 November).** Same steps, plugin
+off: chapter 2 read from its start (its first page cached), KOReader at
+the same place. `pull --write` wrote the EPUB and the mapped kepub and
+dropped 41 cached pages of their chapter 2; the device was only ejected.
+The EPUB opened at the written place (`/1/4/358/1:158`, the page with
+R2-179 at the top, as in KOReader); Nickel kept that bookmark and cached
+fresh pages from `/1/4/356` on.
 Kobo 4.x: whether 4.38 has the `CachePersistence*` tables is open; the
 CLI drops pages only when they exist.
 

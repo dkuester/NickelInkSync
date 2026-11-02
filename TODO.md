@@ -917,7 +917,11 @@ Entscheidungen des Besitzers (2026-10-31):
     R2-178, `pull --write` verwarf 27 Seiten, nur ausgeworfen: öffnete bei
     R2-178. (Ein erster Lauf mit R2-121 lag in einer gespeicherten Seite,
     nichts verworfen, ebenfalls richtig.)
-  - [ ] **du:** Derselbe Gerätetest am Clara BW (6.0).
+  - [x] **du:** Derselbe Gerätetest am Clara BW (2.11., 6.0.279225, Plugin
+    aus): Kapitel 2 ab Anfang gelesen, KOReader bei R2-178/179,
+    `pull --write` schrieb EPUB und zugeordnetes kepub und verwarf 41 Seiten
+    (Kapitelanfang dabei), nur ausgeworfen: das EPUB öffnete an der
+    Stelle (Seite mit R2-179 oben, wie in KOReader).
   - [ ] **ich (falls das Plugin ohne Neustart nicht reicht):** die Seiten
     über Nickel selbst verwerfen (`PersistedCacheManager`); als letzter
     Ausweg `deleteAllRelatedToBookInfo`. Früherer Plan, falls auch das
