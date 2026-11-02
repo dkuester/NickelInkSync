@@ -2,7 +2,8 @@
 
 A review of the desktop client (`gui/`, egui/eframe 0.37, macOS and
 Windows, German and English) against the ergonomics standards of the
-DIN EN ISO 9241 series and against WCAG 2.1 level AA, carried over to
+DIN EN ISO 9241 series and against WCAG 2.1 level AA (since 2026-11-02 the
+target is WCAG 2.2 AA, see E2), carried over to
 desktop software through WCAG2ICT and EN 301 549 chapter 11. It is the
 basis of U1 and U2 in [TODO.md](../TODO.md) (release 0.2.0, accessibility
 by 1.0.0 at the latest).
@@ -120,9 +121,12 @@ Effort: S = an afternoon, M = a few days, L = a week or more. Release:
 10. **A13/I4 Help:** Help button and an accessibility section in the
     READMEs, S.
 
-## Open decisions for the owner
+## Decisions of the owner
 
-| # | Question | Recommendation |
+Decided on 2026-11-02: every recommendation below was taken. The items
+for 0.2.0 and 1.0.0 are in [TODO.md](../TODO.md) (U1, U2).
+
+| # | Question | Recommendation (decided) |
 | --- | --- | --- |
 | E1 | Which platforms does the accessibility goal cover: macOS and Windows only, or Linux (AT-SPI, AppImage E8) too? | macOS and Windows for 1.0.0; Linux best effort, since AccessKit supports it but it is not a release target yet |
 | E2 | WCAG 2.1 AA as decided, or WCAG 2.2 AA (the basis of EN 301 549 V4.1.1 since September 2026)? | Aim at 2.2 AA: the extra criteria that apply here (2.4.11 focus not obscured, 2.5.8 target size, 3.3.7 redundant entry) are small, and a 1.0.0 in 2027 would otherwise target an outdated version |
