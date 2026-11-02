@@ -493,7 +493,7 @@ Entscheidungen des Besitzers (2026-10-31):
     Span. `pull --write` schreibt in ein zugeordnetes kepub am Kobo 6.x;
     der Seiten-Cache aus PR #48 vergleicht Spans genauso wie Points.
     Kobo 4.x (Span ohne Offset, Adobe-Point mit zusammengefasstem Text)
-    wird noch nicht geschrieben; kommt mit **C8** (Libra 2, 4.38).
+    wird seit **C8** ebenfalls geschrieben (siehe dort).
   - [x] **du (Entscheidung, 2026-10-31):** Ein kepub wird **nur über eine
     Zuordnung** zu seinem EPUB synchronisiert, immer unter der Prüfsumme
     des EPUBs, nie unter der eigenen (auch ohne Bibliothek; ein
@@ -1138,19 +1138,46 @@ Auf dem Kobo ist das Plugin inaktiv.
     aus dem Index (Vorschläge nach Titel und Autor); Einstieg über
     NickelMenu-Datei und Buchmenü.
   - [ ] **du:** Am Kobo: vorgemerkte Bücher senden, ein kepub zuordnen.
-- [ ] **C8 Kobo 4.x lesen und zurückschreiben** (Rust, CLI und GUI; kann
+- [x] **C8 Kobo 4.x lesen und zurückschreiben** (Rust, CLI und GUI; kann
   sofort parallel laufen) · neues Testgerät **Kobo Libra 2, Firmware
   4.38.23852** (Qt5, von dir am 2026-11-01).
-  - [ ] **du:** Datenbankkopie des Libra 2 (`.kobo/KoboReader.sqlite`, Nickel
+  - [x] **du:** Datenbankkopie des Libra 2 (`.kobo/KoboReader.sqlite`, Nickel
     beendet bzw. per USB) mit Book P/Q/R als kepub und EPUB, P und Q markiert
     wie zuvor, für neue Fixtures (`tools/make_db_fixture.py`).
-  - [ ] **ich:** Positionsformat auf 4.38 gegen die 4.46-Fixtures prüfen;
-    Rückrichtung für Kobo 4.x: Adobe-Point mit zusammengefasstem Text
-    (`PointFlavor::JoinText`) und kepub-Span ohne Offset (`#kobo.N.M`);
-    `pull --write` am Libra 2 per USB, in CLI und Desktop-Client; Seiten-Cache
-    (N5) auf 4.x prüfen; READMEs (heute „wird nicht geschrieben“) nachziehen.
-  - [ ] **du:** Book R vom Server per USB auf den **Libra 2** schreiben
-    (EPUB und zugeordnetes kepub), auswerfen, öffnen.
+  - [x] **ich:** Rückrichtung für Kobo 4.x (`from_xpointer`,
+    `from_xpointer_kepub` mit `PointFlavor::JoinText`): Adobe-Point, in dem
+    Text, CDATA und Kommentare eines Elements ein Knoten sind (Offset in
+    UTF-8-Bytes durch Text und CDATA, Kommentare zählen nicht), und
+    kepub-Span ohne Offset (`#kobo.N.M`; die Stelle im Span geht verloren,
+    Nickel öffnet am Span-Anfang). Rundreise mit allen 16 EPUB-Markierungen
+    des Clara BW 4.46 und KOReaders Markierungen derselben Wörter (p7w03
+    nach dem Kommentar `/1/4/16/1:13`, q5w04 nach CDATA `/1/4/12/1:20`),
+    KOReaders kepub-Markierungen ergeben die Kobo-Spans, Book A und Book R
+    als Leseposition (`tests/xpointer.rs`). `pull --write` und „Holen“ im
+    Desktop-Client schreiben beides auf 4.x (`tests/write.rs`,
+    `tests/sync_mapping.rs`, `gui/src/sync.rs`); Sicherung vorher und
+    Kobalt-Schutz wie bisher. Modell-ID 388 = Kobo Libra 2. READMEs,
+    `SCOPE.md`, `ROADMAP.md` nachgezogen.
+  - [x] **ich:** Am Libra 2 gelesen (2026-11-02, nur lesend): `.kobo/version`
+    meldet 4.38.23852 und Modell-ID 388 (Kobo Libra 2), Datenbankversion
+    174. **Kein Seiten-Cache** auf 4.38: keine `CachePersistence*`-Tabellen,
+    die CLI verwirft dort also nichts (wie für ältere Firmware vorgesehen).
+  - [x] **ich:** 4.38-Fixtures (`kobo-libra2-4.38-probe-books.sql`,
+    2026-11-02): alle 32 Markierungen beim ersten Versuch gespeichert und
+    genau wie auf 4.46; Book R im EPUB `chapter2.xhtml#point(/1/4/104/1:113)`
+    (R2-51), im kepub `chapter3.xhtml#kobo.122.1` (R3-121), beide hin und
+    zurück (`tests/xpointer.rs`). In den kepubs zeigt 4.38 wie 4.46 zwei
+    Markierungen verschoben an (p3w03 nach `&amp;`, q7w03 nach `&lt;`/`&gt;`),
+    gespeichert sind sie richtig.
+  - [x] **du:** Book R vom Server per USB auf den **Libra 2** schreiben
+    (EPUB und zugeordnetes kepub), auswerfen, öffnen (2026-11-02): KOReader
+    in R3-161 (Zeichen 99), `pull --write` schrieb ins EPUB
+    `chapter3.xhtml#point(/1/4/324/1:102)` und ins kepub
+    `chapter3.xhtml#kobo.162.1`, mit Sicherung. Das EPUB öffnete bei R3-160
+    (sehr große Schrift), Nickel speicherte danach genau den geschriebenen
+    Point zurück; das kepub öffnete bei R3-158, Nickel speicherte
+    `kobo.160.1` (R3-159) als Seitenanfang: die Seite mit dem Anfang von
+    R3-161, wie auf 4.x erwartet (nur der Span).
 - [ ] **C9 Qt5-Erkundung für Kobo 4.x** (ersetzt N1; kann sofort parallel
   laufen)
   - [ ] **du:** Zustimmung zum Download des Firmware-Updates 4.38.23852 für

@@ -251,12 +251,14 @@ reading and USB write-back (C8) and the plugin as a Qt5 build (C9, C10).
 - **Position translation, back to the Kobo** (S–M, stage C1 of the
   on-device client): KOReader XPointer → Kobo span with offset (kepub) is
   done and checked on 6.0 (see "Recently completed"); Kobo 4.x (the
-  Adobe point that joins text, the span without an offset) follows in
-  stage C8 on the Libra 2. Back to the Tolino is done.
+  Adobe point that joins text, the span without an offset) is done
+  against the 4.46 fixtures (stage C8), the device test on the Libra 2
+  (4.38) is open. Back to the Tolino is done.
 - **USB write-back on the Kobo** (S–M): `pull --write` works on the
   Tolino and for EPUBs on the Kobo 6.0; into a mapped kepub it writes the
   span with offset (see "Recently completed"), checked on the Clara BW. The desktop client's "Get" and "Get all" take mapped
-  kepubs too.
+  kepubs too. On Kobo 4.x (C8) both write the 4.x point and the span
+  without offset; to be checked on the Libra 2.
 - **Messages in the Tolino plugin** (S): each outcome of opening and
   leaving a book as one of Nickel's toasts, chosen by `notify` in
   `config.ini` (`all`, `errors`, `none`). Verified on the Tolino, also
