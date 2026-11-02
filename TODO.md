@@ -1315,6 +1315,16 @@ Auf dem Kobo ist das Plugin inaktiv.
     Symbole ab). Nicht ohne Gerät prüfbar: ob die Stelle aus dem
     `Bookmark` beim EPUB (Adobe-Leser) dieselbe Form hat (das Log zeigt
     es beim ersten Öffnen).
+  - [x] **ich:** Erster Gerätetest am Libra 2 (2026-11-02): Plugin aktiv,
+    beim kepub liest es Nickels Stelle richtig
+    (`OEBPS/text/chapter3.xhtml#kobo.160.1`), aber Öffnen lief am Plugin
+    vorbei (keine Toasts, kein Pull). Ursache laut Disassembly und Code:
+    NickelStorygraph hookt auf dem Libra 2 ebenfalls
+    `ReadingController::setVolume`, mit dem alten NickelHook (pgaskin), das
+    einen vorhandenen Hook nicht weiterreicht, und lädt nach uns. Das Plugin
+    setzt seinen Öffnen-Hook jetzt nach dem Laden aller Mods (und 20 s
+    später noch einmal) wieder davor, der fremde Hook läuft danach als
+    Original (`keep_open_hook()`, Log: „opening hook: another mod …“).
   - [ ] **du:** Dieselben Tests wie C4 am **Libra 2** (Anleitung im PR).
 - [ ] **C7 Tolino** (braucht C4 bis C6)
   - [ ] **ich:** Dasselbe Plugin auf dem Shine Color; Kobalts Schreibweg

@@ -130,6 +130,7 @@
 #include <QTimer>
 
 #include <cstdio>
+#include <dlfcn.h>
 #include <unistd.h>
 
 typedef void Device;
@@ -1499,6 +1500,39 @@ void _nh_ReadingView__leavingReadingExperience(ReadingView *self)
     when_online(kWifiLeaveWaitS, [id] { start_push(id); });
 }
 
+// NickelHook's GOT patcher (plugin/NickelHook/nh.c, linked into this
+// library): puts `target` into libnickel's slot for `symname` and returns
+// what the slot called before (another mod's hook, kept), NULL if `target`
+// is already there or on an error (both in the system log).
+extern "C" void *nh_dlhook(void *handle, const char *symname, void *target);
+
+// As in the hook table below.
+static const char kSetVolumeSym[] = "_ZN17ReadingController9setVolumeERK6VolumeRK8Bookmark";
+
+// Another mod that hooks setVolume with an older NickelHook (upstream
+// pgaskin, as in the 4.x build of NickelStorygraph) and loads after this
+// one takes the slot without calling this hook: books would open without a
+// pull, while leaving still pushes (device test on the Libra 2). Once every
+// mod is loaded the plugin puts its hook in front again; the other mod's
+// hook then runs as the original, so both work.
+static void keep_open_hook()
+{
+    void *libnickel = dlopen("libnickel.so.1.0.0", RTLD_LAZY | RTLD_NOLOAD);
+    if (!libnickel) {
+        return;
+    }
+    void *previous = nh_dlhook(libnickel, kSetVolumeSym, reinterpret_cast<void *>(&_nh_ReadingController__setVolume));
+    dlclose(libnickel);
+    if (!previous) {
+        return;  // still ours (NickelHook logs "target is already installed")
+    }
+    Dl_info info;
+    const bool named = dladdr(previous, &info) && info.dli_fname;
+    log_line(QStringLiteral("opening hook: another mod (%1) had replaced it; put back in front, the other runs after it")
+                 .arg(named ? QString::fromLocal8Bit(info.dli_fname) : QStringLiteral("unknown")));
+    ReadingController__setVolume = reinterpret_cast<void (*)(ReadingController *, const Volume *, const Bookmark *)>(previous);
+}
+
 static int nickelinksync_init()
 {
     g_kobo = !Device__isTolino(Device__getCurrentDevice());
@@ -1541,6 +1575,12 @@ static int nickelinksync_init()
                  .arg(QLocale().name(), QLocale::system().name())
                  .arg(QString::fromLatin1(qVersion())));
     g_active = true;
+    // Mods load one after another while Nickel starts; the checks run once
+    // the event loop does, and once more when the home screen is up.
+    if (QCoreApplication::instance()) {
+        QTimer::singleShot(0, qApp, [] { keep_open_hook(); });
+        QTimer::singleShot(kKobaltToastDelayMs, qApp, [] { keep_open_hook(); });
+    }
     return 0;
 }
 
