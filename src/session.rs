@@ -1072,6 +1072,25 @@ impl Session {
     })
   }
 
+  /// For the plugin on a Kobo, which writes the position through Nickel
+  /// itself: the day's backup of the database that [`Session::write`] would
+  /// make first, and the base of the position [`Session::take`] made for
+  /// `content_id`, for the plugin to keep in `state.json` once Nickel
+  /// committed it. Nothing goes into `state.json` here.
+  /// Refused while Kobalt is installed ([`crate::kobalt::Active`]).
+  pub fn hand_over(&self, content_id: &str) -> Result<(Option<PathBuf>, Option<Base>)> {
+    self.kobalt.check()?;
+    let dir = Config::backup_dir().ok_or("no directory for the backup (HOME is not set)")?;
+    let stamp = backup_stamp()?;
+    let backup = self.device.backup_live(&dir, &stamp[..8])?;
+    let base = self
+      .taken
+      .borrow_mut()
+      .remove(content_id)
+      .map(|(_, base)| base);
+    Ok((backup, base))
+  }
+
   /// Writes the positions into the device database after a backup of it;
   /// in `state.json` each becomes the book's base (made by
   /// [`Session::take`]) and is in line.
@@ -1079,13 +1098,7 @@ impl Session {
   pub fn write(&mut self, writes: &[Write]) -> Result<Written> {
     self.kobalt.check()?;
     let dir = Config::backup_dir().ok_or("no directory for the backup (HOME is not set)")?;
-    let now = std::time::SystemTime::now()
-      .duration_since(std::time::UNIX_EPOCH)?
-      .as_secs() as i64;
-    let stamp: String = iso_timestamp(now)
-      .chars()
-      .filter(|c| !"-:".contains(*c))
-      .collect();
+    let stamp = backup_stamp()?;
     let written = if self.device.live {
       // Only the one book the plugin is about to open.
       if self.content_id.is_none() {
@@ -1122,6 +1135,20 @@ impl Session {
     }
     Ok(written)
   }
+}
+
+/// Now as `20261024T120000Z`, for naming backups; the day is its first 8
+/// characters.
+fn backup_stamp() -> Result<String> {
+  let now = std::time::SystemTime::now()
+    .duration_since(std::time::UNIX_EPOCH)?
+    .as_secs() as i64;
+  Ok(
+    iso_timestamp(now)
+      .chars()
+      .filter(|c| !"-:".contains(*c))
+      .collect(),
+  )
 }
 
 /// "Kobo" or "Tolino". Kobo firmware 6.0 has the `tolino_*` tables too,

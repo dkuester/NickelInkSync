@@ -12,9 +12,11 @@ build (Kobo 4.x) only in `#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)` /
 
 A reference lists `_Z` dynamic symbols of `libnickel.so.1.0.0`, one
 "D name" / "U name" per line, gzipped:
-- Qt 6: the Tolino build 5.18.264769, every symbol. It comes from firmware,
-  so it is not in this repository: CI downloads it from the owner's
-  NickelTolinoShopRedirect repository at a fixed commit.
+- Qt 6: the Tolino build 5.18.264769 and the Kobo build 6.0.279225, every
+  symbol. They come from firmware, so they are not in this repository: CI
+  downloads the 5.18 list from the owner's NickelTolinoShopRedirect
+  repository at a fixed commit and makes the 6.0 list from Kobo's update
+  (tools/libnickel_symbols.sh).
 - Qt 5: `tools/libnickel-4.38.23852.syms.gz`, the Kobo build 4.38.23852,
   only the classes the plugin and the Kobo client use (made by
   tools/nickel_symbol_reference.py, see docs/nickel-4.38-symbols.md).

@@ -25,7 +25,10 @@
 #
 # NICKEL_VM_QT_LOGGING sets Nickel's QT_LOGGING_RULES (e.g. "wifi.*=true"),
 # VM_WIFI_TRACE=1 logs every call to the fake Wi-Fi, VM_DBUS_MONITOR=1 writes
-# the system bus to vm/state/VM/dbus-monitor.txt.
+# the system bus to vm/state/VM/dbus-monitor.txt. NICKEL_VM_INSTANCE=NAME
+# runs a second VM of the same kind beside one from another checkout: its
+# containers get the suffix -NAME and its mock server the port in
+# NICKEL_VM_KOSYNC_PORT (state stays in this checkout's vm/state/VM).
 set -euo pipefail
 
 VM_DIR=$(cd "$(dirname "$0")" && pwd)
@@ -60,14 +63,15 @@ case "$PROFILE" in
         KOSYNC_PORT=8766
         ;;
 esac
+KOSYNC_PORT=${NICKEL_VM_KOSYNC_PORT:-$KOSYNC_PORT}
 STATE=$VM_DIR/state/$PROFILE
 IMAGE=localhost/nickel-vm-rootfs:$FW_VERSION
 # Native arm64 and amd64 image with the Kobo 5.x cross compiler.
 KOBUILD=ghcr.io/nicoverbruggen/kobuild:qt6@sha256:b939301323e1bed0bf6b0bee43b8791db2efdf01231d4245c1f972d57433644a
 NET=nickel-vm
-VM=nickel-vm-$PROFILE
-KOSYNC=nickel-vm-$PROFILE-kosync
-WIFI=nickel-vm-$PROFILE-wifi
+VM=nickel-vm-$PROFILE${NICKEL_VM_INSTANCE:+-$NICKEL_VM_INSTANCE}
+KOSYNC=$VM-kosync
+WIFI=$VM-wifi
 WIFI_IMAGE=localhost/nickel-vm-wifi
 # Shared with the Wi-Fi sidecar: the system bus, wpa_supplicant's control
 # socket and /tmp, where wpa_ctrl clients bind their reply sockets.

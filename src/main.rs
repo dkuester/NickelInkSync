@@ -70,6 +70,16 @@ enum Command {
     /// after a backup copy of it
     #[arg(long)]
     write: bool,
+    /// For the plugin on a Kobo, which writes the position through Nickel
+    /// itself (with --live, --content-id and --emit): decide as --write
+    /// would and make the day's backup of the database, but write nothing.
+    /// After the position it prints `NICKELINKSYNC_LAST_READ<tab>time`
+    /// (the `DateLastRead` to set, empty to keep it),
+    /// `NICKELINKSYNC_STALE_PAGES<tab>id…` (cached pages to drop in the same
+    /// transaction) and `NICKELINKSYNC_BASE<tab>json` (the book's base for
+    /// `state.json`, to keep once Nickel committed the position)
+    #[arg(long, conflicts_with = "write", requires = "emit")]
+    nickel_writes: bool,
     /// For the plugin: print each position to take as one line
     /// `NICKELINKSYNC_POSITION<tab>percent<tab>ChapterIDBookmarked` followed
     /// by `NICKELINKSYNC_FROM<tab>device`, `NICKELINKSYNC_CONFLICT<tab>…` and
@@ -231,8 +241,9 @@ fn main() -> ExitCode {
       target,
       force,
       write,
+      nickel_writes,
       emit,
-    } => (pull(&target, force, write, emit), emit),
+    } => (pull(&target, force, write, nickel_writes, emit), emit),
     Command::Sync {
       target,
       pending: _,
@@ -1081,7 +1092,13 @@ fn sent_what(update: &Update, note: Option<String>) -> String {
   )
 }
 
-fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
+fn pull(
+  target: &Target,
+  force: bool,
+  write: bool,
+  nickel_writes: bool,
+  emit: bool,
+) -> Result<bool> {
   let options = target.options();
   if kindle_device::is_kindle(&options.device) {
     return Err(
@@ -1089,8 +1106,11 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
         .into(),
     );
   }
+  if nickel_writes && (!options.live || options.content_id.is_none()) {
+    return Err("--nickel-writes needs --live and --content-id".into());
+  }
   let mut session = open_session(&options)?;
-  if write {
+  if write || nickel_writes {
     session.kobalt.check()?;
   }
   let server = require_server(&options)?;
@@ -1158,7 +1178,7 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
     let apply = match action {
       Action::InSync => {
         println!("  in sync   {}", describe(&remote));
-        if write {
+        if write || nickel_writes {
           session.agreed(book, step.identity.document().unwrap_or_default(), &remote);
         }
         false
@@ -1178,7 +1198,7 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
           local,
           &remote,
           answer,
-          !write,
+          !(write || nickel_writes),
           &mut unanswered,
         )?;
         if emit && unanswered > before {
@@ -1228,7 +1248,29 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
     // For the plugin: a position needs an answer it cannot give.
     emit_line("UNANSWERED", &[&unanswered.to_string()]);
   }
-  if !write && options.live {
+  if nickel_writes {
+    for w in &writes {
+      let (backup, base) = session.hand_over(&w.content_id)?;
+      let stale = session.device.db.stale_pages(&w.content_id, &w.position)?;
+      println!("\nThe plugin writes the position through Nickel.");
+      if !stale.is_empty() {
+        println!(
+          "{} of Nickel's cached pages hide the place; the plugin drops them.",
+          stale.len()
+        );
+      }
+      if let Some(backup) = backup {
+        println!("Backup of the database (one a day): {}", backup.display());
+      }
+      emit_line("LAST_READ", &[w.last_read.as_deref().unwrap_or("")]);
+      let stale: Vec<&str> = stale.iter().map(String::as_str).collect();
+      emit_line("STALE_PAGES", &stale);
+      if let Some(base) = base {
+        emit_line("BASE", &[&serde_json::to_string(&base)?]);
+      }
+    }
+    ok &= save_state(&session);
+  } else if !write && options.live {
     println!("\nNothing was written to the device database (Nickel is running).");
   } else if !write {
     println!("\nDry run: nothing was written to the device; --write writes it.");

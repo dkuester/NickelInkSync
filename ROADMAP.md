@@ -182,6 +182,18 @@ drafts the release; only the owner tags and publishes.
       a 4.38 reference and builds it
       ([docs/nickel-4.38-symbols.md](docs/nickel-4.38-symbols.md)).
       Replaces N1
+- [x] The plugin on the Kobo 6.0 (stage C4 of the on-device client, PR
+      #72; checked in the Nickel VM and on the Clara BW on 2026-11-02): one `Kobo.tgz` for
+      Kobo and Tolino. On the Kobo the CLI only decides (`pull --live
+      --nickel-writes`) and makes the day's backup; the plugin writes the
+      position through Nickel's own transaction as Kobalt does and drops
+      the cached pages that hid the place, then keeps the base in
+      `state.json`. A push that cannot reach the server is kept pending
+      and sent the next time the server answers; a book opened offline is
+      sent only if read on. A conflict is reported and left alone (the
+      dialog is C5); without `device prepare` a message says nothing is
+      sent. CI checks the plugin's symbols against 5.18 and 6.0.
+      Replaces N2
 
 ## Quick wins
 
@@ -273,16 +285,17 @@ reading and USB write-back (C8) and the plugin as a Qt5 build (C9, C10).
   span with offset (see "Recently completed"), checked on the Clara BW. The desktop client's "Get" and "Get all" take mapped
   kepubs too. On Kobo 4.x (C8) both write the 4.x point and the span
   without offset; to be checked on the Libra 2.
-- **Messages in the Tolino plugin** (S): each outcome of opening and
+- **Messages in the plugin** (S): each outcome of opening and
   leaving a book as one of Nickel's toasts, chosen by `notify` in
   `config.ini` (`all`, `errors`, `none`). Verified on the Tolino, also
   opening within the chapter last read. Still to do: English texts (the
   plugin logs `QLocale()`, `de_DE` so far).
 - **On-device client for the Kobo 6.0 and the Tolino** (L, release
   0.1.0, experimental): one plugin for both devices, plus a Qt5 build
-  (`KoboRoot.tgz`) for Kobo 4.x (C9, C10); stages C0–C3 are done (PRs
-  #66, #55, #64, #67), and so is C9 (the Qt5 symbols on 4.38.23852 and a
-  Qt5 build that loads and stays idle), the plugin itself (C4–C7, C10) is
+  (`KoboRoot.tgz`) for Kobo 4.x (C9, C10); stages C0–C4 are done (PRs
+  #66, #55, #64, #67, #72), and so is C9 (the Qt5 symbols on 4.38.23852
+  and a Qt5 build that loads and stays idle); the conflict dialog (C5),
+  the plugin's own screens (C6), the Tolino (C7) and Kobo 4.x (C10) are
   next. Like today's plugin
   it stays idle while Kobalt is installed (N7). Opening a book takes a
   newer server position, written through Nickel itself as Kobalt (MIT)
@@ -295,8 +308,7 @@ reading and USB write-back (C8) and the plugin as a Qt5 build (C9, C10).
   `DateLastRead` on opening no longer counts as reading; when both
   changed, a dialog shows both positions to choose from. A book read
   without Wi-Fi, or whose push failed, is kept on a pending list and sent
-  once Wi-Fi is back (today the plugin keeps nothing and does not push a
-  book opened offline). Mapped books (kepub preferred, plain EPUB
+  once Wi-Fi is back (done in C4). Mapped books (kepub preferred, plain EPUB
   supported) sync under the original's checksum through a library index
   and per-book translation tables that the desktop puts on the device;
   original EPUBs never go onto the device, and without the index nothing

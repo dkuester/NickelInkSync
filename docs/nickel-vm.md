@@ -38,6 +38,11 @@ just vm log                   # NickelInkSync.log and the plugin's syslog lines
 just vm down
 ```
 
+To run a second VM of the same kind beside one from another checkout (the
+container names are fixed), set `NICKEL_VM_INSTANCE` (a suffix for the
+containers) and `NICKEL_VM_KOSYNC_PORT` for every command, for example
+`NICKEL_VM_INSTANCE=c4 NICKEL_VM_KOSYNC_PORT=8776 vm/vm.sh kobo up`.
+
 These commands use the `tolino` VM. For the other one, name it first:
 `just vm kobo image`, `just vm kobo up`, `just vm kobo shot` and so on.
 Both can run at once (mock servers on `127.0.0.1:8765` for `tolino` and
@@ -49,8 +54,9 @@ screenshot taken too early shows a half-drawn screen.
 Each VM keeps its state in `vm/state/tolino/` or `vm/state/kobo/` (ignored
 by git): `onboard/` is the user partition (`/mnt/onboard`, with
 `.kobo/KoboReader.sqlite` and `.adds/NickelInkSync/`), `kosync.json` the
-mock's documents. Delete the folder to start from a new device. On the
-`kobo` VM the plugin stays inactive, as on a real Kobo. State from before
+mock's documents. Delete the folder to start from a new device. The plugin
+runs on both, writing positions through Nickel on the `kobo` VM as on a
+real Kobo (stage C4). State from before
 the split (files directly in `vm/state/`, a Tolino on 6.0) is not used any
 more and can be deleted.
 
