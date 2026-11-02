@@ -1136,11 +1136,19 @@ Auf dem Kobo ist das Plugin inaktiv.
     anderes Buch öffnen → nachgeholt (2 Bücher), Konflikt, ohne
     `device prepare`, Kobalt-Schutz. Code bleibt Qt5/C++11-tauglich
     (für C9/C10).
-  - [ ] **du:** Am Clara BW: Buch mit WLAN öffnen (Stand vom Server),
-    dann WLAN aus, lesen, schließen (vorgemerkt), WLAN an, ein anderes Buch
-    öffnen (nachgeholt); in KOReader prüfen. Dazu der Fall, den die VM nur
-    annähert: Anfang eines Kapitels lesen, verlassen, in KOReader weiter in
-    dasselbe Kapitel, Kobo neu starten, öffnen.
+  - [x] **du:** Am Clara BW (2026-11-02): Book R (kepub, zugeordnet) mit
+    WLAN geöffnet, öffnet bei R2-40 für KOReaders R2-41 („Fortschritt
+    übernommen“); WLAN aus, bis R2-64 gelesen, geschlossen („Fortschritt
+    vorgemerkt“); Foundation (kepub) offline erst „Buch nicht zugeordnet“,
+    nach Zuordnen und `device prepare` offline gelesen bis Kapitel 5,
+    vorgemerkt; WLAN an, Book R geöffnet: „Vorgemerktes gesendet / 2
+    Bücher“. KOReader: Book R bei R2-63, Foundation auf der Seite mit dem
+    Absatzanfang (Kapitel 5, 183 Zeichen vor der Kobo-Stelle,
+    `position = paragraph`). Vorher lag auf dem Kobo das alte Paket vom
+    25.10. (`dist/` war nicht neu gebaut), das Plugin blieb inaktiv.
+  - [ ] **du:** Der Fall, den die VM nur annähert: Anfang eines Kapitels
+    lesen, verlassen, in KOReader weiter in dasselbe Kapitel, Kobo neu
+    starten, öffnen.
 - [ ] **C5 Dialog bei Konflikten** (braucht C4)
   - [ ] **ich:** Qt-Dialog beim Öffnen mit beiden Ständen und drei Knöpfen
     (`ConfirmationDialog` hat zwei eigene; der dritte muss ein
