@@ -575,7 +575,7 @@ static void when_online(int seconds, F fn)
         } else if (waited_s >= seconds) {
             t->stop();
             t->deleteLater();
-            log_line(QStringLiteral("still no network after %1 s: trying anyway").arg(seconds));
+            log_line(QStringLiteral("still no network after %1 s: trying anyway").arg(waited_s));
             fn();
         }
     });

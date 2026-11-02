@@ -1350,7 +1350,17 @@ Auf dem Kobo ist das Plugin inaktiv.
     das Plugin beim Öffnen „Buch nicht zugeordnet“ statt „Gerät nicht
     vorbereitet“: `pull` meldet ohne Index `not-mapped`, `NO_INDEX` kommt
     nur von `push`, und der wird danach nicht mehr versucht (wie bei C4).
-  - [ ] **du:** Dieselben Tests mit dem EPUB von Book R am **Libra 2**.
+  - [x] **du:** Dieselben Tests mit dem EPUB von Book R am **Libra 2**
+    (2026-11-02): KOReader R3-10 → Libra 2 öffnet bei R3-10 („Fortschritt
+    übernommen“, `chapter3.xhtml#point(/1/4/20/1:208)` geschrieben, Nickel
+    meldet genau diese Stelle zurück, die Stelle aus dem `Bookmark` hat
+    also auch beim Adobe-Leser die Form von `ChapterIDBookmarked`); offline
+    bis R3-51 → „Fortschritt vorgemerkt“; WLAN an, anderes Buch →
+    „Vorgemerktes gesendet / 1 Buch“; Libra 2 offline R3-95, KOReader R3-72
+    → „Konflikt, nicht geladen“. Die Meldung „Fortschritt vorgemerkt“ kam
+    einmal erst beim Öffnen von Book P: das Warten auf WLAN dauerte dort
+    35 s statt 15 (Nickel war beschäftigt) und der Push ohne DNS noch 8 s,
+    die Meldung gehörte zu Book R.
 - [ ] **C7 Tolino** (braucht C4 bis C6)
   - [ ] **ich:** Dasselbe Plugin auf dem Shine Color; Kobalts Schreibweg
     dort prüfen (Kobalt schreibt auf `develop` seit 8b144d2 auch auf dem
