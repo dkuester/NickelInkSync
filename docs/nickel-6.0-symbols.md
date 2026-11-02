@@ -164,10 +164,64 @@ VM lost the rendered page images at every restart, so after a restart
 Nickel always rendered live and could not show N5 (now
 `/mnt/aux` is kept, see [nickel-vm.md](nickel-vm.md)); and the device test
 of 31.10. on the Kobo, which dropped the rows of all three cache tables
-without a restart, still opened at the chapter start because Nickel wrote
-the pages back from memory. That was a book already open in that session;
-H dropped before the first opening, when Nickel holds no pages of the book
-in memory yet.
+without a restart, still opened at the chapter start. That was not Nickel
+writing pages back from memory; see
+[Restart after a USB write](#restart-after-a-usb-write).
+
+## Restart after a USB write
+
+Checked on 1 and 2 November 2026 in the `kobo` VM (6.0.279225), Book R as
+EPUB. Until then the CLI and the desktop client asked for a restart after
+dropping pages over USB, "because Nickel keeps those pages in memory".
+That does not hold.
+
+**Where Nickel looks.** `openBookFromPersistentCache` always calls
+`initializeBookFromPersistentCache`, which asks
+`PersistedCacheManager::getEntryByStartLocation`, then
+`getEntryWrappingLocation`, then `getByChapterInPersistence` on
+`ContentLocation::toSpine()` (through `getFirstEntryFound`), and else logs
+"openBookFromPersistentCache could not find page with location at …" and
+renders the place live. Each of these is a query on
+`CachePersistenceRenderedPageData` at the moment of opening; the
+in-memory cache (`populateMemoryCache`) is filled only after a hit. The
+same call chain is in 5.18.279364. The chapter fallback hits only when the
+chapter's **first** page is cached: with chapter 2 cached only from
+`/1/4/114`, a place at `/1/4/60` opened right (E3 below, and F above).
+
+**USB in the VM.** `usb plug add` on `/run/kobo/udev/fifo` and "Connect":
+Nickel closes `KoboReader.sqlite` (the WAL is checkpointed, `-wal` and
+`-shm` are gone, no file of it stays open); a book that is open is closed
+first and its bookmark saved. Then the position was written from the host
+with the same SQL as `write_positions` and `drop_stale_pages`, and
+`usb plug remove` ejected.
+
+| | Before | Written | Pages dropped | Restart | Nickel opened at |
+|---|---|---|---|---|---|
+| E5 | book opened earlier in this session, chapter 2 cached from its start | `/1/4/100` | no | no | **chapter start**, "inferred position with getByChapterInPersistence" |
+| E1 | as E5 | `/1/4/120` | yes | no | R2-59, right; "could not find page", live |
+| E1b | as E5 | `/1/4/100` | yes | no | R2-49, right |
+| E3 | after a start, chapter 2 cached only from `/1/4/114` | `/1/4/60` | no | no | R2-29, right |
+| E4 | book open while plugging in, chapter 2 cached from its start | `/1/4/140` | yes | no | Nickel went to the home screen, the dropped rows stayed gone; opening: R2-69, right |
+
+So the failure also comes on a later opening in the same session (E5), not
+only on the first after a start, and dropping the target chapter's pages
+fixes it without a restart (E1, E1b, E4).
+
+**The Kobo test of 31.10.** The backups of that test
+(`kobo-cachetest`, 12:06, and `kobo-progresstest`, 12:13) show Book R's
+chapter 2 pages afterwards with new ids and `lastAccess` 12:11:44–52
+(before: 12:00:21–30): rendered fresh from the chapter start, not written
+back. `ChapterIDBookmarked` named the chapter start before and after, so
+Nickel opened where the row said; why the written place was not in the row
+then is open.
+
+**Consequence.** The CLI and the desktop client say "eject" after dropping
+pages, with a restart only as the fallback if the book still opens at the
+chapter start. Restoring a backup still asks for a restart (the whole
+database is replaced; not checked). Not checked: the Tolino VM (same code
+path) and a device test without a restart on the Clara BW and the Tolino.
+Kobo 4.x: whether 4.38 has the `CachePersistence*` tables is open; the
+CLI drops pages only when they exist.
 
 ## The Kobalt guard on the Kobo
 

@@ -123,7 +123,7 @@ drafts the release; only the owner tags and publishes.
       cache of rendered pages (`CachePersistence*` tables) and, with no
       cached page at the written place, at the chapter's first cached page.
       The CLI now drops that chapter's cached pages when it writes, over USB
-      (a restart is needed then) and live through the plugin, and folds in
+      (ejecting is enough, checked in the Kobo VM) and live through the plugin, and folds in
       the `-wal` files Tolino 5.18.279364 leaves on the USB partition.
       Device test on the Tolino 5.18.279364 with Book R: over USB 4 pages
       dropped, after a restart it opened at R2-116 for R2-117; through the

@@ -114,8 +114,8 @@ pub struct Report {
   pub questions: Vec<Question>,
   /// The copy of the device database made before writing to it.
   pub backup: Option<PathBuf>,
-  /// Nickel's cached pages dropped so it opens at the written place; then
-  /// the device must be restarted, not only ejected.
+  /// Nickel's cached pages dropped so it opens at the written place; the
+  /// report says so (ejecting is enough, a restart only the fallback).
   pub pages_dropped: usize,
 }
 
@@ -794,9 +794,9 @@ mod tests {
   }
 
   /// Nickel's cached pages of the chapter hide the written place: they are
-  /// dropped, and the report asks for a restart instead of only ejecting.
+  /// dropped, and the report says so; ejecting is enough.
   #[test]
-  fn a_pull_that_drops_cached_pages_asks_for_a_restart() {
+  fn a_pull_that_drops_cached_pages_says_so() {
     let s = Setup::new("pull-pages");
     let chapter = "OEBPS/xhtml/xhtml-0-89.xhtml";
     let conn = rusqlite::Connection::open(s.root.join(".kobo/KoboReader.sqlite")).unwrap();
@@ -838,12 +838,16 @@ mod tests {
     assert_eq!(report.pages_dropped, 2);
     let text = crate::i18n::report(crate::i18n::Lang::En, &report);
     assert!(
-      text.contains("restart it before you open the book"),
+      text.contains("Dropped 2 of Nickel's cached pages that hid the place."),
       "{text}"
     );
-    assert!(!text.contains("Eject the device before you open"), "{text}");
+    assert!(text.contains("Eject the device before you open"), "{text}");
+    assert!(
+      text.contains("still open at the start of the chapter"),
+      "{text}"
+    );
     let text = crate::i18n::report(crate::i18n::Lang::De, &report);
-    assert!(text.contains("neu starten"), "{text}");
+    assert!(text.contains("trotzdem am Kapitelanfang"), "{text}");
   }
 
   #[test]

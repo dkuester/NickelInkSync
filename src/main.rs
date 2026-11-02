@@ -1265,8 +1265,8 @@ fn pull(target: &Target, force: bool, write: bool, emit: bool) -> Result<bool> {
         if pages_dropped > 0 {
           println!(
             "Dropped {pages_dropped} of Nickel's cached pages that hid the place. Eject the \
-             device and restart it before you open the book: Nickel keeps those pages in \
-             memory until then."
+             device before you open the book; should it still open at the start of the \
+             chapter, restart the device."
           );
         } else {
           println!("Eject the device before you open the book.");

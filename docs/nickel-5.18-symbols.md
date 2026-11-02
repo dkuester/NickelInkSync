@@ -466,16 +466,18 @@ Device tests (Book R, plugin off, position written over USB):
 | What was dropped | Restart | Opened at |
 |---|---|---|
 | nothing | yes | chapter start (log line above) |
-| all three tables' rows of the book (Kobo) | no | chapter start; Nickel wrote the pages back from memory |
+| all three tables' rows of the book (Kobo) | no | chapter start; the backups show the chapter rendered fresh (new page ids) and the row still at the chapter start, so the written place had not reached the row ([details](nickel-6.0-symbols.md#restart-after-a-usb-write)) |
 | all three tables' rows of the book (Tolino) | yes | the written place, R2-63; the log shows a fresh render ("received live rendering") |
 | only the pages of the target chapter and their chapter rows (Tolino) | yes | the written place, R2-149; chapter 3's 14 pages and the book row stayed |
 
 Ruled out on the way: `tolino_bookmark` (both rows held the place, PR
-#40), `CurrentChapterProgress`, and the page cache alone without a restart.
+#40) and `CurrentChapterProgress`.
 The fix (`drop_stale_pages` in `src/db.rs`): when the CLI writes a
 position and no cached page of the book holds it, it drops the cached
 pages of that chapter in the same transaction, over USB and live. Over USB
-the device then needs a restart. Device test of this code (31.10.): over
+a restart was asked for until 2 November; the Kobo VM then showed that
+ejecting is enough ([Restart after a USB write](nickel-6.0-symbols.md#restart-after-a-usb-write)).
+Device test of this code (31.10.): over
 USB 4 pages were dropped and after a restart Book R opened at R2-116 for
 R2-117; through the plugin (live, no restart) 14 pages were dropped and
 Book R opened at R3-66 for R3-67. Nickel knew its place only after 8 s

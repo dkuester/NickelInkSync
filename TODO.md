@@ -906,6 +906,16 @@ Entscheidungen des Besitzers (2026-10-31):
   - [x] **ich:** Über USB blieb seit 5.18.279364 immer eine `-wal`-Datei
     liegen und blockierte das Schreiben; die CLI arbeitet sie jetzt nach
     einer Sicherung ein.
+  - [x] **ich:** Neustart nach dem Schreiben über USB geprüft (Kobo-VM 6.0,
+    2.11.): Nickel sucht seine Seiten bei jedem Öffnen in der Datenbank;
+    Seiten verwerfen und auswerfen reicht, auch wenn das Buch in derselben
+    Sitzung schon offen war. CLI, Desktop-Client und READMEs sagen jetzt
+    „auswerfen“, den Neustart nur als Rückfall
+    (`docs/nickel-6.0-symbols.md`, „Restart after a USB write“).
+  - [ ] **du:** Gerätetest ohne Neustart am Clara BW und am Tolino:
+    Kapitelanfang von Book R lesen, verlassen, in KOReader weiter ins
+    selbe Kapitel, `pull --write` über USB („Dropped …“), nur auswerfen,
+    öffnen.
   - [ ] **ich (falls das Plugin ohne Neustart nicht reicht):** die Seiten
     über Nickel selbst verwerfen (`PersistedCacheManager`); als letzter
     Ausweg `deleteAllRelatedToBookInfo`. Früherer Plan, falls auch das

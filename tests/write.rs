@@ -754,7 +754,8 @@ const CHAPTER_90: &str = "OEBPS/xhtml/xhtml-0-90.xhtml";
 
 /// No cached page holds the place: the pages of its chapter go, so Nickel
 /// renders the place instead of opening at the chapter's first cached page;
-/// other chapters keep theirs, and the output asks for a restart.
+/// other chapters keep theirs, and the output says to eject (a restart only
+/// as the fallback).
 #[test]
 fn pull_write_drops_the_cached_pages_of_the_chapter() {
   let s = Setup::tolino("write-page-cache");
@@ -786,7 +787,14 @@ fn pull_write_drops_the_cached_pages_of_the_chapter() {
     out.contains("Dropped 2 of Nickel's cached pages that hid the place."),
     "{out}"
   );
-  assert!(out.contains("restart it before you open the book"), "{out}");
+  assert!(
+    out.contains("Eject the device before you open the book"),
+    "{out}"
+  );
+  assert!(
+    out.contains("still open at the start of the chapter"),
+    "{out}"
+  );
   assert_eq!(
     cached_pages(&Connection::open(s.db()).unwrap()),
     (vec!["c".to_string()], 1)
