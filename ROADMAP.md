@@ -35,13 +35,17 @@ drafts the release; only the owner tags and publishes.
 ## Release 0.2.0
 
 Wished for by the owner (2026-11-02), for the desktop client: it should meet
-general ergonomics and usability requirements, based on a review against
+general ergonomics and usability requirements, based on the review against
 DIN EN ISO 9241 (parts 110, 11, 112, 125, 143, 210) in
-`docs/usability-requirements.md` (to come). Accessibility to WCAG 2.1 level
-AA, carried over to desktop software through WCAG2ICT and EN 301 549
-(chapter 11), should be in place by release 1.0.0 at the latest; 0.2.0
-does the groundwork (an audit with VoiceOver and Narrator, keyboard, focus,
-contrast and scaling, and the first fixes).
+`docs/usability-requirements.md` (PR #79). Accessibility to WCAG 2.2 level
+AA (decided 2026-11-02 instead of 2.1: EN 301 549 V4.1.1 builds on it),
+carried over to desktop software through WCAG2ICT and EN 301 549
+(chapter 11), should be in place by release 1.0.0 at the latest, on macOS
+and Windows. 0.2.0 does the groundwork: understandable errors, undo and
+cancel, feedback, shortcuts, help, labelled fields, contrast, keyboard and
+focus, zoom, and audits with VoiceOver and Narrator. Gaps egui cannot close
+yet are worked around, reported upstream and documented; no formal
+conformance statement.
 
 ## Recently completed
 
