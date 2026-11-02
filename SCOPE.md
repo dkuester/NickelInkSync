@@ -36,8 +36,11 @@ NickelHook plugin is built twice (Qt5 and Qt6).
 On 2026-10-28 the reference Clara BW updated itself to firmware
 **6.0.279225** (database version 222). Since 2026-11-01 the 4.x line has a
 test device again, a **Kobo Libra 2 on 4.38.23852** (Qt5); the 4.46
-findings below come from the Clara BW before its update and are checked
-again on the Libra 2 (stage C8 in [TODO.md](TODO.md)).
+findings below come from the Clara BW before its update. On the Libra 2
+(database version 174, model ID 388) they hold unchanged: all 32
+highlights of Book P and Book Q are stored exactly as on 4.46, a kepub
+reading position is the span only, and there is no page cache
+(`CachePersistence*`) on 4.38 (stage C8 in [TODO.md](TODO.md)).
 
 ## Book identity
 

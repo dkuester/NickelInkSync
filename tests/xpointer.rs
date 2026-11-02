@@ -119,31 +119,49 @@ fn check_highlights(sql: &str, flavor: PointFlavor, file: &str, sdr: &str, count
   }
 }
 
+/// The Kobo 4.x probe fixtures: the Clara BW on 4.46 and the Libra 2 on
+/// 4.38.
+const KOBO_4: [&str; 2] = [
+  "kobo-clarabw-4.46-probe-books.sql",
+  "kobo-libra2-4.38-probe-books.sql",
+];
+
 #[test]
 fn kobo_kepub_highlights() {
-  for (file, sdr) in [
-    ("book-p.kepub.epub", "book-p.kepub.sdr"),
-    ("book-q.kepub.epub", "book-q.kepub.sdr"),
-  ] {
-    check_highlights(
-      "kobo-clarabw-4.46-probe-books.sql",
-      PointFlavor::JoinText,
-      file,
-      sdr,
-      8,
-    );
+  for sql in KOBO_4 {
+    for (file, sdr) in [
+      ("book-p.kepub.epub", "book-p.kepub.sdr"),
+      ("book-q.kepub.epub", "book-q.kepub.sdr"),
+    ] {
+      check_highlights(sql, PointFlavor::JoinText, file, sdr, 8);
+    }
   }
 }
 
 #[test]
 fn kobo_epub_highlights() {
-  for (file, sdr) in [("book-p.epub", "book-p.sdr"), ("book-q.epub", "book-q.sdr")] {
-    check_highlights(
-      "kobo-clarabw-4.46-probe-books.sql",
-      PointFlavor::JoinText,
-      file,
-      sdr,
-      8,
+  for sql in KOBO_4 {
+    for (file, sdr) in [("book-p.epub", "book-p.sdr"), ("book-q.epub", "book-q.sdr")] {
+      check_highlights(sql, PointFlavor::JoinText, file, sdr, 8);
+    }
+  }
+}
+
+/// Firmware 4.38 (Libra 2) stores every highlight exactly as 4.46 (Clara
+/// BW) did.
+#[test]
+fn kobo_4_38_highlights_as_on_4_46() {
+  let (old, new) = (load(KOBO_4[0]), load(KOBO_4[1]));
+  for file in [
+    "book-p.epub",
+    "book-p.kepub.epub",
+    "book-q.epub",
+    "book-q.kepub.epub",
+  ] {
+    assert_eq!(
+      device_highlights(&old, file),
+      device_highlights(&new, file),
+      "{file}"
     );
   }
 }
@@ -370,9 +388,11 @@ fn xpointer_fallbacks() {
 /// `/1/4/12/1:20`), offsets in UTF-8 bytes.
 #[test]
 fn kobo_4_epub_highlights_round_trip() {
-  let db = load("kobo-clarabw-4.46-probe-books.sql");
   let flavor = PointFlavor::JoinText;
-  for (file, sdr) in [("book-p.epub", "book-p.sdr"), ("book-q.epub", "book-q.sdr")] {
+  for (sql, (file, sdr)) in KOBO_4.into_iter().flat_map(|sql| {
+    [("book-p.epub", "book-p.sdr"), ("book-q.epub", "book-q.sdr")].map(|b| (sql, b))
+  }) {
+    let db = load(sql);
     let mut book = epub(file);
     let highlights = device_highlights(&db, file);
     assert_eq!(highlights.len(), 8, "{file}");
@@ -564,12 +584,15 @@ fn kepub_xpointer_fallbacks() {
 /// start.
 #[test]
 fn kobo_4_kepub_highlights_to_spans() {
-  let db = load("kobo-clarabw-4.46-probe-books.sql");
   let flavor = PointFlavor::JoinText;
-  for (file, sdr) in [
-    ("book-p.kepub.epub", "book-p.kepub.sdr"),
-    ("book-q.kepub.epub", "book-q.kepub.sdr"),
-  ] {
+  for (sql, (file, sdr)) in KOBO_4.into_iter().flat_map(|sql| {
+    [
+      ("book-p.kepub.epub", "book-p.kepub.sdr"),
+      ("book-q.kepub.epub", "book-q.kepub.sdr"),
+    ]
+    .map(|b| (sql, b))
+  }) {
+    let db = load(sql);
     let mut book = epub(file);
     let highlights = device_highlights(&db, file);
     assert_eq!(highlights.len(), 8, "{file}");
@@ -639,4 +662,38 @@ fn kobo_4_kepub_reading_positions_round_trip() {
     back.position.to_string(),
     "OEBPS/text/chapter2.xhtml#kobo.17.1"
   );
+}
+
+/// Book R as the Libra 2 (4.38.23852) stored it on 2026-11-02, with the
+/// marker at the top of the page as the owner read it: the plain EPUB in
+/// R2-51 (byte 113, character 105 after umlauts, the page start), the
+/// kepub at the span of R3-121 (the paragraph, without offset). Both there
+/// and back.
+#[test]
+fn kobo_4_38_book_r_positions() {
+  let flavor = PointFlavor::JoinText;
+  for (file, expected) in [
+    (
+      "book-r.epub",
+      "/body[1]/DocFragment[3]/body[1]/p[51]/text()[1].105",
+    ),
+    (
+      "book-r.kepub.epub",
+      "/body[1]/DocFragment[4]/body[1]/div[1]/div[1]/p[121]/span[1]/text()[1].0",
+    ),
+  ] {
+    let position = stored("kobo-libra2-4.38-probe-books.sql", file);
+    let mut book = epub(file);
+    let there = to_xpointer(&mut book, &position, flavor).unwrap();
+    assert!(there.exact, "{file}");
+    assert_eq!(there.xpointer, expected, "{file}");
+    let back = if file.contains("kepub") {
+      from_xpointer_kepub(&mut book, &there.xpointer, flavor)
+    } else {
+      from_xpointer(&mut book, &there.xpointer, flavor)
+    }
+    .unwrap();
+    assert!(back.exact, "{file}");
+    assert_eq!(back.position, position, "{file}");
+  }
 }

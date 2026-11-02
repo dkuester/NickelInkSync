@@ -1141,7 +1141,7 @@ Auf dem Kobo ist das Plugin inaktiv.
 - [~] **C8 Kobo 4.x lesen und zurückschreiben** (Rust, CLI und GUI; kann
   sofort parallel laufen) · neues Testgerät **Kobo Libra 2, Firmware
   4.38.23852** (Qt5, von dir am 2026-11-01).
-  - [ ] **du:** Datenbankkopie des Libra 2 (`.kobo/KoboReader.sqlite`, Nickel
+  - [x] **du:** Datenbankkopie des Libra 2 (`.kobo/KoboReader.sqlite`, Nickel
     beendet bzw. per USB) mit Book P/Q/R als kepub und EPUB, P und Q markiert
     wie zuvor, für neue Fixtures (`tools/make_db_fixture.py`).
   - [x] **ich:** Rückrichtung für Kobo 4.x (`from_xpointer`,
@@ -1162,10 +1162,13 @@ Auf dem Kobo ist das Plugin inaktiv.
     meldet 4.38.23852 und Modell-ID 388 (Kobo Libra 2), Datenbankversion
     174. **Kein Seiten-Cache** auf 4.38: keine `CachePersistence*`-Tabellen,
     die CLI verwirft dort also nichts (wie für ältere Firmware vorgesehen).
-  - [ ] **ich:** 4.38-Fixtures aus der Datenbankkopie, gegen die
-    4.46-Befunde prüfen (Markierungen, Book-R-Positionen). Stand
-    2026-11-02: Auf dem Libra 2 liegen noch keine Bücher und keine
-    Markierungen.
+  - [x] **ich:** 4.38-Fixtures (`kobo-libra2-4.38-probe-books.sql`,
+    2026-11-02): alle 32 Markierungen beim ersten Versuch gespeichert und
+    genau wie auf 4.46; Book R im EPUB `chapter2.xhtml#point(/1/4/104/1:113)`
+    (R2-51), im kepub `chapter3.xhtml#kobo.122.1` (R3-121), beide hin und
+    zurück (`tests/xpointer.rs`). In den kepubs zeigt 4.38 wie 4.46 zwei
+    Markierungen verschoben an (p3w03 nach `&amp;`, q7w03 nach `&lt;`/`&gt;`),
+    gespeichert sind sie richtig.
   - [ ] **du:** Book R vom Server per USB auf den **Libra 2** schreiben
     (EPUB und zugeordnetes kepub), auswerfen, öffnen.
 - [ ] **C9 Qt5-Erkundung für Kobo 4.x** (ersetzt N1; kann sofort parallel
