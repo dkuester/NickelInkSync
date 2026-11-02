@@ -1341,8 +1341,16 @@ Auf dem Kobo ist das Plugin inaktiv.
     Startzeit statt Zähler. Der „Konflikt“ blieb aus, weil `config.ini`
     dort `confirm = never` hat (dann gewinnt der neuere Stand, kein
     Konflikt).
-  - [ ] **du:** Dieselben Tests wie C4 am **Libra 2** (Anleitung im PR),
-    ab „offline lesen → vorgemerkt“, dann EPUB.
+  - [x] **du:** Dritter Gerätetest am Libra 2 (2026-11-02, kepub, mit
+    `confirm = backwards`): offline bis R2-162 gelesen → „Fortschritt
+    vorgemerkt“ (nach 15 s); Book P offline geöffnet und geschlossen →
+    nichts gesendet; WLAN an, Book Q geöffnet → „Vorgemerktes gesendet / 1
+    Buch“; KOReader R2-130, Libra 2 offline R2-197 → „Konflikt, nicht
+    geladen“, beim Verlassen „Nicht gesendet“. Ohne `library.json` meldet
+    das Plugin beim Öffnen „Buch nicht zugeordnet“ statt „Gerät nicht
+    vorbereitet“: `pull` meldet ohne Index `not-mapped`, `NO_INDEX` kommt
+    nur von `push`, und der wird danach nicht mehr versucht (wie bei C4).
+  - [ ] **du:** Dieselben Tests mit dem EPUB von Book R am **Libra 2**.
 - [ ] **C7 Tolino** (braucht C4 bis C6)
   - [ ] **ich:** Dasselbe Plugin auf dem Shine Color; Kobalts Schreibweg
     dort prüfen (Kobalt schreibt auf `develop` seit 8b144d2 auch auf dem
