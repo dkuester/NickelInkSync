@@ -88,6 +88,29 @@ jobs:
             grep -qE " T $h\$" plugin/nm.txt || { echo "::error::$h not exported"; exit 1; }
           done
           test "$(tar -tzf plugin/Kobo.tgz)" = "imageformats/libnickelinksync.so" || { echo "::error::Unexpected Kobo.tgz layout"; exit 1; }
+      # Kobo firmware 4.x: the reference lists the symbols of the classes the
+      # plugin uses in libnickel 4.38.23852 (tools/nickel_symbol_reference.py).
+      - name: Plugin symbols exist in libnickel 4.38 (Qt 5)
+        run: python tools/check_plugin_symbols.py --qt 5 tools/libnickel-4.38.23852.syms.gz
+      # Qt 5.2.1 NickelTC (arm-nickel-linux-gnueabihf); Qt 5.2.1 has no symbol
+      # versions, so the check is the library it needs and no Qt 6.
+      - name: Plugin build (Qt 5, KoboRoot.tgz)
+        run: |
+          tools/build_plugin_qt5.sh
+          lib=target/plugin-qt5/libnickelinksync.so
+          dump=target/plugin-qt5/objdump.txt
+          file -b "$lib" | grep -q 'ELF 32-bit LSB shared object, ARM' || { echo "::error::Qt 5 plugin is not a 32-bit ARM library"; exit 1; }
+          grep -qE 'NEEDED +libQt5Core\.so\.5$' "$dump" || { echo "::error::Qt 5 plugin does not link Qt 5"; exit 1; }
+          if grep -qE 'Qt_6|libQt6' "$dump"; then echo "::error::Qt 6 in a Qt 5 build"; exit 1; fi
+          for h in _nh_ReadingController__setVolume _nh_ReadingView__leavingReadingExperience; do
+            grep -qE " T $h\$" target/plugin-qt5/nm.txt || { echo "::error::$h not exported (Qt 5)"; exit 1; }
+          done
+          test "$(tar -tzf plugin/KoboRoot.tgz)" = "./usr/local/Kobo/imageformats/libnickelinksync.so" || { echo "::error::Unexpected KoboRoot.tgz layout"; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NickelInkSync-kobo4-KoboRoot
+          path: plugin/KoboRoot.tgz
+          if-no-files-found: error
       - name: Package for the Tolino
         run: |
           d=dist/NickelInkSync

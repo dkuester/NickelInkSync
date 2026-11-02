@@ -45,6 +45,13 @@ plugin:
   docker run --rm --platform linux/amd64 --volume="$PWD:$PWD" --workdir="$PWD" {{ toolchain }} 'make -C plugin && make -C plugin kobo'
   tar -tzvf plugin/Kobo.tgz
 
+# Build the plugin for Kobo firmware 4.x (Qt 5, plugin/KoboRoot.tgz) in
+# NickelTC, needs Docker
+plugin-qt5:
+  git submodule update --init plugin/NickelHook
+  tools/build_plugin_qt5.sh
+  tar -tzvf plugin/KoboRoot.tgz
+
 # Everything for the Tolino in dist/NickelInkSync: Kobo.tgz for .kobo/ and
 # the folder for .adds/
 package: build-device plugin
