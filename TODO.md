@@ -72,6 +72,77 @@ Entscheidungen des Besitzers (2026-10-31):
 - Ein Workflow baut die Assets bei einem Tag `v*` und legt einen Entwurf an;
   den Tag setzt und das Release veröffentlicht nur der Besitzer.
 
+## Release 0.2.0
+
+Wünsche des Besitzers (2026-11-02) für den **Desktop-Client** (`gui/`).
+Grundlage ist die Normenprüfung in `docs/usability-requirements.md`
+(PR #79); die Nummern in Klammern verweisen auf deren Tabellen.
+
+Entscheidungen des Besitzers (2026-11-02, jeweils die Empfehlung aus der
+Normenprüfung):
+
+- **Ziel WCAG 2.2 AA** statt 2.1 (E2): EN 301 549 V4.1.1 (September 2026)
+  beruht darauf; 2.2 enthält 2.1 ganz.
+- **Plattformen** (E1): macOS und Windows für 1.0.0; Linux nach Kräften.
+- **Grenzen von egui** (E3: Tabellen, Überschriften, Live-Meldungen): in
+  0.2.0 umgehen, bei egui/AccessKit melden oder beitragen, den Rest in den
+  READMEs nennen; kein Wechsel weg von egui.
+- **Tests** (E4): du mit der Sprachausgabe (Windows), ich mit VoiceOver
+  (macOS); vor 1.0.0 ein Test mit einer blinden oder sehbehinderten Person.
+- **Keine formale Konformitätserklärung** (E5), nur ein kurzer Abschnitt in
+  den READMEs mit erreichter Stufe und bekannten Grenzen.
+- **macOS-Menüleiste** (E6): in 0.2.0 nur Tastenkürzel (Cmd-, und Cmd-Q),
+  ohne neue Abhängigkeit; ein echtes Menü, wenn es beim Testen fehlt.
+
+- [~] **U1 Ergonomie und Usability** nach DIN EN ISO 9241 (Teile 110, 11,
+  112, 125, 143, 210).
+  - [x] **ich:** Normenprüfung (PR #79).
+  - [x] **du:** Punkte für 0.2.0 und Entscheidungen festgelegt (2026-11-02).
+  - [ ] **ich:** Verständliche Fehler (I6, A12): häufige Fehler (Server
+    nicht erreichbar, falsches Passwort, Bibliothek fehlt, Gerät nur lesbar)
+    deutsch und englisch, mit dem nächsten Schritt; Server-URL und
+    Bibliotheksordner im Einstellungsdialog vor dem Speichern prüfen.
+  - [ ] **ich:** Rückgängig und Abbrechen (I5): „Rückgängig“ in der Meldung
+    nach dem Entfernen einer Zuordnung; Kopieren und Vorbereiten zwischen
+    zwei Büchern abbrechen.
+  - [ ] **ich:** Rückmeldung (I2, I7): Tooltips an Zuordnen, Entfernen,
+    Senden und Holen in den Buchzeilen; Meldung mit Uhrzeit und
+    Schließen-Knopf; Text neben dem Spinner („3 Bücher werden gesendet …“);
+    Erklärung der Wörter in der Server-Spalte.
+  - [ ] **ich:** Tastenkürzel unter macOS (I3, E6): Cmd-, öffnet die
+    Einstellungen, Cmd-Q beendet; Windows entsprechend Strg-,.
+  - [ ] **ich:** Hilfe (I4, A13): Knopf „Hilfe“ oben, öffnet den
+    README-Abschnitt zum Client; Abschnitt „Barrierefreiheit“ in
+    `README.md` und `README.de.md` (Tastatur, Zoom, Screenreader, Grenzen).
+  - [ ] **du:** Nach diesen Punkten den Client mit drei Aufgaben ausprobieren
+    (I11: Gerät einrichten, Buch zuordnen, Position holen) und sagen, wo es
+    hakt.
+- [~] **U2 Barrierefreiheit nach WCAG 2.2** (Stufe AA, sinngemäß auf
+  Desktop-Software übertragen über WCAG2ICT und DIN EN 301 549, Kapitel 11):
+  wenn möglich **spätestens in Release 1.0.0**. In 0.2.0 die Vorarbeit und
+  die ersten Punkte:
+  - [ ] **ich:** Beschriftungen mit den Feldern verbinden (A2,
+    `labelled_by`): Einstellungen, Sprache, Suche im Kopierdialog,
+    Pfadfelder.
+  - [ ] **ich:** Kontrast (A5): eigene Farben für hell und dunkel
+    (schwacher Text, Warnung, Fehler, Links) mit mindestens 4,5 : 1, an
+    Screenshots nachgemessen.
+  - [ ] **ich:** Tastatur und Fokus (A1, A9): obere Leiste in Leserichtung,
+    Escape bricht den Rückfrage-Dialog ab, Enter löst die Hauptaktion aus,
+    Fokus beim Öffnen in den Dialog und danach zurück.
+  - [ ] **ich:** Zoom (A7): sichtbar machen und speichern; alle Dialoge bei
+    200 % prüfen.
+  - [ ] **ich:** Bestandsaufnahme mit VoiceOver (macOS) nach EN 301 549,
+    Kapitel 11; Ergebnis in `docs/usability-requirements.md`.
+  - [ ] **du:** Dieselbe Bestandsaufnahme mit der Sprachausgabe unter
+    Windows (ich schreibe dir eine Checkliste).
+  - [ ] **ich:** Für 1.0.0: Details zum gewählten Buch ohne Maus (A3),
+    Tabellenzeilen mit eigener Beschriftung (A4), Meldungen vorlesen (A6),
+    Hochkontrast unter Windows (A8), größere Knöpfe in den Buchzeilen
+    (A10); Lücken von egui melden (E3).
+  - [ ] **du:** Vor 1.0.0 ein Test mit einer blinden oder sehbehinderten
+    Person (E4).
+
 ## Grundlagen
 
 - [x] **G1 Lizenz** · PR #5
