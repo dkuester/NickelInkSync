@@ -99,6 +99,33 @@ is drawn, unstyled, but never gets a tap (Nickel's own touch handling), so
 a third button has to be a Nickel widget; and `setText` showed `\n` as a
 space.
 
+### The conflict dialog (C5)
+
+| Purpose | Symbol | Signature (checked) |
+|---|---|---|
+| Its buttons | `_ZNK18ConfirmationDialog12acceptButtonEv`, `…12rejectButtonEv` | `QWidget* acceptButton() const`, `rejectButton() const`: the two `N3ButtonLabel`s (object names `acceptButton`, `rejectButton`), in a `QHBoxLayout` of their own row widget |
+| Third button | `_ZN13N3ButtonLabelC1EP7QWidget` | `N3ButtonLabel(QWidget* parent)`; `Ui_ConfirmationDialog::setupUi` allocates 0x88 bytes for one (5.18 and 6.0; 0x98 on 4.38). A `TouchLabel` and so a `QLabel`; its signal `tapped(bool)` connects by name |
+
+The plugin builds the third button itself (`operator new` with room to
+spare, then the constructor, parented to the buttons' row) and inserts it
+in front of the reject button. Checked in the Kobo VM on 2026-11-02:
+
+- The `N3ButtonLabel` gets taps: `tapped(bool)`, connected by name to a
+  `QAction`'s `trigger()`, ends the dialog with our own result (2).
+  Accept gives 1, reject and the close button 0.
+- The dialog's own style sheet makes its two buttons primary buttons
+  (`#acceptButton,#rejectButton{qproperty-primaryButton:true}`), which
+  Nickel's application style sheet draws grey and centred; the property
+  `primaryButton` set on ours does the same. Copying the reject button's
+  dynamic properties instead is wrong: they are Qt's style sheet caches
+  (`_q_stylesheet_minh` and so on).
+- `setText` takes HTML: `<br>` breaks the line and `<b>` is bold.
+- Nickel shrinks a button's text to fit; with three buttons "Server
+  übernehmen" is drawn smaller than "Später".
+- `getConfirmationDialog(nullptr)` parents the dialog to the main window;
+  `QDialog::exec()` inside the `setVolume` hook shows it over the library
+  and blocks the opening until it is answered.
+
 ## The write path in the VM
 
 A throwaway plugin (not in this repository) did Kobalt's sequence above in
