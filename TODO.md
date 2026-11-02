@@ -1138,7 +1138,7 @@ Auf dem Kobo ist das Plugin inaktiv.
     aus dem Index (Vorschläge nach Titel und Autor); Einstieg über
     NickelMenu-Datei und Buchmenü.
   - [ ] **du:** Am Kobo: vorgemerkte Bücher senden, ein kepub zuordnen.
-- [~] **C8 Kobo 4.x lesen und zurückschreiben** (Rust, CLI und GUI; kann
+- [x] **C8 Kobo 4.x lesen und zurückschreiben** (Rust, CLI und GUI; kann
   sofort parallel laufen) · neues Testgerät **Kobo Libra 2, Firmware
   4.38.23852** (Qt5, von dir am 2026-11-01).
   - [x] **du:** Datenbankkopie des Libra 2 (`.kobo/KoboReader.sqlite`, Nickel
@@ -1169,8 +1169,15 @@ Auf dem Kobo ist das Plugin inaktiv.
     zurück (`tests/xpointer.rs`). In den kepubs zeigt 4.38 wie 4.46 zwei
     Markierungen verschoben an (p3w03 nach `&amp;`, q7w03 nach `&lt;`/`&gt;`),
     gespeichert sind sie richtig.
-  - [ ] **du:** Book R vom Server per USB auf den **Libra 2** schreiben
-    (EPUB und zugeordnetes kepub), auswerfen, öffnen.
+  - [x] **du:** Book R vom Server per USB auf den **Libra 2** schreiben
+    (EPUB und zugeordnetes kepub), auswerfen, öffnen (2026-11-02): KOReader
+    in R3-161 (Zeichen 99), `pull --write` schrieb ins EPUB
+    `chapter3.xhtml#point(/1/4/324/1:102)` und ins kepub
+    `chapter3.xhtml#kobo.162.1`, mit Sicherung. Das EPUB öffnete bei R3-160
+    (sehr große Schrift), Nickel speicherte danach genau den geschriebenen
+    Point zurück; das kepub öffnete bei R3-158, Nickel speicherte
+    `kobo.160.1` (R3-159) als Seitenanfang: die Seite mit dem Anfang von
+    R3-161, wie auf 4.x erwartet (nur der Span).
 - [ ] **C9 Qt5-Erkundung für Kobo 4.x** (ersetzt N1; kann sofort parallel
   laufen)
   - [ ] **du:** Zustimmung zum Download des Firmware-Updates 4.38.23852 für
