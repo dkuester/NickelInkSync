@@ -172,7 +172,7 @@ drafts the release; only the owner tags and publishes.
       the Kobo, its progress opens in KOReader in the original EPUB.
       Replaces N6
 - [x] The plugin on the Kobo 6.0 (stage C4 of the on-device client, PR
-      #72, Nickel VM; device test on the Clara BW open): one `Kobo.tgz` for
+      #72; checked in the Nickel VM and on the Clara BW on 2026-11-02): one `Kobo.tgz` for
       Kobo and Tolino. On the Kobo the CLI only decides (`pull --live
       --nickel-writes`) and makes the day's backup; the plugin writes the
       position through Nickel's own transaction as Kobalt does and drops
