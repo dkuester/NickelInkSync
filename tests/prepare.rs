@@ -182,10 +182,10 @@ fn the_device_sends_what_the_desktop_sends() {
     out.contains("Tables    1 written, 0 up to date, 0 removed"),
     "{out}"
   );
-  // Index, mappings, one table; no EPUB.
+  // Index, mappings, one table; no EPUB. Separators as `/`, also on Windows.
   let mut files: Vec<String> = files_below(&s.dir())
     .iter()
-    .map(|f| f[s.dir().to_str().unwrap().len() + 1..].to_string())
+    .map(|f| f[s.dir().to_str().unwrap().len() + 1..].replace('\\', "/"))
     .collect();
   files.sort();
   assert_eq!(
