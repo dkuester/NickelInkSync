@@ -252,6 +252,7 @@ fn without_a_base_the_newer_time_still_counts() {
       &(LAST_READ - 60).to_string(),
       "KOReader",
       &at(95),
+      "/body[1]/DocFragment[82]/body[1]/div[1]/text()[1].0",
     ]
   );
 }
@@ -318,9 +319,14 @@ fn conflict(s: &Setup) -> i64 {
     .map(str::to_string)
     .collect::<Vec<_>>();
   // ContentID, why, device percent, time, position, server percent, time,
-  // device, XPointer.
+  // device, XPointer, the device position as an XPointer.
   assert_eq!(conflict[0], BOOK);
   assert_eq!(conflict[1], "both-moved");
+  assert_eq!(conflict[8], at(20));
+  assert_eq!(
+    conflict[9],
+    "/body[1]/DocFragment[82]/body[1]/div[1]/text()[1].0"
+  );
   conflict[6].parse().unwrap()
 }
 

@@ -645,7 +645,10 @@ fn confirm(
 
 /// For the plugin: a position needs an answer, with both sides for the
 /// dialog. `why`: `both-moved` (both moved since the last sync),
-/// `always` (`confirm = always`) or `backwards`.
+/// `always` (`confirm = always`) or `backwards`. The fields: ContentID,
+/// why, device percent, `DateLastRead` (Unix seconds), Nickel's position,
+/// server percent, server time, server device, server XPointer, and the
+/// device position as an XPointer (to compare the two places).
 fn emit_conflict(
   book: &Book,
   local: &Local,
@@ -671,6 +674,7 @@ fn emit_conflict(
       &remote.timestamp.to_string(),
       &remote.device,
       &remote.progress,
+      &local.xpointer,
     ],
   );
 }
