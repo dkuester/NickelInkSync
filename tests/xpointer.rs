@@ -665,8 +665,9 @@ fn kobo_4_kepub_reading_positions_round_trip() {
 }
 
 /// Book R as the Libra 2 (4.38.23852) stored it on 2026-11-02, with the
-/// marker at the top of the page as the owner read it: the plain EPUB in
-/// R2-51 (byte 113, character 105 after umlauts, the page start), the
+/// marker the owner saw near the top of the page (not the first words): the
+/// plain EPUB in R2-51 (byte 113, character 105 after umlauts, the page
+/// start at "groß gehen ruhig", with "(R2-51)" later on the line), the
 /// kepub at the span of R3-121 (the paragraph, without offset). Both there
 /// and back.
 #[test]

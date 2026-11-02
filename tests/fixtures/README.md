@@ -150,8 +150,9 @@ The same display bug in the kepub: p3w03 (after `&amp;`) was shown as
 early; the stored rows are right. Both words follow escaped characters,
 so Nickel 4.x seems to place a kepub highlight on screen by the source
 text with its entities, while it stores characters of the parsed text.
-Book R: the EPUB at `chapter2.xhtml#point(/1/4/104/1:113)` (R2-51 at the
-top of the page; byte 113 is character 105 after umlauts), the kepub at
+Book R: the EPUB at `chapter2.xhtml#point(/1/4/104/1:113)` (byte 113 is character 105
+after umlauts, the page start at "groß gehen ruhig"; the owner saw the
+marker "(R2-51)" a little further on), the kepub at
 `chapter3.xhtml#kobo.122.1` (R3-121, span only).
 
 Highlighting on the Kobo 4.46 is fiddly, with two display bugs while the
