@@ -32,6 +32,17 @@ release notes). The same holds for the Kindle (mapped KFX only). Release notes i
 then German. A workflow builds the assets on a `v*` tag and
 drafts the release; only the owner tags and publishes.
 
+## Release 0.2.0
+
+Wished for by the owner (2026-11-02), for the desktop client: it should meet
+general ergonomics and usability requirements, based on a review against
+DIN EN ISO 9241 (parts 110, 11, 112, 125, 143, 210) in
+`docs/usability-requirements.md` (to come). Accessibility to WCAG 2.1 level
+AA, carried over to desktop software through WCAG2ICT and EN 301 549
+(chapter 11), should be in place by release 1.0.0 at the latest; 0.2.0
+does the groundwork (an audit with VoiceOver and Narrator, keyboard, focus,
+contrast and scaling, and the first fixes).
+
 ## Recently completed
 
 - [x] Scope fixed: Rust core + CLI (desktop and on-device) plus a NickelHook plugin

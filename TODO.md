@@ -72,6 +72,25 @@ Entscheidungen des Besitzers (2026-10-31):
 - Ein Workflow baut die Assets bei einem Tag `v*` und legt einen Entwurf an;
   den Tag setzt und das Release veröffentlicht nur der Besitzer.
 
+## Release 0.2.0
+
+Wünsche des Besitzers (2026-11-02) für den **Desktop-Client** (`gui/`):
+
+- [ ] **U1 Ergonomie und Usability** nach den Interaktionsprinzipien der
+  DIN EN ISO 9241 (Teile 110, 11, 112, 125, 143, 210). Grundlage ist die
+  Normenprüfung in `docs/usability-requirements.md` (PR folgt).
+  - [ ] **ich:** Normenprüfung: Anforderung, Quelle, heutiger Stand der GUI,
+    Lücke, Vorschlag, Aufwand, Release.
+  - [ ] **du:** Die Punkte für 0.2.0 und die offenen Entscheidungen
+    festlegen; ich trage sie danach hier einzeln ein.
+- [ ] **U2 Barrierefreiheit nach WCAG 2.1** (Stufe AA, sinngemäß auf
+  Desktop-Software übertragen über WCAG2ICT und DIN EN 301 549, Kapitel 11):
+  wenn möglich **spätestens in Release 1.0.0**. In 0.2.0 die Vorarbeit:
+  Bestandsaufnahme (Screenreader, Tastatur, Fokus, Kontrast, Skalierung) und
+  erste Punkte.
+  - [ ] **ich:** Bestandsaufnahme mit VoiceOver (macOS) und Sprachausgabe
+    (Windows), Ergebnis in `docs/usability-requirements.md`.
+
 ## Grundlagen
 
 - [x] **G1 Lizenz** · PR #5
