@@ -77,8 +77,10 @@ differences in the symbols, all exported by 4.38:
 
 So the write path C4 builds on 6.0 carries over to 4.38 if the code keeps
 `dbConnection`, `updateBookmark` and the place string behind the Qt
-switch. The page cache question (N5, the target chapter's cached pages) has
-to be checked on 4.x again: stage C8 checks it for the USB path.
+switch. The page cache of N5 (the target chapter's cached pages) does not
+exist on 4.38: the Libra 2's database (version 174, rollback journal, no
+WAL) has no `CachePersistence*` tables (read from a copy on 2 November
+2026), so nothing is dropped there and ejecting is all a USB write needs.
 
 ## Dialog, book menu, toast
 

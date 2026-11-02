@@ -234,8 +234,9 @@ dropped 41 cached pages of their chapter 2; the device was only ejected.
 The EPUB opened at the written place (`/1/4/358/1:158`, the page with
 R2-179 at the top, as in KOReader); Nickel kept that bookmark and cached
 fresh pages from `/1/4/356` on.
-Kobo 4.x: whether 4.38 has the `CachePersistence*` tables is open; the
-CLI drops pages only when they exist.
+Kobo 4.x has no page cache: the Libra 2 on 4.38.23852 (database version
+174) has no `CachePersistence*` tables, so the CLI drops nothing there
+([nickel-4.38-symbols.md](nickel-4.38-symbols.md)).
 
 ## The Kobalt guard on the Kobo
 
