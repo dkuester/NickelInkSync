@@ -14,6 +14,7 @@ derive from them.
 | [`tolino-shinecolor-5.18.sql`](db/tolino-shinecolor-5.18.sql) | Tolino Shine Color | 5.18.264769 | 220 | Book A, Book C (plain EPUB) |
 | [`kobo-clarabw-4.46-placeholder-books.sql`](db/kobo-clarabw-4.46-placeholder-books.sql) | Kobo Clara BW | 4.46.23836 | 176 | the three EPUB fixtures below |
 | [`kobo-clarabw-4.46-probe-books.sql`](db/kobo-clarabw-4.46-probe-books.sql) | Kobo Clara BW | 4.46.23836 | 176 | Book P (kepub and EPUB) with highlights |
+| [`kobo-libra2-4.38-probe-books.sql`](db/kobo-libra2-4.38-probe-books.sql) | Kobo Libra 2 | 4.38.23852 | 174 | Book P and Book Q (kepub and EPUB) with highlights, Book R (kepub and EPUB) |
 | [`tolino-shinecolor-5.18-probe-books.sql`](db/tolino-shinecolor-5.18-probe-books.sql) | Tolino Shine Color | 5.18.264769 | 220 | Book P and Book Q (EPUB) with highlights |
 | [`tolino-shinecolor-5.18-placeholder-books.sql`](db/tolino-shinecolor-5.18-placeholder-books.sql) | Tolino Shine Color | 5.18.264769 | 220 | the three EPUB fixtures below |
 
@@ -141,6 +142,18 @@ EPUB), the Tolino (EPUB) and in KOReader (both); stored in the
 | `p7w03` | `kobo.8.2`, 7 | **`/1/4/16/1:13`** | `/1/4/16/3:7` | `p[7]/text()[2].7` | `…/span[2]/text()[1].7` |
 
 ¹ The selection started at the space before the word (`/1/4/14/1:15`).
+
+**Kobo 4.38** (Libra 2, 2026-11-02): all 32 highlights stored on the first
+try, every one exactly as on 4.46 (`kobo-libra2-4.38-probe-books.sql`).
+The same display bug in the kepub: p3w03 (after `&amp;`) was shown as
+`w02 p`, q7w03 (after `&lt;`, `&gt;`) as `2>`, both a few characters
+early; the stored rows are right. Both words follow escaped characters,
+so Nickel 4.x seems to place a kepub highlight on screen by the source
+text with its entities, while it stores characters of the parsed text.
+Book R: the EPUB at `chapter2.xhtml#point(/1/4/104/1:113)` (byte 113 is character 105
+after umlauts, the page start at "groß gehen ruhig"; the owner saw the
+marker "(R2-51)" a little further on), the kepub at
+`chapter3.xhtml#kobo.122.1` (R3-121, span only).
 
 Highlighting on the Kobo 4.46 is fiddly, with two display bugs while the
 stored rows are correct: in the kepub some highlights were shown a few

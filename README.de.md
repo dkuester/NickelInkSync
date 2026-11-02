@@ -19,7 +19,7 @@ teilen.
 > Tolino überträgt `nickelinksync push` die Leseposition jedes
 > seitengeladenen Buchs zu einem KOSync-Server, `status` stellt die Position
 > auf dem Gerät und auf dem Server gegenüber, und `pull` zeigt, was eine
-> neuere Position auf dem Server ändern würde; auf einem Tolino schreibt
+> neuere Position auf dem Server ändern würde; auf einem Tolino oder Kobo schreibt
 > `pull --write` sie aufs Gerät (experimentell, vorher mit
 > Sicherungskopie). Den Scope und die Datenbank-Befunde, auf denen er beruht,
 > findest du in [SCOPE.md](SCOPE.md), die nächsten Schritte in
@@ -37,7 +37,7 @@ nickelinksync pull --device /Volumes/KOBOeReader
 |---|---|
 | `status` | Listet die seitengeladenen Bücher mit Prüfsumme, gespeicherter Position, KOReader-XPointer und, falls eingerichtet, der Position auf dem Server. |
 | `push` | Überträgt die Position jedes Buchs zum Server. Eine Position, die der Server erst nach dem letzten Lesen auf dem Gerät bekommen hat, wird nie überschrieben; außerdem fragt `push` standardmäßig nach, bevor es den Server an eine frühere Stelle im Buch zurücksetzt (siehe `confirm` unten). `--force` überträgt ohne Rückfrage, `--dry-run` zeigt nur, was gesendet würde. |
-| `pull` | Zeigt, für welche Bücher der Server eine neuere Position hat, wie das Gerät sie speichern würde und wo es nachfragen würde. Nur mit `--write` wird sie aufs Gerät geschrieben (bisher nur Tolino, experimentell, siehe unten); `--force` übernimmt die Server-Position ohne Rückfrage. |
+| `pull` | Zeigt, für welche Bücher der Server eine neuere Position hat, wie das Gerät sie speichern würde und wo es nachfragen würde. Nur mit `--write` wird sie aufs Gerät geschrieben (Tolino und Kobo, experimentell, siehe unten); `--force` übernimmt die Server-Position ohne Rückfrage. |
 | `sync --pending` | Sendet die Bücher, deren Push auf dem Gerät gescheitert ist (kein Netz, Server-Fehler), wie sie in `.adds/NickelInkSync/state.json` vorgemerkt sind, sofern sie noch gesendet werden sollen (siehe [Zuletzt abgeglichene Position](#zuletzt-abgeglichene-position)). |
 
 Alle drei nehmen `--book <Text>` (nur Bücher, deren Titel oder Dateipfad den
@@ -153,9 +153,10 @@ wurde über die 32 Zeichen danach gefunden), *chapter start only* (die
 Stelle im Kapitel wurde nicht gefunden), *from the percentage only* (das
 Kapitel fehlt in der anderen Datei, z. B. Calibres `titlepage.xhtml`).
 `pull --write` bringt die Server-Position genauso in eine zugeordnete EPUB
-auf dem Tolino zurück und in ein zugeordnetes kepub auf einem Kobo mit
-Firmware 6.x als die Stelle, die Nickel speichert (`#kobo.N.M:offset`); in
-ein kepub auf Kobo-Firmware 4.x schreibt es nichts.
+auf dem Tolino zurück und in ein zugeordnetes kepub auf einem Kobo
+als die Stelle, die Nickel speichert: `#kobo.N.M:offset` auf Firmware 6.x,
+`#kobo.N.M` auf 4.x (die keinen Offset speichert; das Buch öffnet dann am
+Anfang dieses Abschnitts, meist eines Satzes).
 
 **Kindle (experimentell).** Die Kindle-Unterstützung bleibt, wie sie ist,
 bis Kobo und Tolino stabil laufen: keine Weiterentwicklung und kein
@@ -435,7 +436,7 @@ wird nur beim Start geprüft).
 
 ## Geräte und Bücher
 
-- Kobo mit Firmware 4.x sowie Tolino Shine 5, Shine Color und Vision Color mit
+- Kobo mit Firmware 4.x und 6.x sowie Tolino Shine 5, Shine Color und Vision Color mit
   Firmware 5.x
 - Seitengeladene kepub- und EPUB-Bücher ohne DRM
 - Vorerst muss auf jedem Gerät **dieselbe Datei** liegen. Der Sync-Server
