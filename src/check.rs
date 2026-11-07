@@ -123,6 +123,11 @@ pub fn check(root: &Path, system: Option<&Path>, build: &Build) -> Report {
   let mut r = Report::default();
   let dir = root.join(prepare::DIR);
   let qt5 = device(&mut r, root);
+  if !root.join(".kobo/version").is_file() {
+    // Nothing else can be said, and a list of ✗ for a missing mount point
+    // only hides that.
+    return r;
+  }
   plugin(&mut r, root, system, build, qt5);
   program(&mut r, &dir, build);
   config(&mut r, &dir);
@@ -650,6 +655,18 @@ mod tests {
     let r = check(&t.0, None, &Build::default());
     assert_eq!(find(&r, "Kobalt").mark, Mark::Warn);
     assert!(find(&r, "Kobalt").text.contains("installed"));
+  }
+
+  #[test]
+  fn an_unmounted_device_is_one_line() {
+    let r = check(
+      &std::env::temp_dir().join("nickelinksync-check-not-there"),
+      None,
+      &Build::default(),
+    );
+    assert_eq!(r.lines.len(), 1);
+    assert_eq!(r.lines[0].mark, Mark::Bad);
+    assert!(!r.ok());
   }
 
   #[test]
