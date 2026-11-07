@@ -52,14 +52,14 @@ jobs:
       - name: Device binary is a static 32-bit ARM ELF and runs under QEMU
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq qemu-user-static file
+          sudo apt-get install -y -qq qemu-user file
           bin=target/armv7-unknown-linux-musleabihf/release/nickelinksync
           info=$(file "$bin")
           echo "$info"
           echo "$info" | grep -q 'ELF 32-bit LSB executable, ARM' || { echo "::error::Not a 32-bit ARM executable"; exit 1; }
           echo "$info" | grep -qE 'statically linked|static-pie linked' || { echo "::error::Not statically linked"; exit 1; }
           version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "nickelinksync") | .version')
-          actual=$(qemu-arm-static "$bin" --version)
+          actual=$(qemu-arm "$bin" --version)
           echo "$actual"
           test "$actual" = "nickelinksync $version" || { echo "::error::Expected 'nickelinksync $version'"; exit 1; }
       - uses: actions/upload-artifact@v4
