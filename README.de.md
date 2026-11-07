@@ -384,19 +384,37 @@ in der Datei.
 
 ## Plugin für Kobo und Tolino (experimentell)
 
-Auf einem Kobo mit Firmware 6.0 oder einem Tolino ab Firmware 5.18 gleicht
+Auf einem Kobo mit Firmware 6.0 (4.x: siehe unten) oder einem Tolino mit Firmware 5.18 gleicht
 ein NickelHook-Plugin ohne Rechner ab, per WLAN: Beim Öffnen eines
 seitengeladenen Buchs holt es eine neuere Position vom Server, und das Buch
 öffnet dort; beim Verlassen des Buchs sendet es deine. Es ruft dasselbe
 Programm `nickelinksync` auf dem Gerät auf und folgt derselben Regel
 `confirm` und dem [zuletzt abgeglichenen Position](#zuletzt-abgeglichene-position).
-Fragen kann es noch nicht: Eine Position, die eine Antwort bräuchte, oder
-ein Buch, das seit dem letzten Abgleich auf beiden Seiten weitergelesen
-wurde (ein Konflikt), bleibt unverändert und steht im Log und in einer
-Meldung. Das Gerät muss vorher am Rechner
-[vorbereitet](#buchzuordnung-im-aufbau) sein (`device prepare`): Ohne das
-holt das Plugin weiterhin, sendet aber nichts und sagt das („Gerät nicht
-vorbereitet“). Ein kepub ohne Zuordnung synchronisiert nie.
+
+**Was 0.1.0 kann und was nicht.** Das Plugin ist experimentell und nur auf
+dem Kobo Clara BW (Firmware 6.0.279225), dem Kobo Libra 2 (4.38.23852) und
+dem Tolino Shine Color (5.18.279364) getestet; auf anderer Firmware hat es
+niemand geprüft.
+
+- **Ein Konflikt** (ein Buch, das seit dem letzten Abgleich auf beiden
+  Seiten weitergelesen wurde, und die Stelle des Servers liegt weiter
+  hinten) **hat noch keinen Dialog**: Das Buch bleibt unverändert, nichts
+  wird geholt und nichts gesendet, eine Meldung („Konflikt, nicht
+  geladen“, später „Nicht gesendet“) und ein Logeintrag sagen das.
+  Aufgelöst wird am Rechner, im Desktop-Client oder mit `pull` / `push`
+  (`--force` entscheidet). Der Dialog ist für 0.1.1 geplant.
+- **Das Gerät muss am Rechner [vorbereitet](#buchzuordnung-im-aufbau)
+  sein** (`device prepare`, wieder nach dem Zuordnen oder Hinzufügen von
+  Büchern): Ohne das holt das Plugin weiterhin, sendet aber nichts und sagt
+  das („Gerät nicht vorbereitet“). Ein kepub ohne Zuordnung synchronisiert nie.
+- Es gibt **kein „Jetzt synchronisieren“ und kein Zuordnen auf dem Gerät**:
+  Vorgemerkte Bücher gehen beim nächsten WLAN hinaus (beim Öffnen oder
+  Verlassen eines beliebigen Buchs), zugeordnet wird am Rechner.
+- Vor dem ersten Einsatz die **Datenbank des Geräts sichern**
+  (`.kobo/KoboReader.sqlite` per USB wegkopieren). Das Plugin und
+  `pull --write` legen einmal am Tag eine eigene Sicherung an
+  (`nickelinksync restore` listet und spielt sie zurück), aber eine zweite
+  Kopie kostet nichts.
 
 1. `NickelInkSync-device` aus dem letzten CI-Lauf holen (oder `just
    package`, siehe [Bauen](#bauen)). Darin liegen `Kobo.tgz`, dasselbe für
@@ -479,10 +497,19 @@ seine Datei `uninstall` (so entfernt man Kobalt von Hand) zählt nicht.
 anlegen, auswerfen und den E-Reader aus- und wieder einschalten (die Datei
 wird nur beim Start geprüft).
 
+**Mit [NickelStorygraph](https://github.com/dkuester/NickelStorygraph):**
+beide hängen sich an das Öffnen eines Buchs. Die Korrektur, mit der sie
+sich verketten, ist in NickelStorygraph gemergt (dort PR #16); eine aktuelle
+Version nehmen. Eine ältere kann den Öffnen-Hook von NickelInkSync umgehen,
+dann öffnet ein Buch, ohne die Position vom Server zu holen (das Log sagt
+„opening hook: another mod …“).
+
 ## Geräte und Bücher
 
-- Kobo mit Firmware 4.x und 6.x sowie Tolino Shine 5, Shine Color und Vision
-  Color mit Firmware 5.x (das Plugin: Kobo 6.0, Tolino ab 5.18)
+- Am Rechner (USB): Kobo mit Firmware 4.x und 6.x sowie Tolino Shine 5,
+  Shine Color und Vision Color mit Firmware 5.x. **Getestet** sind nur der
+  Kobo Clara BW 6.0.279225, der Kobo Libra 2 4.38.23852 und der Tolino Shine
+  Color 5.18.279364; das Plugin läuft auf diesen dreien (experimentell)
 - Seitengeladene kepub- und EPUB-Bücher ohne DRM
 - Vorerst muss auf jedem Gerät **dieselbe Datei** liegen. Der Sync-Server
   erkennt Bücher an einer Prüfsumme der Datei, ein kepub auf dem einen und das

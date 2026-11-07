@@ -26,6 +26,18 @@ jobs:
             echo "::error::Device database committed. Test fixtures must be trimmed and anonymized first."
             exit 1
           fi
+      - name: No odd file names committed
+        run: |
+          python3 - <<'PY'
+          import subprocess, sys
+          names = subprocess.check_output(["git", "ls-files", "-z"]).decode().split("\0")[:-1]
+          bad = [n for n in names
+                 if any(ord(c) < 32 or ord(c) == 127 for c in n)
+                 or n.startswith("/") or "var/folders" in n or ".." in n.split("/")]
+          for n in bad:
+              print("::error::Odd file name committed (control characters, an absolute or temp path?): " + repr(n))
+          sys.exit(1 if bad else 0)
+          PY
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
