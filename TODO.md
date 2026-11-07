@@ -16,8 +16,9 @@ Erledigte Punkte wandern in der Roadmap nach „Recently completed“.
 
 - **Fertig auf `main`:** Desktop-Client und CLI (macOS, Windows), Release-Workflow, Plugin C4/C9/C10 (Kobo 6.0, Kobo 4.x, Tolino).
 - **0.1.0 kommt früher, ohne C5, C6, C7** (Entscheidung vom 2026-11-07); die drei stehen unter „Release 0.1.1“.
-- **Als Nächstes (ich):** Vorprüfung `device check`, Gerätetest-Tabellen unter `docs/device-tests/`, Release-Notes und READMEs.
-- **Was dich braucht:** die [Freigabe-Checkliste 0.1.0](#freigabe-checkliste-010), nichts anderes. Pro Gerät ein Termin (Tabelle in `docs/device-tests/`).
+- **Erledigt am 2026-11-07:** Vorprüfung `device check`, Gerätetest-Tabellen, Release-Notes und READMEs; Gerätetests am Clara BW (6.0) und Libra 2 (4.38) bestanden.
+- **Als Nächstes (du):** Tolino-Retest, Release-Probelauf, Notes lesen, Tag (Checkliste unten).
+- **Was dich braucht:** die [Freigabe-Checkliste 0.1.0](#freigabe-checkliste-010), nichts anderes. Pro Gerät ein Termin (Tabellen in [`docs/device-tests/`](docs/device-tests/)).
 - **Offen, nicht in 0.1.0:** PR #80 (Konfliktdialog, C5) bleibt offen und wartet auf 0.1.1.
 - **Regeln, damit es übersichtlich bleibt:** höchstens zwei Sessions gleichzeitig; Gerätetests bündeln; Doku-Updates gesammelt.
 
@@ -102,19 +103,20 @@ jetzt unter „Release 0.1.1“.
 ### Freigabe-Checkliste 0.1.0
 
 Das ist die einzige Stelle, an der du den Stand siehst. Je Gerät ein Termin;
-die Schritte stehen in den Tabellen unter `docs/device-tests/` (kommen mit einem eigenen PR).
+die Schritte stehen in den Tabellen unter [`docs/device-tests/`](docs/device-tests/).
 
 - [ ] **(a) Tolino Shine Color (5.18):** Retest mit dem Paket aus dem aktuellen
   `main` (wie C4 ohne Dialog: Server-Stand beim Öffnen übernehmen, offline
   lesen → vorgemerkt, offline öffnen ohne Lesen → nichts, anderes Buch
   öffnen → nachgeholt, Konflikt nicht geladen/nicht gesendet, ohne `device
   prepare`), dazu die längere Wartezeit „after opening (… ms)“ ·
-  `docs/device-tests/tolino-shine-color-5.18.md`
-- [ ] **(b) Kobo Libra 2 (4.38):** Kobalt-Schutz und „Gerät nicht
-  vorbereitet“ (die zwei offenen C10-Punkte) ·
-  `docs/device-tests/kobo-libra-2-4.38.md`;
-  **Clara BW (6.0)** dasselbe in Kurzform ·
-  `docs/device-tests/kobo-clara-bw-6.0.md`
+  [`tolino-shine-color-5.18.md`](docs/device-tests/tolino-shine-color-5.18.md)
+- [x] **(b) Kobo Libra 2 (4.38):** Kobalt-Schutz und „Gerät nicht
+  vorbereitet“ (die zwei offenen C10-Punkte) · bestanden am 2026-11-07,
+  dazu der volle Durchlauf mit Konflikt ·
+  [`kobo-libra-2-4.38.md`](docs/device-tests/kobo-libra-2-4.38.md);
+  **Clara BW (6.0)** dasselbe in Kurzform · bestanden am 2026-11-07 ·
+  [`kobo-clara-bw-6.0.md`](docs/device-tests/kobo-clara-bw-6.0.md)
 - [ ] **(c) Release-Probelauf:** GitHub → Actions → Release → Run workflow;
   Artefakte ansehen (Disk-Image, ZIPs, Gerätepaket mit `Kobo.tgz` und
   `kobo-4.x/KoboRoot.tgz`, `SHA256SUMS`)
@@ -1426,7 +1428,7 @@ Auf dem Kobo ist das Plugin inaktiv.
     installiert, das Plugin lädt und meldet im Log `inactive: Kobo firmware
     4.x (Qt 5.2.1), plugin loaded; syncing on 4.x follows later`; Öffnen und
     Schließen eines Buchs ändern nichts.
-- [ ] **C10 Plugin auf Kobo 4.x** (braucht C4, C8, C9): dasselbe Verhalten
+- [x] **C10 Plugin auf Kobo 4.x** (braucht C4, C8, C9): dasselbe Verhalten
   wie C4 in der Qt5-Fassung aus derselben Quelle (`#if` für Qt5/Qt6, wo
   nötig). Ab C10 bauen C5 und C6 beide Fassungen.
   - [x] **ich:** Die Qt5-Fassung (`just plugin-qt5` → `KoboRoot.tgz`) ist
@@ -1505,13 +1507,14 @@ Auf dem Kobo ist das Plugin inaktiv.
     einmal erst beim Öffnen von Book P: das Warten auf WLAN dauerte dort
     35 s statt 15 (Nickel war beschäftigt) und der Push ohne DNS noch 8 s,
     die Meldung gehörte zu Book R.
-  - [ ] **du:** Kobalt-Schutz am **Libra 2**: Kobalt (Qt5) installieren,
+  - [x] **du:** Kobalt-Schutz am **Libra 2**: Kobalt (Qt5) installieren,
     ohne `.adds/NickelInkSync/ignore-kobalt`; Öffnen und Schließen ändern
     nichts, das Log meldet `inactive: Kobalt is installed`, die Meldung
-    „NickelInkSync ist aus“ kommt einmal (aus Zeitgründen am 2026-11-02
-    nicht mehr getestet).
-  - [ ] **du:** Ohne `library.json` öffnen: „Gerät nicht vorbereitet“
-    statt „Buch nicht zugeordnet“ (Änderung nach dem Gerätetest).
+    „NickelInkSync ist aus“ kommt einmal. Geprüft am 2026-11-07
+    (`docs/device-tests/kobo-libra-2-4.38.md`), ebenso am Clara BW.
+  - [x] **du:** Ohne `library.json` öffnen: „Gerät nicht vorbereitet“
+    statt „Buch nicht zugeordnet“. Geprüft am 2026-11-07 am Libra 2 und am
+    Clara BW; beim Schließen „Nicht gesendet“.
 - [ ] **C7 Tolino** → nach [Release 0.1.1](#release-011) verschoben (2026-11-07).
 - [x] **(in D2, nach C3)** Knopf „Gerät vorbereiten“ in der GUI
   (`prepare::prepare` mit Fortschritt, `Prepared::load` für den Hinweis);
