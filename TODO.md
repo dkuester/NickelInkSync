@@ -12,6 +12,15 @@ Wer: **du** = braucht dich (Gerät, Entscheidung, Zugang) · **ich** = kann ich 
 
 Erledigte Punkte wandern in der Roadmap nach „Recently completed“.
 
+## Aktueller Stand (2026-11-07)
+
+- **Fertig auf `main`:** Desktop-Client und CLI (macOS, Windows), Release-Workflow, Plugin C4/C9/C10 (Kobo 6.0, Kobo 4.x, Tolino).
+- **0.1.0 kommt früher, ohne C5, C6, C7** (Entscheidung vom 2026-11-07); die drei stehen unter „Release 0.1.1“.
+- **Als Nächstes (ich):** Vorprüfung `device check`, Gerätetest-Tabellen unter `docs/device-tests/`, Release-Notes und READMEs.
+- **Was dich braucht:** die [Freigabe-Checkliste 0.1.0](#freigabe-checkliste-010), nichts anderes. Pro Gerät ein Termin (Tabelle in `docs/device-tests/`).
+- **Offen, nicht in 0.1.0:** PR #80 (Konfliktdialog, C5) bleibt offen und wartet auf 0.1.1.
+- **Regeln, damit es übersichtlich bleibt:** höchstens zwei Sessions gleichzeitig; Gerätetests bündeln; Doku-Updates gesammelt.
+
 **Reihenfolge der Geräte:** Erst wird alles, was mit dem **Tolino Shine Color
 (5.18)** allein geht, umgesetzt und am Gerät getestet: P3, K4 rückwärts für
 normale EPUBs, P2 am Tolino, N3, N4. Danach kommt der **Kobo** (Clara BW)
@@ -35,8 +44,9 @@ allem anderen (auch vor dem Kobo-Durchgang). Ohne die Zuordnung gibt es
 weder den Sync kepub ↔ EPUB noch den Kindle-Sync. Wartung und Fehlerbehebung
 dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
 fertig, D2 läuft (E0 bis E7 und O5 erledigt; als Nächstes der Release-Workflow). **Der
-Kobo-Client** (Abschnitt Kobo-Client, C0–C10, geplant am 2026-10-31) gehört
-seit 2026-11-01 ebenfalls zu **Release 0.1.0**.
+Kobo-Client** (Abschnitt Kobo-Client, C0–C10, geplant am 2026-10-31) gehörte
+seit 2026-11-01 zu **Release 0.1.0**; seit 2026-11-07 kommen C5 bis C7 erst
+in **0.1.1** (Abschnitt Release 0.1.1).
 
 ## Release 0.1.0
 
@@ -52,8 +62,8 @@ Entscheidungen des Besitzers (2026-10-31):
   **experimentell** gekennzeichnet (geändert am 2026-11-01); den Workflow
   dafür baut die D2-Session.
 - **Kein Linux:** E8 (AppImage) kommt im Release danach.
-- **Kobo-Client** (C0–C10, Kobo und Tolino) gehört zu 0.1.0 (Plan geändert
-  am 2026-11-01).
+- **Kobo-Client** (C0–C10, Kobo und Tolino) gehörte zu 0.1.0 (Plan geändert
+  am 2026-11-01); **geändert am 2026-11-07:** ohne C5, C6, C7, siehe unten.
 - **Kobo 4.x vollständig in 0.1.0** (von dir am 2026-11-01, Testgerät Kobo
   Libra 2 mit 4.38.23852): Lesen und Rückschreiben per USB in CLI und
   Desktop-Client (C8) und das Plugin als **Qt5-Fassung** (C9, C10, Paket
@@ -71,6 +81,72 @@ Entscheidungen des Besitzers (2026-10-31):
 - Release-Notes **englisch, darunter deutsch**, wie die READMEs.
 - Ein Workflow baut die Assets bei einem Tag `v*` und legt einen Entwurf an;
   den Tag setzt und das Release veröffentlicht nur der Besitzer.
+
+**Früherer Schnitt (Entscheidung des Besitzers, 2026-11-07):** 0.1.0 erscheint
+**ohne C5, C6 und C7**. Gründe: Du verlierst die Übersicht, und es soll kein
+fehlerhaftes Plugin erscheinen. Umfang von 0.1.0:
+
+- Desktop-Client und CLI für macOS und Windows;
+- das Plugin für Kobo 6.0 (Qt6), Kobo 4.x (Qt5) und Tolino 5.18, alles
+  **experimentell**: Öffnen übernimmt den Server-Stand, Schließen sendet,
+  Vormerkliste, Meldungen; **kein Dialog bei Konflikten** (das Buch bleibt
+  unverändert, nichts wird gesendet, Meldung und Logeintrag; aufgelöst wird
+  am Rechner), kein „Jetzt synchronisieren“ und kein Zuordnen auf dem Gerät;
+- Kindle experimentell wie bisher;
+- unterstützt und getestet nur: Kobo 6.0.279225 (Clara BW), Kobo 4.38.23852
+  (Libra 2), Tolino 5.18.279364 (Shine Color).
+
+C5 (Konfliktdialog) liegt nur in PR #80 und bleibt dort; C5, C6, C7 stehen
+jetzt unter „Release 0.1.1“.
+
+### Freigabe-Checkliste 0.1.0
+
+Das ist die einzige Stelle, an der du den Stand siehst. Je Gerät ein Termin;
+die Schritte stehen in den Tabellen unter `docs/device-tests/` (kommen mit einem eigenen PR).
+
+- [ ] **(a) Tolino Shine Color (5.18):** Retest mit dem Paket aus dem aktuellen
+  `main` (wie C4 ohne Dialog: Server-Stand beim Öffnen übernehmen, offline
+  lesen → vorgemerkt, offline öffnen ohne Lesen → nichts, anderes Buch
+  öffnen → nachgeholt, Konflikt nicht geladen/nicht gesendet, ohne `device
+  prepare`), dazu die längere Wartezeit „after opening (… ms)“ ·
+  `docs/device-tests/tolino-shine-color-5.18.md`
+- [ ] **(b) Kobo Libra 2 (4.38):** Kobalt-Schutz und „Gerät nicht
+  vorbereitet“ (die zwei offenen C10-Punkte) ·
+  `docs/device-tests/kobo-libra-2-4.38.md`;
+  **Clara BW (6.0)** dasselbe in Kurzform ·
+  `docs/device-tests/kobo-clara-bw-6.0.md`
+- [ ] **(c) Release-Probelauf:** GitHub → Actions → Release → Run workflow;
+  Artefakte ansehen (Disk-Image, ZIPs, Gerätepaket mit `Kobo.tgz` und
+  `kobo-4.x/KoboRoot.tgz`, `SHA256SUMS`)
+- [ ] **(d) Release-Notes** aktualisiert (`.github/release-notes.md`, READMEs)
+  und von dir gelesen
+- [ ] **(e) Tag `v0.1.0`** setzt nur du
+
+## Release 0.1.1
+
+Entscheidung des Besitzers (2026-11-07): C5, C6 und C7 kommen erst nach 0.1.0.
+Inhalt, Abhängigkeiten und Status bleiben wie sie waren; die übrigen Etappen
+(C0–C4, C8–C10) stehen im Abschnitt [Kobo-Client](#kobo-client).
+
+- [ ] **C5 Dialog bei Konflikten** (braucht C4) · **PR #80 (offen, nicht auf `main`)**; Stand und Übergabe dort und in der Notiz `2026-11-02-kobo-c5-handover.md`
+  - [ ] **ich:** Qt-Dialog beim Öffnen mit beiden Ständen und drei Knöpfen
+    (`ConfirmationDialog` hat zwei eigene; der dritte muss ein
+    Nickel-Widget sein, siehe C0).
+  - [ ] **du:** Konflikt am Kobo nachstellen (KOReader und Kobo offline
+    an verschiedenen Stellen), alle drei Knöpfe.
+- [ ] **C6 Oberfläche** (braucht C5)
+  - [ ] **ich:** Vormerkliste, „Jetzt synchronisieren“, Zuordnen am Gerät
+    aus dem Index (Vorschläge nach Titel und Autor); Einstieg über
+    NickelMenu-Datei und Buchmenü.
+  - [ ] **du:** Am Kobo: vorgemerkte Bücher senden, ein kepub zuordnen.
+- [ ] **C7 Tolino** (braucht C4 bis C6)
+  - [ ] **ich:** Dasselbe Plugin auf dem Shine Color; Kobalts Schreibweg
+    dort prüfen (Kobalt schreibt auf `develop` seit 8b144d2 auch auf dem
+    Tolino, mit `tolino_bookmark`; für den Vergleich mit Kobalt daneben
+    `ignore-kobalt` anlegen, N7). Wenn
+    er geht, ersetzt er dort den heutigen Weg B (CLI schreibt, verwirft die
+    Seiten im Cache, N5); sonst bleibt Weg B.
+  - [ ] **du:** Dieselben Tests wie C4 bis C6 am Tolino.
 
 ## Release 0.2.0
 
@@ -1096,7 +1172,7 @@ Normenprüfung):
 Client auf dem Gerät (ein Plugin für Kobo 6.0 und Tolino 5.18, dazu eine
 Qt5-Fassung für Kobo 4.x), geplant
 am 2026-10-31 (deine Antworten auf meine Rückfragen). **Teil von Release
-0.1.0** (geändert am 2026-11-01); C0 bis C3 sind erledigt (PRs #66, #55,
+0.1.0** (geändert am 2026-11-01; **C5 bis C7 seit 2026-11-07 in 0.1.1**); C0 bis C3 sind erledigt (PRs #66, #55,
 #64, #67), C4 läuft. **Kobo 4.x** (seit 2026-11-01, Libra 2 mit
 4.38.23852): C8 (Rust, PR #70) und C9 (Qt5-Erkundung und -Build) sind
 erledigt, C10 (Plugin in Qt5) ist gebaut, der Gerätetest am Libra 2 steht aus. **Kobalt-Schutz (N7):** Jeder neue Einstieg des
@@ -1275,17 +1351,8 @@ Auf dem Kobo ist das Plugin inaktiv.
     ist aktuell“. Kein Seitenverwerfen nötig: Nickel hatte das ganze
     Kapitel schon gerendert, eine Seite hielt die Stelle. Das Verwerfen
     selbst ist in der Kobo-VM geprüft (5 Seiten, richtig geöffnet).
-- [ ] **C5 Dialog bei Konflikten** (braucht C4)
-  - [ ] **ich:** Qt-Dialog beim Öffnen mit beiden Ständen und drei Knöpfen
-    (`ConfirmationDialog` hat zwei eigene; der dritte muss ein
-    Nickel-Widget sein, siehe C0).
-  - [ ] **du:** Konflikt am Kobo nachstellen (KOReader und Kobo offline
-    an verschiedenen Stellen), alle drei Knöpfe.
-- [ ] **C6 Oberfläche** (braucht C5)
-  - [ ] **ich:** Vormerkliste, „Jetzt synchronisieren“, Zuordnen am Gerät
-    aus dem Index (Vorschläge nach Titel und Autor); Einstieg über
-    NickelMenu-Datei und Buchmenü.
-  - [ ] **du:** Am Kobo: vorgemerkte Bücher senden, ein kepub zuordnen.
+- [ ] **C5 Dialog bei Konflikten** → nach [Release 0.1.1](#release-011) verschoben (2026-11-07).
+- [ ] **C6 Oberfläche** → nach [Release 0.1.1](#release-011) verschoben (2026-11-07).
 - [x] **C8 Kobo 4.x lesen und zurückschreiben** (Rust, CLI und GUI; kann
   sofort parallel laufen) · neues Testgerät **Kobo Libra 2, Firmware
   4.38.23852** (Qt5, von dir am 2026-11-01).
@@ -1445,14 +1512,7 @@ Auf dem Kobo ist das Plugin inaktiv.
     nicht mehr getestet).
   - [ ] **du:** Ohne `library.json` öffnen: „Gerät nicht vorbereitet“
     statt „Buch nicht zugeordnet“ (Änderung nach dem Gerätetest).
-- [ ] **C7 Tolino** (braucht C4 bis C6)
-  - [ ] **ich:** Dasselbe Plugin auf dem Shine Color; Kobalts Schreibweg
-    dort prüfen (Kobalt schreibt auf `develop` seit 8b144d2 auch auf dem
-    Tolino, mit `tolino_bookmark`; für den Vergleich mit Kobalt daneben
-    `ignore-kobalt` anlegen, N7). Wenn
-    er geht, ersetzt er dort den heutigen Weg B (CLI schreibt, verwirft die
-    Seiten im Cache, N5); sonst bleibt Weg B.
-  - [ ] **du:** Dieselben Tests wie C4 bis C6 am Tolino.
+- [ ] **C7 Tolino** → nach [Release 0.1.1](#release-011) verschoben (2026-11-07).
 - [x] **(in D2, nach C3)** Knopf „Gerät vorbereiten“ in der GUI
   (`prepare::prepare` mit Fortschritt, `Prepared::load` für den Hinweis);
   beim Kopieren (E5) schreibt `copy::copy` Zuordnung und Tabelle schon
