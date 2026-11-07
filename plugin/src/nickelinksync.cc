@@ -1377,6 +1377,25 @@ static QWidget *third_button(QWidget *dialog, const QString &text)
     const int at = layout ? layout->indexOf(reject) : -1;
     if (at >= 0) {
         layout->insertWidget(at, button);
+        // Nickel fits a button's text to the width it gets, so three side by
+        // side showed three sizes (VM, device test); one under the other
+        // each gets the dialog's width and the same size. Server's, then
+        // the device's, then later.
+        QWidget *accept = ConfirmationDialog__acceptButton(dialog);
+        QWidget *order[] = {accept, button, reject};
+        layout->setDirection(QBoxLayout::TopToBottom);
+        for (QWidget *w : order) {
+            layout->removeWidget(w);
+        }
+        for (int i = 0; i < 3; ++i) {
+            layout->insertWidget(i, order[i]);
+        }
+        QStringList items;
+        for (int i = 0; i < layout->count(); ++i) {
+            QWidget *w = layout->itemAt(i)->widget();
+            items << (w ? w->objectName() + QLatin1Char('/') + QString::number(w->font().pixelSize()) : QStringLiteral("spacer"));
+        }
+        log_line(QStringLiteral("conflict dialog: layout %1").arg(items.join(QLatin1Char(' '))));
     } else {
         ConfirmationDialog__addWidget(dialog, button);
     }
@@ -1436,7 +1455,10 @@ static Answer ask(const Pulled &p)
     QObject::connect(kept, &QAction::triggered, dialog, [dialog] { dialog->done(2); });
     log_line(QStringLiteral("conflict dialog: shown (%1), button connected %2").arg(QString::fromUtf8(why)).arg(connected));
     const int result = dialog->exec();
-    delete d;
+    // Not deleted at once: Nickel may still hold the dialog in a queued
+    // event or a gesture of the tap that ended it.
+    dialog->hide();
+    dialog->deleteLater();
     const Answer answer = result == QDialog::Accepted ? Answer::Server : result == 2 ? Answer::Device : Answer::Later;
     log_line(QStringLiteral("conflict dialog: answered %1 (%2)")
                  .arg(result)
