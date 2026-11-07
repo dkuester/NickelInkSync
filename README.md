@@ -386,18 +386,36 @@ password = your password
 
 ## Plugin for Kobo and Tolino (experimental)
 
-On a Kobo with firmware 6.0 or a Tolino with firmware 5.18 or later, a
+On a Kobo with firmware 6.0 (4.x: see below) or a Tolino with firmware 5.18, a
 NickelHook plugin syncs without a computer, over Wi-Fi: when you open a
 sideloaded book it fetches a newer position from the server and the book
 opens there, when you leave the book it sends yours. It calls the same
 `nickelinksync` program on the device and follows the same `confirm` rule
-and [last agreed position](#the-last-agreed-position). It cannot ask yet:
-a position that needs an answer, or a book that moved on both sides since
-they last agreed (a conflict), is left alone and noted in the log and in a
-message. The device has to be [prepared](#book-mapping-in-progress) on the
-computer first (`device prepare`): without it the plugin still fetches,
-but sends nothing and says so ("Gerät nicht vorbereitet"). A kepub
-without a mapping never syncs.
+and [last agreed position](#the-last-agreed-position).
+
+**What 0.1.0 does and does not do.** The plugin is experimental and is
+tested only on the Kobo Clara BW (firmware 6.0.279225), the Kobo Libra 2
+(4.38.23852) and the Tolino Shine Color (5.18.279364); on any other
+firmware nobody has checked it.
+
+- **A conflict** (a book read on both sides since they last agreed, and
+  the server's place lies further back) **has no dialog yet**: the book
+  stays as it is, nothing is fetched and nothing is sent, a message
+  ("Konflikt, nicht geladen", later "Nicht gesendet") and a line in the
+  log say so. Settle it on the computer, in the desktop client or with
+  `pull` / `push` (`--force` to decide). The dialog is planned for 0.1.1.
+- **The device has to be [prepared](#book-mapping-in-progress)** on the
+  computer first (`device prepare`, again after mapping or adding
+  books): without it the plugin still fetches, but sends nothing and says
+  so ("Gerät nicht vorbereitet"). A kepub without a mapping never syncs.
+- There is **no "sync now" and no mapping on the device** yet: pending
+  books go out the next time Wi-Fi is up (when you open or leave any
+  book), and books are mapped on the computer.
+- Before the first use, **back up the device database**
+  (`.kobo/KoboReader.sqlite`, copy it away over USB). The plugin and
+  `pull --write` keep a backup of their own once a day
+  (`nickelinksync restore` lists and puts one back), but a second copy
+  costs nothing.
 
 1. Get `NickelInkSync-device` from the latest CI run (or `just package`,
    see [Build](#build)). It holds `Kobo.tgz`, the same for Kobo and
@@ -480,10 +498,18 @@ count.
 and power the e-reader off and on again (the file is only checked when it
 starts).
 
+**With [NickelStorygraph](https://github.com/dkuester/NickelStorygraph):**
+both hook the moment a book opens. The fix that lets them chain is merged
+in NickelStorygraph (its PR #16); use a current version. An older one can
+bypass NickelInkSync's opening hook, and then a book opens without fetching
+the server's position (the log says "opening hook: another mod …").
+
 ## Devices and books
 
-- Kobo on firmware 4.x and 6.x, and Tolino Shine 5, Shine Color and Vision
-  Color on firmware 5.x (the plugin: Kobo 6.0, Tolino 5.18 and later)
+- On the computer (USB): Kobo on firmware 4.x and 6.x, Tolino Shine 5,
+  Shine Color and Vision Color on firmware 5.x. **Tested** are only the
+  Kobo Clara BW 6.0.279225, the Kobo Libra 2 4.38.23852 and the Tolino
+  Shine Color 5.18.279364; the plugin runs on those three (experimental)
 - Sideloaded kepub and EPUB books without DRM
 - For now, put the **same file** on every device. The sync server tells
   books apart by a hash of the file, so a kepub on one device and the original

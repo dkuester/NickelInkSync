@@ -144,6 +144,28 @@ jobs:
         with:
           name: SHA256SUMS
           path: assets/SHA256SUMS
+      - name: Notes match the files
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          sed "s/@VERSION@/$VERSION/g" .github/release-notes.md > "$RUNNER_TEMP/notes.md"
+          fail=0
+          # every file is named in the notes ...
+          for f in assets/*; do
+            n=$(basename "$f")
+            [ "$n" = SHA256SUMS ] && continue
+            grep -qF "\`$n\`" "$RUNNER_TEMP/notes.md" || { echo "::error::$n is not named in the release notes"; fail=1; }
+          done
+          # ... and every file the downloads tables name exists
+          for n in $(grep -o "\`[A-Za-z0-9._-]*$VERSION[A-Za-z0-9._-]*\`" "$RUNNER_TEMP/notes.md" | tr -d '\`' | sort -u); do
+            [ -f "assets/$n" ] || { echo "::error::the release notes name $n, which was not built"; fail=1; }
+          done
+          # the device package holds what the notes tell people to copy
+          zip=$(ls assets/NickelInkSync-*-device.zip)
+          for e in Kobo.tgz kobo-4.x/KoboRoot.tgz .adds/NickelInkSync/nickelinksync .adds/NickelInkSync/config.ini.example; do
+            unzip -Z1 "$zip" | grep -qF "/$e" || { echo "::error::$zip lacks $e"; fail=1; }
+          done
+          exit $fail
       - name: Draft the release
         if: github.ref_type == 'tag'
         env:
