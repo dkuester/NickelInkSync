@@ -71,8 +71,8 @@ Gerät: **Tolino Shine Color**, Firmware **5.18.279364**. Ein Termin deckt alle 
 | 5 | Weiter ohne WLAN: Book P öffnen, **nicht blättern**, schließen. | Keine Meldung „vorgemerkt“; Book P wird nicht vorgemerkt. |  |
 | 6 | WLAN **an**, warten bis verbunden. Ein **anderes** Buch öffnen als Book R (Book Q). | Etwa 5 s nach dem Öffnen Toast „Vorgemerktes gesendet“ mit **„1 Buch“** (nicht 2, Book P darf nicht dabei sein). |  |
 | 7 | **KOReader:** Book R öffnen. | KOReader bietet Stelle S2 vom Server an (auf den Absatz genau); übernehmen, aber nichts weiterlesen. |  |
-| 8 | **KOReader:** Book R auf Stelle **S3** blättern (ca. 5 Seiten hinter S2), Fortschritt senden. KOReader danach nicht mehr anfassen. | Server hat S3 (neuer als der Stand des E-Readers). |  |
-| 9 | **E-Reader**, WLAN **aus**: Book R öffnen, bis Stelle **S4** lesen (mindestens 25 Seiten hinter S2, also **weiter** als S3), schließen, 15 s warten. | Toast „Fortschritt vorgemerkt“. (Hier ist der Konflikt vorbereitet: beide bewegt, Server neuer, aber weiter hinten.) |  |
+| 8 | **Zuerst das Gerät:** **E-Reader**, WLAN **aus**: Book R öffnen, bis Stelle **S4** lesen (mindestens 25 Seiten hinter dem Stand, der gerade mit dem Server abgeglichen ist), schließen, 15 s warten. KOReader darf davor **nicht** gesendet haben. | Toast „Fortschritt vorgemerkt“. (Das Lesen am Gerät ist jetzt älter als alles, was KOReader gleich sendet.) |  |
+| 9 | **Danach KOReader:** Book R öffnen (fragt KOReader nach dem Server-Stand: ablehnen, am eigenen Stand bleiben), auf Stelle **S3** blättern, die **vor S4** liegt (ca. 10 Seiten davor) und vom abgeglichenen Stand abweicht, Fortschritt senden. Danach nicht mehr anfassen. | Server hat S3, **neuer** als das Lesen am E-Reader, aber weiter hinten als S4. |  |
 | 10 | WLAN **an**, verbunden: Book R öffnen. | Toast „Konflikt, nicht geladen“ („Server und Gerät bewegt, bleibt liegen“); das Buch öffnet unverändert an S4. Kein Dialog (den gibt es erst in 0.1.1). Zusätzlich darf kurz „Vorgemerkt: Konflikt“ erscheinen. |  |
 | 11 | Book R schließen. | Toast „Nicht gesendet“ (Konflikt). Nichts geht an den Server. |  |
 | 12 | **KOReader:** Book R öffnen. | KOReader steht weiter auf S3 und bietet **nicht** S4 an: der Server wurde nicht überschrieben. |  |
@@ -81,6 +81,8 @@ Gerät: **Tolino Shine Color**, Firmware **5.18.279364**. Ein Termin deckt alle 
 | 15 | Am Ende per USB das Log ansehen: `grep -n -e "after opening" -e conflict -e inactive /Volumes/KOBOeReader/.adds/NickelInkSync/NickelInkSync.log` | **Wartezeit:** zu Schritt 2 steht eine Zeile „after opening (N ms): Nickel is at …, pulled …“, N zwischen 3000 und 15000; trage N ein. Kein „Nicht übernommen“ ohne Anlass. |  |
 
 Hinweis: Der Tolino schreibt über den alten Weg (die CLI schreibt, `--write`); nach dem Schreiben reicht Auswerfen bzw. das Plugin, kein Neustart. Kobalt wird hier nicht geprüft (Kobalt-Schutz am Libra 2 und am Clara BW).
+
+Warum die Reihenfolge beim Konflikt so ist: Ein Konflikt entsteht nur, wenn der Server-Stand **neuer** ist als das letzte Lesen am Gerät *und* weiter hinten liegt. Sendet KOReader schon vor dem Offline-Lesen, ist das Gerät neuer und gewinnt: „Fortschritt gesendet“ (so am Libra 2 am 2026-11-07 gesehen; das ist die Regel, kein Fehler).
 
 ## Nach dem Test
 
