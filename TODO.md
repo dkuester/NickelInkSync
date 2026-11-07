@@ -120,8 +120,8 @@ die Schritte stehen in den Tabellen unter [`docs/device-tests/`](docs/device-tes
 - [ ] **(c) Release-Probelauf:** GitHub → Actions → Release → Run workflow;
   Artefakte ansehen (Disk-Image, ZIPs, Gerätepaket mit `Kobo.tgz` und
   `kobo-4.x/KoboRoot.tgz`, `SHA256SUMS`)
-- [ ] **(d) Release-Notes** aktualisiert (`.github/release-notes.md`, READMEs)
-  und von dir gelesen
+- [x] **(d) Release-Notes** aktualisiert (`.github/release-notes.md`, READMEs)
+  und von dir gelesen (2026-11-07, keine Änderungen)
 - [ ] **(e) Tag `v0.1.0`** setzt nur du
 
 ## Release 0.1.1
