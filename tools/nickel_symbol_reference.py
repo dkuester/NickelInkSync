@@ -29,6 +29,7 @@ CLASSES = {
     "Device",
     "EventEngine",
     "MainWindowController",
+    "N3ButtonLabel",
     "N3Dialog",
     "N3DialogFactory",
     "N3ReaderOpener",

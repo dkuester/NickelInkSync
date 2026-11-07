@@ -44,6 +44,13 @@ enum Command {
     /// Send the device position without asking, also if the server's is newer
     #[arg(long)]
     force: bool,
+    /// For the plugin's conflict dialog ("keep the device's"), with
+    /// --content-id: send as --force would, but only while the server still
+    /// holds the position it stored at this time (the server time of
+    /// `NICKELINKSYNC_CONFLICT`, Unix seconds). Otherwise nothing is sent
+    /// (`NICKELINKSYNC_NOT_SENT<tab>server-changed`)
+    #[arg(long, value_name = "SERVER_TIME", conflicts_with = "force")]
+    answered: Option<i64>,
     /// Only show what would be sent
     #[arg(long)]
     dry_run: bool,
@@ -66,6 +73,13 @@ enum Command {
     /// Take the server position without asking, also if the device's is newer
     #[arg(long)]
     force: bool,
+    /// For the plugin's conflict dialog ("take the server's"), with
+    /// --content-id: take it as --force would, but only while the server
+    /// still holds the position it stored at this time (the server time of
+    /// `NICKELINKSYNC_CONFLICT`, Unix seconds). Otherwise nothing is taken
+    /// (`NICKELINKSYNC_NOT_TAKEN<tab>server-changed`)
+    #[arg(long, value_name = "SERVER_TIME", conflicts_with = "force")]
+    answered: Option<i64>,
     /// Write the positions into the device database (Tolino only so far),
     /// after a backup copy of it
     #[arg(long)]
@@ -237,16 +251,21 @@ fn main() -> ExitCode {
     Command::Push {
       target,
       force,
+      answered,
       dry_run,
       emit,
-    } => (push(&target, force, dry_run, emit), emit),
+    } => (push(&target, (force, answered), dry_run, emit), emit),
     Command::Pull {
       target,
       force,
+      answered,
       write,
       nickel_writes,
       emit,
-    } => (pull(&target, force, write, nickel_writes, emit), emit),
+    } => (
+      pull(&target, (force, answered), write, nickel_writes, emit),
+      emit,
+    ),
     Command::Sync {
       target,
       pending: _,
@@ -629,7 +648,10 @@ fn confirm(
 
 /// For the plugin: a position needs an answer, with both sides for the
 /// dialog. `why`: `both-moved` (both moved since the last sync),
-/// `always` (`confirm = always`) or `backwards`.
+/// `always` (`confirm = always`) or `backwards`. The fields: ContentID,
+/// why, device percent, `DateLastRead` (Unix seconds), Nickel's position,
+/// server percent, server time, server device, server XPointer, and the
+/// device position as an XPointer (to compare the two places).
 fn emit_conflict(
   book: &Book,
   local: &Local,
@@ -655,8 +677,42 @@ fn emit_conflict(
       &remote.timestamp.to_string(),
       &remote.device,
       &remote.progress,
+      &local.xpointer,
     ],
   );
+}
+
+/// Why an answer from the plugin's dialog was not carried out.
+const SERVER_CHANGED: &str = "server-changed";
+
+/// `--answered` is about one book.
+fn check_answered(answered: Option<i64>, options: &Options) -> Result<()> {
+  if answered.is_some() && options.content_id.is_none() {
+    return Err("--answered needs --content-id".into());
+  }
+  Ok(())
+}
+
+/// Whether an answer (`--answered`, the server time the plugin showed)
+/// still applies: the server holds the position stored at that time. True
+/// without an answer.
+fn answer_holds(answered: Option<i64>, remote: Option<&Progress>) -> bool {
+  let Some(time) = answered else {
+    return true;
+  };
+  if remote.is_some_and(|r| r.timestamp == time) {
+    return true;
+  }
+  println!(
+    "  skipped   the answer was about the server position from {}; the server now holds {}",
+    format_timestamp(time),
+    describe_opt(remote)
+  );
+  false
+}
+
+fn describe_opt(remote: Option<&Progress>) -> String {
+  remote.map_or_else(|| "(nothing stored)".to_string(), describe)
 }
 
 /// A failed request worth trying again later: no network or a server error.
@@ -721,11 +777,19 @@ fn send(
   }
 }
 
-fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool> {
+fn push(
+  target: &Target,
+  (force, answered): (bool, Option<i64>),
+  dry_run: bool,
+  emit: bool,
+) -> Result<bool> {
   let options = target.options();
+  check_answered(answered, &options)?;
   if kindle_device::is_kindle(&options.device) {
     return kindle_push(&options, force, dry_run);
   }
+  // An answer overwrites as --force does, once the server is checked.
+  let force = force || answered.is_some();
   let session = open_session(&options)?;
   if no_index(&session, emit) {
     return Ok(false);
@@ -797,6 +861,15 @@ fn push(target: &Target, force: bool, dry_run: bool, emit: bool) -> Result<bool>
       } => {
         if let Some(note) = moved_note(moved) {
           println!("  since     {note}");
+        }
+        if !answer_holds(answered, remote.as_ref()) {
+          if emit {
+            emit_line(
+              "NOT_SENT",
+              &[SERVER_CHANGED, &describe_opt(remote.as_ref())],
+            );
+          }
+          continue;
         }
         (local, note, remote, action, moved)
       }
@@ -1097,12 +1170,15 @@ fn sent_what(update: &Update, note: Option<String>) -> String {
 
 fn pull(
   target: &Target,
-  force: bool,
+  (force, answered): (bool, Option<i64>),
   write: bool,
   nickel_writes: bool,
   emit: bool,
 ) -> Result<bool> {
   let options = target.options();
+  check_answered(answered, &options)?;
+  // An answer overwrites as --force does, once the server is checked.
+  let force = force || answered.is_some();
   if kindle_device::is_kindle(&options.device) {
     return Err(
       "a Kindle is only read: its position goes to the server with `push`, nothing comes back"
@@ -1166,6 +1242,12 @@ fn pull(
       } => {
         if let Some(note) = moved_note(moved) {
           println!("  since     {note}");
+        }
+        if !answer_holds(answered, Some(&remote)) {
+          if emit {
+            emit_line("NOT_TAKEN", &[SERVER_CHANGED, &describe(&remote)]);
+          }
+          continue;
         }
         (remote, local, plugin, (action, moved))
       }

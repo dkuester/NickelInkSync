@@ -252,6 +252,7 @@ fn without_a_base_the_newer_time_still_counts() {
       &(LAST_READ - 60).to_string(),
       "KOReader",
       &at(95),
+      "/body[1]/DocFragment[82]/body[1]/div[1]/text()[1].0",
     ]
   );
 }
@@ -299,6 +300,197 @@ fn both_moving_is_a_conflict_by_the_old_rule() {
   assert_eq!(s.position(), STORED);
   // Unanswered: the base stays.
   assert_eq!(s.state()["books"][BOOK]["base"]["xpointer"], AHEAD);
+}
+
+/// Both moved since the base: book-a stands at STORED on the device (read
+/// at LAST_READ + 90), the server moved back to spine item 19 at
+/// LAST_READ + 120. Returns the server time the conflict names.
+fn conflict(s: &Setup) -> i64 {
+  s.server.store(&hash(), AHEAD, 0.9, LAST_READ + 60);
+  s.pull_write();
+  s.read_to(STORED, LAST_READ + 90);
+  s.server.store(&hash(), &at(20), 0.2, LAST_READ + 120);
+  let (_, out) = s.run(&["pull", "--write", "--emit", "--content-id", BOOK]);
+  let conflict = lines(&out)
+    .into_iter()
+    .find_map(|l| l.strip_prefix("NICKELINKSYNC_CONFLICT\t"))
+    .unwrap_or_else(|| panic!("{out}"))
+    .split('\t')
+    .map(str::to_string)
+    .collect::<Vec<_>>();
+  // ContentID, why, device percent, time, position, server percent, time,
+  // device, XPointer, the device position as an XPointer.
+  assert_eq!(conflict[0], BOOK);
+  assert_eq!(conflict[1], "both-moved");
+  assert_eq!(conflict[8], at(20));
+  assert_eq!(
+    conflict[9],
+    "/body[1]/DocFragment[82]/body[1]/div[1]/text()[1].0"
+  );
+  conflict[6].parse().unwrap()
+}
+
+#[test]
+fn an_answered_conflict_takes_the_server_position() {
+  let s = Setup::new("answered-pull");
+  let time = conflict(&s);
+  assert_eq!(time, LAST_READ + 120);
+  let answered = time.to_string();
+  let (output, out) = s.run(&[
+    "pull",
+    "--write",
+    "--emit",
+    "--content-id",
+    BOOK,
+    "--answered",
+    &answered,
+  ]);
+  assert!(output.status.success(), "{out}");
+  assert!(
+    lines(&out)[0].starts_with("NICKELINKSYNC_POSITION\t20\t"),
+    "{out}"
+  );
+  assert!(!out.contains("NICKELINKSYNC_CONFLICT"), "{out}");
+  assert_ne!(s.position(), STORED);
+  // Taken: the server's position is the new base, nothing was sent.
+  assert_eq!(s.state()["books"][BOOK]["base"]["xpointer"], at(20));
+  assert!(s.server.puts().is_empty());
+}
+
+/// On a Kobo the plugin writes through Nickel: the answered pull only hands
+/// the position and the base over, as an unasked one does.
+#[test]
+fn an_answered_conflict_is_handed_to_nickel() {
+  let s = Setup::new("answered-nickel");
+  let answered = conflict(&s).to_string();
+  let (output, out) = s.run(&[
+    "pull",
+    "--live",
+    "--nickel-writes",
+    "--emit",
+    "--content-id",
+    BOOK,
+    "--answered",
+    &answered,
+  ]);
+  assert!(output.status.success(), "{out}");
+  let found = lines(&out);
+  assert!(
+    found[0].starts_with("NICKELINKSYNC_POSITION\t20\t"),
+    "{out}"
+  );
+  assert!(
+    found.iter().any(|l| l.starts_with("NICKELINKSYNC_BASE\t")),
+    "{out}"
+  );
+  // Nickel has not committed yet: neither the row nor the base change.
+  assert_eq!(s.position(), STORED);
+  assert_eq!(s.state()["books"][BOOK]["base"]["xpointer"], AHEAD);
+}
+
+/// "Later" in the dialog: the plugin notes the server time in `state.json`.
+fn defer(s: &Setup, server_time: i64) {
+  let mut state = s.state();
+  state["books"][BOOK]["deferred"] = json!(server_time);
+  fs::write(s.state_path(), state.to_string()).unwrap();
+}
+
+#[test]
+fn a_put_off_conflict_is_asked_again_although_the_device_was_read_later() {
+  let s = Setup::new("deferred");
+  let time = conflict(&s);
+  // Opening and leaving bump DateLastRead: past the server's time, the
+  // device now looks like the newer side.
+  s.read_to(STORED, time + 600);
+  let (_, out) = s.run(&["pull", "--write", "--emit", "--content-id", BOOK]);
+  assert!(!out.contains("NICKELINKSYNC_CONFLICT"), "{out}");
+  defer(&s, time);
+  for (command, extra) in [("pull", "--write"), ("push", "--live")] {
+    let (_, out) = s.run(&[command, extra, "--emit", "--content-id", BOOK]);
+    assert!(
+      out.contains(&format!("\nNICKELINKSYNC_CONFLICT\t{BOOK}\tboth-moved\t")),
+      "{command}: {out}"
+    );
+  }
+  assert!(s.server.puts().is_empty());
+  assert_eq!(s.position(), STORED);
+  // Another device sent meanwhile: the old "later" does not apply.
+  s.server.store(&hash(), &at(30), 0.3, time + 300);
+  let (_, out) = s.run(&["pull", "--write", "--emit", "--content-id", BOOK]);
+  assert!(!out.contains("NICKELINKSYNC_CONFLICT"), "{out}");
+  // An answer settles it: the base is set and "later" is forgotten.
+  s.run(&["pull", "--write", "--emit", "--content-id", BOOK, "--force"]);
+  assert!(s.state()["books"][BOOK].get("deferred").is_none());
+}
+
+#[test]
+fn an_answered_conflict_sends_the_device_position() {
+  let s = Setup::new("answered-push");
+  let answered = conflict(&s).to_string();
+  let (output, out) = s.run(&[
+    "push",
+    "--live",
+    "--emit",
+    "--timeout",
+    "2",
+    "--content-id",
+    BOOK,
+    "--answered",
+    &answered,
+  ]);
+  assert!(output.status.success(), "{out}");
+  assert!(lines(&out)[0].starts_with("NICKELINKSYNC_SENT\t"), "{out}");
+  assert_eq!(s.server.puts().len(), 1);
+  assert_eq!(s.position(), STORED);
+  // Sent: the device's position is the new base, so the next push agrees.
+  assert_eq!(s.state()["books"][BOOK]["base"]["device"], STORED);
+  let (ok, out) = s.push_live();
+  assert!(ok, "{out}");
+  assert_eq!(lines(&out), ["NICKELINKSYNC_IN_SYNC"]);
+}
+
+#[test]
+fn an_answer_about_an_older_server_position_changes_nothing() {
+  let s = Setup::new("answered-stale");
+  let answered = conflict(&s).to_string();
+  // Another device sends while the dialog is open.
+  s.server.store(&hash(), &at(30), 0.3, LAST_READ + 150);
+  for command in ["pull", "push"] {
+    let (output, out) = s.run(&[
+      command,
+      "--live",
+      "--emit",
+      "--content-id",
+      BOOK,
+      "--answered",
+      &answered,
+    ]);
+    assert!(output.status.success(), "{out}");
+    let reason = if command == "pull" {
+      "NOT_TAKEN"
+    } else {
+      "NOT_SENT"
+    };
+    assert!(
+      lines(&out)[0].starts_with(&format!("NICKELINKSYNC_{reason}\tserver-changed\t")),
+      "{out}"
+    );
+  }
+  assert!(s.server.puts().is_empty());
+  assert_eq!(s.position(), STORED);
+  assert_eq!(s.state()["books"][BOOK]["base"]["xpointer"], AHEAD);
+  // One book only, and not together with --force.
+  let (output, _) = s.run(&["push", "--live", "--answered", &answered]);
+  assert!(!output.status.success());
+  let (output, _) = s.run(&[
+    "pull",
+    "--content-id",
+    BOOK,
+    "--force",
+    "--answered",
+    &answered,
+  ]);
+  assert!(!output.status.success());
 }
 
 #[test]

@@ -17,7 +17,7 @@ dialog and a book menu entry. Checked on 2026-11-01 against the library
 | Library | `usr/local/Kobo/libnickel.so.1.0.0` from its `KoboRoot.tgz`: 24,019,884 bytes, 70,873 `_Z` dynamic symbols. |
 | Qt | Qt 5.2.1 (`usr/local/Qt-5.2.1-arm/lib/libQt5*.so.5` are links to `usr/local/Trolltech/QtEmbedded-4.6.2-arm/lib/libQt*.so.4.6.2`, a historical name). Kobo's build has some later additions, for example `QTimer::singleShotImpl` (the functor `singleShot` of Qt 5.4). |
 | C library | `lib/libc-2.11.1.so`, by name glibc 2.11.1, but it exports symbol versions up to `GLIBC_2.18` (`pthread_setname_np@GLIBC_2.12`, which NickelHook uses, is there). |
-| Reference | [`tools/libnickel-4.38.23852.syms.gz`](../tools/libnickel-4.38.23852.syms.gz): the `_Z` symbols of the 25 classes the plugin and the Kobo client use (1,585 lines), made with [`tools/nickel_symbol_reference.py`](../tools/nickel_symbol_reference.py) from `llvm-nm -D libnickel.so.1.0.0`. CI checks the plugin against it (`check_plugin_symbols.py --qt 5`). |
+| Reference | [`tools/libnickel-4.38.23852.syms.gz`](../tools/libnickel-4.38.23852.syms.gz): the `_Z` symbols of the 26 classes the plugin and the Kobo client use (1,602 lines; `N3ButtonLabel` added for the conflict dialog, C5), made with [`tools/nickel_symbol_reference.py`](../tools/nickel_symbol_reference.py) from `llvm-nm -D libnickel.so.1.0.0`. CI checks the plugin against it (`check_plugin_symbols.py --qt 5`). |
 | Disassembly | Thumb-2, `llvm-objdump -d --triple=thumbv7a-linux-gnueabihf` from the even address for the size `llvm-nm -S` gives, as for 5.18 and 6.0. |
 | Kobalt | [Kobalt](https://github.com/nicoverbruggen/kobalt) `main` @ `3d8514c`, its own code under MIT: `platforms/kobo/qt5/` (Kobalt supports 4.38.21908 and later). Read for the concept only; no code taken over. |
 
@@ -90,6 +90,7 @@ WAL) has no `CachePersistence*` tables (read from a copy on 2 November
 | Menu item, its action | `_ZN28AbstractNickelMenuController18createMenuTextItemEP5QMenuRK7QStringbbS4_`, `_ZN22AbstractMenuController12createActionEP5QMenuP7QWidgetbbb` | none |
 | Dialog | `_ZN25ConfirmationDialogFactory21getConfirmationDialogEP7QWidget` | none: `new ConfirmationDialog(parent)` |
 | Its texts, more content | `_ZN18ConfirmationDialog8setTitleERK7QString`, `…7setTextERK7QString`, `…19setAcceptButtonTextERK7QString`, `…19setRejectButtonTextERK7QString`, `…9addWidgetEP7QWidget` | none |
+| Its buttons, a third one (C5) | `_ZNK18ConfirmationDialog12acceptButtonEv`, `…12rejectButtonEv`, `_ZN13N3ButtonLabelC1EP7QWidget` | none; an `N3ButtonLabel` is 0x98 bytes on 4.38 (0x88 on 5.18 and 6.0), from `Ui_ConfirmationDialog::setupUi` |
 | Other dialogs | `ConfirmationDialogFactory::showOKDialog`/`showErrorDialog(QString const&, QString const&)`, `N3Dialog(QWidget*, bool)`, `N3DialogFactory::getDialog(QWidget*, bool)` | none |
 | Reading menu | `_ZN15ReadingMenuViewC1EP7QWidgetb` | one `bool` (5.x/6.0: `…EP7QWidgetbb`); the 4.x-only `(QWidget*, QByteArray const&, bool)` constructor is gone on 4.38 too. The plugin does not use it |
 | Toast | `MainWindowController::toast`, see above | none |
