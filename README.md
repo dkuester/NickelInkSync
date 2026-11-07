@@ -397,7 +397,7 @@ agreed and the server's place lies further back (a conflict), it asks
 before the book opens, in one of Nickel's dialogs with both sides
 (percent, section, device, time): "Server übernehmen" opens the book at
 the server's position, "Gerät behalten" sends the device's, "Später" (or
-closing the dialog) leaves both alone until the next opening. If the
+closing the dialog) leaves both alone and asks again at the next opening. If the
 server changed while the dialog was open, nothing is overwritten. The
 dialog is German only, like the plugin's messages. The device has to be [prepared](#book-mapping-in-progress) on the
 computer first (`device prepare`): without it the plugin still fetches,

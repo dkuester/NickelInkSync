@@ -217,7 +217,9 @@ conformance statement.
       take the server's, keep the device's, later. The answer goes back
       to the CLI (`--answered <server time>` for `pull` and `push`), which
       overwrites only while the server still holds what the dialog showed
-      and keeps the base as before. Built for Qt 6 and Qt 5; the dialog's
+      and keeps the base as before. "Later" is kept in `state.json`
+      (`deferred`, the server time shown), so the next opening asks again
+      although opening and leaving bump Nickel's `DateLastRead`. Built for Qt 6 and Qt 5; the dialog's
       symbols exist on 4.38, 5.18 and 6.0
 
 ## Quick wins

@@ -733,7 +733,7 @@ static bool update_state(const QString &id, F change)
     QJsonObject entry = books.value(id).toObject();
     change(entry);
     if (entry.contains(QStringLiteral("base")) || entry.contains(QStringLiteral("not_in_line"))
-        || entry.contains(QStringLiteral("pending"))) {
+        || entry.contains(QStringLiteral("pending")) || entry.contains(QStringLiteral("deferred"))) {
         books.insert(id, entry);
     } else {
         books.remove(id);
@@ -780,6 +780,18 @@ static bool set_base(const QString &id, const QJsonObject &base)
         entry.insert(QStringLiteral("base"), base);
         entry.remove(QStringLiteral("not_in_line"));
         entry.remove(QStringLiteral("pending"));
+        entry.remove(QStringLiteral("deferred"));
+    });
+}
+
+// "Later" in the conflict dialog: the server time of the position it showed.
+// The CLI asks again while the server holds that position, however Nickel's
+// DateLastRead moves (opening and leaving bump it, which would make the
+// device the newer side).
+static void set_deferred(const QString &id, qint64 server_time)
+{
+    update_state(id, [server_time](QJsonObject &entry) {
+        entry.insert(QStringLiteral("deferred"), static_cast<double>(server_time));
     });
 }
 
@@ -1591,6 +1603,9 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
             when_online(kWifiLeaveWaitS, [id, server_time] { push_answered(id, server_time); });
             return;
         } else {
+            if (answer == Answer::Later) {
+                set_deferred(id, server_time.toLongLong());
+            }
             g_not_synced = id;
             g_not_synced_why = answer == Answer::Later ? QStringLiteral("Konflikt, später entscheiden")
                                                        : QStringLiteral("Konflikt, bleibt liegen");

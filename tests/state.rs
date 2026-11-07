@@ -388,6 +388,41 @@ fn an_answered_conflict_is_handed_to_nickel() {
   assert_eq!(s.state()["books"][BOOK]["base"]["xpointer"], AHEAD);
 }
 
+/// "Later" in the dialog: the plugin notes the server time in `state.json`.
+fn defer(s: &Setup, server_time: i64) {
+  let mut state = s.state();
+  state["books"][BOOK]["deferred"] = json!(server_time);
+  fs::write(s.state_path(), state.to_string()).unwrap();
+}
+
+#[test]
+fn a_put_off_conflict_is_asked_again_although_the_device_was_read_later() {
+  let s = Setup::new("deferred");
+  let time = conflict(&s);
+  // Opening and leaving bump DateLastRead: past the server's time, the
+  // device now looks like the newer side.
+  s.read_to(STORED, time + 600);
+  let (_, out) = s.run(&["pull", "--write", "--emit", "--content-id", BOOK]);
+  assert!(!out.contains("NICKELINKSYNC_CONFLICT"), "{out}");
+  defer(&s, time);
+  for (command, extra) in [("pull", "--write"), ("push", "--live")] {
+    let (_, out) = s.run(&[command, extra, "--emit", "--content-id", BOOK]);
+    assert!(
+      out.contains(&format!("\nNICKELINKSYNC_CONFLICT\t{BOOK}\tboth-moved\t")),
+      "{command}: {out}"
+    );
+  }
+  assert!(s.server.puts().is_empty());
+  assert_eq!(s.position(), STORED);
+  // Another device sent meanwhile: the old "later" does not apply.
+  s.server.store(&hash(), &at(30), 0.3, time + 300);
+  let (_, out) = s.run(&["pull", "--write", "--emit", "--content-id", BOOK]);
+  assert!(!out.contains("NICKELINKSYNC_CONFLICT"), "{out}");
+  // An answer settles it: the base is set and "later" is forgotten.
+  s.run(&["pull", "--write", "--emit", "--content-id", BOOK, "--force"]);
+  assert!(s.state()["books"][BOOK].get("deferred").is_none());
+}
+
 #[test]
 fn an_answered_conflict_sends_the_device_position() {
   let s = Setup::new("answered-push");

@@ -179,7 +179,7 @@ pub fn decide_since(
 }
 
 /// The position `direction` would write lies before the one it overwrites.
-fn goes_backwards(direction: Direction, local: &Local, server: &Progress) -> bool {
+pub fn goes_backwards(direction: Direction, local: &Local, server: &Progress) -> bool {
   let device = order_in_book(
     &local.xpointer,
     local.percentage,

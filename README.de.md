@@ -385,7 +385,7 @@ auf dem Server weiter vorn liegt (ein Konflikt), fragt es vor dem Öffnen
 in einem Dialog von Nickel mit beiden Ständen (Prozent, Abschnitt, Gerät,
 Zeit): „Server übernehmen“ öffnet das Buch an der Position vom Server,
 „Gerät behalten“ sendet die des Geräts, „Später“ (oder Schließen des
-Dialogs) lässt beide bis zum nächsten Öffnen unverändert. Hat sich der
+Dialogs) lässt beide unverändert und fragt beim nächsten Öffnen wieder. Hat sich der
 Server geändert, während der Dialog offen war, wird nichts überschrieben.
 Das Gerät muss vorher am Rechner
 [vorbereitet](#buchzuordnung-im-aufbau) sein (`device prepare`): Ohne das

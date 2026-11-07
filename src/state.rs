@@ -80,11 +80,20 @@ pub struct Entry {
   pub not_in_line: Option<String>,
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub pending: Option<Pending>,
+  /// The reader answered the plugin's conflict dialog with "later": the
+  /// server time (Unix seconds) of the position it showed. While the server
+  /// still holds that position, the conflict is asked again, however
+  /// Nickel's `DateLastRead` has moved since.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub deferred: Option<i64>,
 }
 
 impl Entry {
   fn is_empty(&self) -> bool {
-    self.base.is_none() && self.not_in_line.is_none() && self.pending.is_none()
+    self.base.is_none()
+      && self.not_in_line.is_none()
+      && self.pending.is_none()
+      && self.deferred.is_none()
   }
 }
 
@@ -137,6 +146,12 @@ impl State {
   }
 
   /// The base of `content_id` for `document`, if it has one.
+  /// Whether the reader put off the conflict about the server position
+  /// stored at `server_time`.
+  pub fn deferred(&self, content_id: &str, server_time: i64) -> bool {
+    self.get(content_id).and_then(|e| e.deferred) == Some(server_time)
+  }
+
   pub fn base(&self, content_id: &str, document: &str) -> Option<&Base> {
     self
       .get(content_id)?
@@ -166,6 +181,7 @@ impl State {
     entry.base = Some(base);
     entry.not_in_line = None;
     entry.pending = None;
+    entry.deferred = None;
     if title.is_some() {
       entry.title = title.map(str::to_string);
     }

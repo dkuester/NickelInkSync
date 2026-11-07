@@ -1294,7 +1294,12 @@ Auf dem Kobo ist das Plugin inaktiv.
     der normale Weg (Kobo: über Nickel schreiben, Basis nach dem
     Commit). „Gerät behalten“: Buch öffnet unverändert, `push --live
     --answered` im Hintergrund (nach WLAN), die CLI setzt die Basis.
-    „Später“: wie bisher, nichts gesendet. Ohne Dialog-Symbole oder wenn
+    „Später“: nichts gesendet, und das Plugin merkt sich die Server-Zeit in
+    `state.json` (`deferred`): solange der Server diese Position hat,
+    fragt die CLI weiter, auch wenn Öffnen und Schließen `DateLastRead`
+    erneuern (Gerätetest 2026-11-07: sonst überschrieb das zweite Öffnen
+    den Server still). Die Knöpfe stehen untereinander (nebeneinander
+    schrumpft Nickel die Schrift je nach Breite). Ohne Dialog-Symbole oder wenn
     der Knopf nicht entsteht: wie bisher nur Meldung. Die Vormerkliste
     läuft erst nach dem Dialog. Kobalt-Schutz vor dem Dialog und vor dem
     Senden. Qt6 und Qt5 aus derselben Quelle (Symbole auf 4.38, 5.18,
