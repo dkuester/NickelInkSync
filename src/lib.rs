@@ -5,6 +5,7 @@
 //! on top of it, used on the desktop and on the device. See `SCOPE.md` for the
 //! architecture.
 
+pub mod check;
 pub mod config;
 pub mod copy;
 pub mod credentials;
