@@ -88,7 +88,7 @@ device-check device:
       echo "! plugin/KoboRoot.tgz is older than the sources: just plugin-qt5 (only matters for Kobo 4.x)"
     fi
   fi
-  cargo run -q -- device check --device {{ device }} --package dist/NickelInkSync "${q5[@]}"
+  cargo run -q -- device check --device {{ device }} --package dist/NickelInkSync ${q5[@]+"${q5[@]}"}
   rc=$?
   [ $stale = 0 ] || { echo "The package in dist/ is stale, see above."; exit 1; }
   exit $rc
