@@ -32,6 +32,26 @@ release notes). The same holds for the Kindle (mapped KFX only). Release notes i
 then German. A workflow builds the assets on a `v*` tag and
 drafts the release; only the owner tags and publishes.
 
+Changed on 2026-11-07: 0.1.0 is cut earlier, **without C5, C6 and C7**
+(the conflict dialog, the plugin's own screens, the Tolino alignment); they
+move to 0.1.1. The owner wants an overview and no faulty plugin. 0.1.0
+holds the desktop client and CLI (macOS, Windows) and the plugin for Kobo
+6.0, Kobo 4.x and Tolino, all experimental, plus the Kindle, experimental.
+The plugin shows no dialog on a conflict: the book stays as it is, nothing
+is sent, a message and a log line say so, and the conflict is settled on
+the computer. Supported and tested are only Kobo 6.0.279225, Kobo
+4.38.23852 and Tolino 5.18.279364. Release gates: a Tolino retest with the
+current `main`, the Kobalt guard and the "Gerät nicht vorbereitet" message
+on the Libra 2 (the Clara BW in short), a trial run of the release
+workflow, release notes, and the tag (owner only). The checklist is in
+[TODO.md](TODO.md#freigabe-checkliste-010).
+
+## Release 0.1.1
+
+C5 (the conflict dialog, PR #80, open), C6 (the plugin's own screens:
+pending list, "sync now", mapping on the device) and C7 (the Tolino on the
+same write path as the Kobo), moved here from 0.1.0 on 2026-11-07.
+
 ## Release 0.2.0
 
 Wished for by the owner (2026-11-02), for the desktop client: it should meet
@@ -306,12 +326,12 @@ reading and USB write-back (C8) and the plugin as a Qt5 build (C9, C10).
   opening within the chapter last read. Still to do: English texts (the
   plugin logs `QLocale()`, `de_DE` so far).
 - **On-device client for the Kobo 6.0 and the Tolino** (L, release
-  0.1.0, experimental): one plugin for both devices, plus a Qt5 build
+  0.1.0, experimental; C5–C7 move to 0.1.1): one plugin for both devices, plus a Qt5 build
   (`KoboRoot.tgz`) for Kobo 4.x (C9, C10); stages C0–C4 are done (PRs
   #66, #55, #64, #67, #72), and so are C9 (the Qt5 symbols on 4.38.23852
   and a Qt5 build) and C10 (the Qt5 build behaves as C4 on Kobo 4.x;
   device test on the Libra 2 pending); the conflict dialog (C5), the
-  plugin's own screens (C6) and the Tolino (C7) are next. Like today's plugin
+  plugin's own screens (C6) and the Tolino (C7) follow in 0.1.1. Like today's plugin
   it stays idle while Kobalt is installed (N7). Opening a book takes a
   newer server position, written through Nickel itself as Kobalt (MIT)
   does (`VolumeManager::updateBookmark`/`updateFields` in Nickel's
