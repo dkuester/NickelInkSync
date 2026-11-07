@@ -32,6 +32,21 @@ release notes). The same holds for the Kindle (mapped KFX only). Release notes i
 then German. A workflow builds the assets on a `v*` tag and
 drafts the release; only the owner tags and publishes.
 
+## Release 0.2.0
+
+Wished for by the owner (2026-11-02), for the desktop client: it should meet
+general ergonomics and usability requirements, based on the review against
+DIN EN ISO 9241 (parts 110, 11, 112, 125, 143, 210) in
+`docs/usability-requirements.md` (PR #79). Accessibility to WCAG 2.2 level
+AA (decided 2026-11-02 instead of 2.1: EN 301 549 V4.1.1 builds on it),
+carried over to desktop software through WCAG2ICT and EN 301 549
+(chapter 11), should be in place by release 1.0.0 at the latest, on macOS
+and Windows. 0.2.0 does the groundwork: understandable errors, undo and
+cancel, feedback, shortcuts, help, labelled fields, contrast, keyboard and
+focus, zoom, and audits with VoiceOver and Narrator. Gaps egui cannot close
+yet are worked around, reported upstream and documented; no formal
+conformance statement.
+
 ## Recently completed
 
 - [x] Scope fixed: Rust core + CLI (desktop and on-device) plus a NickelHook plugin
@@ -178,7 +193,7 @@ drafts the release; only the owner tags and publishes.
       Kobalt's Qt5 write path, book menu, dialog, toast and Wi-Fi are
       mapped to their 4.x forms by disassembly. The same plugin source
       builds for Qt 5.2.1 in NickelTC (`just plugin-qt5`, `KoboRoot.tgz`),
-      loads on 4.x and stays idle until C10; CI checks its symbols against
+      loads on 4.x (behaviour in C10); CI checks its symbols against
       a 4.38 reference and builds it
       ([docs/nickel-4.38-symbols.md](docs/nickel-4.38-symbols.md)).
       Replaces N1
@@ -303,10 +318,10 @@ reading and USB write-back (C8) and the plugin as a Qt5 build (C9, C10).
 - **On-device client for the Kobo 6.0 and the Tolino** (L, release
   0.1.0, experimental): one plugin for both devices, plus a Qt5 build
   (`KoboRoot.tgz`) for Kobo 4.x (C9, C10); stages C0–C5 are done (PRs
-  #66, #55, #64, #67, #72 and the conflict dialog), and so is C9 (the Qt5
-  symbols on 4.38.23852 and a Qt5 build that loads and stays idle); the
-  plugin's own screens (C6), the Tolino (C7) and Kobo 4.x (C10) are
-  next. Like today's plugin
+  #66, #55, #64, #67, #72 and the conflict dialog, #80), and so are C9
+  (the Qt5 symbols on 4.38.23852 and a Qt5 build) and C10 (the Qt5 build
+  behaves as C4 on Kobo 4.x); the plugin's own screens (C6) and the Tolino
+  (C7) are next. Like today's plugin
   it stays idle while Kobalt is installed (N7). Opening a book takes a
   newer server position, written through Nickel itself as Kobalt (MIT)
   does (`VolumeManager::updateBookmark`/`updateFields` in Nickel's

@@ -72,6 +72,77 @@ Entscheidungen des Besitzers (2026-10-31):
 - Ein Workflow baut die Assets bei einem Tag `v*` und legt einen Entwurf an;
   den Tag setzt und das Release veröffentlicht nur der Besitzer.
 
+## Release 0.2.0
+
+Wünsche des Besitzers (2026-11-02) für den **Desktop-Client** (`gui/`).
+Grundlage ist die Normenprüfung in `docs/usability-requirements.md`
+(PR #79); die Nummern in Klammern verweisen auf deren Tabellen.
+
+Entscheidungen des Besitzers (2026-11-02, jeweils die Empfehlung aus der
+Normenprüfung):
+
+- **Ziel WCAG 2.2 AA** statt 2.1 (E2): EN 301 549 V4.1.1 (September 2026)
+  beruht darauf; 2.2 enthält 2.1 ganz.
+- **Plattformen** (E1): macOS und Windows für 1.0.0; Linux nach Kräften.
+- **Grenzen von egui** (E3: Tabellen, Überschriften, Live-Meldungen): in
+  0.2.0 umgehen, bei egui/AccessKit melden oder beitragen, den Rest in den
+  READMEs nennen; kein Wechsel weg von egui.
+- **Tests** (E4): du mit der Sprachausgabe (Windows), ich mit VoiceOver
+  (macOS); vor 1.0.0 ein Test mit einer blinden oder sehbehinderten Person.
+- **Keine formale Konformitätserklärung** (E5), nur ein kurzer Abschnitt in
+  den READMEs mit erreichter Stufe und bekannten Grenzen.
+- **macOS-Menüleiste** (E6): in 0.2.0 nur Tastenkürzel (Cmd-, und Cmd-Q),
+  ohne neue Abhängigkeit; ein echtes Menü, wenn es beim Testen fehlt.
+
+- [~] **U1 Ergonomie und Usability** nach DIN EN ISO 9241 (Teile 110, 11,
+  112, 125, 143, 210).
+  - [x] **ich:** Normenprüfung (PR #79).
+  - [x] **du:** Punkte für 0.2.0 und Entscheidungen festgelegt (2026-11-02).
+  - [ ] **ich:** Verständliche Fehler (I6, A12): häufige Fehler (Server
+    nicht erreichbar, falsches Passwort, Bibliothek fehlt, Gerät nur lesbar)
+    deutsch und englisch, mit dem nächsten Schritt; Server-URL und
+    Bibliotheksordner im Einstellungsdialog vor dem Speichern prüfen.
+  - [ ] **ich:** Rückgängig und Abbrechen (I5): „Rückgängig“ in der Meldung
+    nach dem Entfernen einer Zuordnung; Kopieren und Vorbereiten zwischen
+    zwei Büchern abbrechen.
+  - [ ] **ich:** Rückmeldung (I2, I7): Tooltips an Zuordnen, Entfernen,
+    Senden und Holen in den Buchzeilen; Meldung mit Uhrzeit und
+    Schließen-Knopf; Text neben dem Spinner („3 Bücher werden gesendet …“);
+    Erklärung der Wörter in der Server-Spalte.
+  - [ ] **ich:** Tastenkürzel unter macOS (I3, E6): Cmd-, öffnet die
+    Einstellungen, Cmd-Q beendet; Windows entsprechend Strg-,.
+  - [ ] **ich:** Hilfe (I4, A13): Knopf „Hilfe“ oben, öffnet den
+    README-Abschnitt zum Client; Abschnitt „Barrierefreiheit“ in
+    `README.md` und `README.de.md` (Tastatur, Zoom, Screenreader, Grenzen).
+  - [ ] **du:** Nach diesen Punkten den Client mit drei Aufgaben ausprobieren
+    (I11: Gerät einrichten, Buch zuordnen, Position holen) und sagen, wo es
+    hakt.
+- [~] **U2 Barrierefreiheit nach WCAG 2.2** (Stufe AA, sinngemäß auf
+  Desktop-Software übertragen über WCAG2ICT und DIN EN 301 549, Kapitel 11):
+  wenn möglich **spätestens in Release 1.0.0**. In 0.2.0 die Vorarbeit und
+  die ersten Punkte:
+  - [ ] **ich:** Beschriftungen mit den Feldern verbinden (A2,
+    `labelled_by`): Einstellungen, Sprache, Suche im Kopierdialog,
+    Pfadfelder.
+  - [ ] **ich:** Kontrast (A5): eigene Farben für hell und dunkel
+    (schwacher Text, Warnung, Fehler, Links) mit mindestens 4,5 : 1, an
+    Screenshots nachgemessen.
+  - [ ] **ich:** Tastatur und Fokus (A1, A9): obere Leiste in Leserichtung,
+    Escape bricht den Rückfrage-Dialog ab, Enter löst die Hauptaktion aus,
+    Fokus beim Öffnen in den Dialog und danach zurück.
+  - [ ] **ich:** Zoom (A7): sichtbar machen und speichern; alle Dialoge bei
+    200 % prüfen.
+  - [ ] **ich:** Bestandsaufnahme mit VoiceOver (macOS) nach EN 301 549,
+    Kapitel 11; Ergebnis in `docs/usability-requirements.md`.
+  - [ ] **du:** Dieselbe Bestandsaufnahme mit der Sprachausgabe unter
+    Windows (ich schreibe dir eine Checkliste).
+  - [ ] **ich:** Für 1.0.0: Details zum gewählten Buch ohne Maus (A3),
+    Tabellenzeilen mit eigener Beschriftung (A4), Meldungen vorlesen (A6),
+    Hochkontrast unter Windows (A8), größere Knöpfe in den Buchzeilen
+    (A10); Lücken von egui melden (E3).
+  - [ ] **du:** Vor 1.0.0 ein Test mit einer blinden oder sehbehinderten
+    Person (E4).
+
 ## Grundlagen
 
 - [x] **G1 Lizenz** · PR #5
@@ -1028,7 +1099,7 @@ am 2026-10-31 (deine Antworten auf meine Rückfragen). **Teil von Release
 0.1.0** (geändert am 2026-11-01); C0 bis C3 sind erledigt (PRs #66, #55,
 #64, #67), C4 läuft. **Kobo 4.x** (seit 2026-11-01, Libra 2 mit
 4.38.23852): C8 (Rust, PR #70) und C9 (Qt5-Erkundung und -Build) sind
-erledigt, C10 (Plugin in Qt5) folgt nach C4. **Kobalt-Schutz (N7):** Jeder neue Einstieg des
+erledigt, C10 (Plugin in Qt5) ist gebaut, der Gerätetest am Libra 2 steht aus. **Kobalt-Schutz (N7):** Jeder neue Einstieg des
 Plugins (Öffnen, Verlassen, Buchmenü, NickelMenu-Auslöser, Nachholen der
 Vormerkliste, Dialog) geht durch dieselbe Prüfung wie heute und bleibt
 untätig, solange Kobalt installiert ist; Gerätetests mit Kobalt daneben
@@ -1316,7 +1387,89 @@ Auf dem Kobo ist das Plugin inaktiv.
 - [ ] **C10 Plugin auf Kobo 4.x** (braucht C4, C8, C9): dasselbe Verhalten
   wie C4 in der Qt5-Fassung aus derselben Quelle (`#if` für Qt5/Qt6, wo
   nötig). Ab C10 bauen C5 und C6 beide Fassungen.
-  - [ ] **du:** Dieselben Tests wie C4 am **Libra 2**.
+  - [x] **ich:** Die Qt5-Fassung (`just plugin-qt5` → `KoboRoot.tgz`) ist
+    auf 4.x aktiv und macht dasselbe wie C4 (Öffnen, Schließen,
+    Vormerkliste, Toasts, `NO_INDEX`, `not_in_line`, Kobalt-Schutz in
+    jedem Einstieg). Unterschiede nur in `#if QT_VERSION`-Blöcken und
+    kleinen Adaptern, die Qt6-Fassung verhält sich unverändert:
+    `Bookmark::isNull` → Vergleich mit einem leeren `Bookmark`
+    (`operator==`); Nickels Stelle aus `Bookmark::getStartContainerPath()`
+    statt `ContentLocation` (der kepub-Leser füllt sie mit genau dem
+    String, den `saveBookmark` als `ChapterIDBookmarked` speichert, laut
+    Disassembly von `KepubBookReaderBase::initializeBookmark`; ohne
+    Kapiteldatei kommt sie aus `getChapterFilePath()`, die erste Stelle
+    steht im Log); Schreibweg mit `dbConnection(QString, bool)`,
+    `updateBookmark` ohne letztes `int`, Position als String ohne
+    `ContentLocation::create`; kein Seitenverwerfen (4.38 hat keinen
+    Seiten-Cache, die CLI nennt keine Seiten). Die CLI liefert mit `pull
+    --live --nickel-writes --emit` auf 4.x dieselben Strings wie `pull
+    --write` (kepub-Span ohne Offset, EPUB-Point mit zusammengefasstem
+    Text; `tests/sync_mapping.rs::live_pull_hands_nickel_the_kobo_4_forms`).
+    Jedes Symbol der Qt5-Bibliothek löst gegen libnickel, Qt 5.2.1 (auch
+    QtSql), libstdc++ und libc von 4.38 auf; Symbolprüfung gegen 4.38,
+    5.18 und 6.0 in der CI (unverändert, die Referenz deckt die neuen
+    Symbole ab). Nicht ohne Gerät prüfbar: ob die Stelle aus dem
+    `Bookmark` beim EPUB (Adobe-Leser) dieselbe Form hat (das Log zeigt
+    es beim ersten Öffnen).
+  - [x] **ich:** Erster Gerätetest am Libra 2 (2026-11-02): Plugin aktiv,
+    beim kepub liest es Nickels Stelle richtig
+    (`OEBPS/text/chapter3.xhtml#kobo.160.1`), aber Öffnen lief am Plugin
+    vorbei (keine Toasts, kein Pull). Ursache laut Disassembly und Code:
+    NickelStorygraph hookt auf dem Libra 2 ebenfalls
+    `ReadingController::setVolume` und lädt nach uns; bis 0.1.x mit dem
+    alten NickelHook (pgaskin), das einen vorhandenen Hook nicht
+    weiterreicht, und in jeder Version ruft es statt seines Originals
+    NickelHardcovers Hook auf, wenn der geladen ist (auch auf 5.18/6.x).
+    Das Plugin setzt seinen Öffnen-Hook nach dem Laden aller Mods (und 20 s
+    später noch einmal) wieder davor, der fremde Hook läuft danach als
+    Original (`keep_open_hook()`, Log: „opening hook: another mod …“). Ruft
+    ein verkettender Mod (NickelStorygraph ab 0.2.0) uns von dort zurück,
+    geht dieser Aufruf direkt an Nickels `setVolume` (`g_in_original`),
+    sonst entstünde eine Endlosschleife (Befund der Session
+    „Hook-Konflikt NickelStorygraph auf 5.18/6.x prüfen“).
+  - [x] **du/ich:** Zweiter Gerätetest am Libra 2 (2026-11-02, kepub):
+    Öffnen übernimmt den Server-Stand (R1-27, „Fortschritt übernommen“),
+    nicht zugeordnete Bücher melden „Buch nicht zugeordnet“. Aber offline
+    gelesen und geschlossen kam keine Meldung und nichts wurde vorgemerkt;
+    gesendet wurde erst, als später WLAN da war. Ursache: Qt 5.2 ruft ein
+    verbundenes Lambda über eine Kopie auf, der Zähler im `mutable`-Lambda
+    von `when_online()` blieb 0, das Warten endete nie. Jetzt mit fester
+    Startzeit statt Zähler. Der „Konflikt“ blieb aus, weil `config.ini`
+    dort `confirm = never` hat (dann gewinnt der neuere Stand, kein
+    Konflikt).
+  - [x] **du:** Dritter Gerätetest am Libra 2 (2026-11-02, kepub, mit
+    `confirm = backwards`): offline bis R2-162 gelesen → „Fortschritt
+    vorgemerkt“ (nach 15 s); Book P offline geöffnet und geschlossen →
+    nichts gesendet; WLAN an, Book Q geöffnet → „Vorgemerktes gesendet / 1
+    Buch“; KOReader R2-130, Libra 2 offline R2-197 → „Konflikt, nicht
+    geladen“, beim Verlassen „Nicht gesendet“. Ohne `library.json` meldet
+    das Plugin beim Öffnen „Buch nicht zugeordnet“ statt „Gerät nicht
+    vorbereitet“: `pull` meldete ohne Index `not-mapped`, `NO_INDEX` kam
+    nur von `push`, und der wurde danach nicht mehr versucht (wie bei C4).
+    Behoben (von dir gewünscht, in PR #77): `pull --live --emit` meldet
+    ohne `library.json` zuerst `NICKELINKSYNC_NO_INDEX` (Holen bleibt
+    erlaubt, `tests/prepare.rs`), das Plugin nennt dann beim Öffnen „Gerät
+    nicht vorbereitet“ (einmal pro Start mit dem Hinweis „Am Rechner
+    ‚Gerät vorbereiten‘“), auf Kobo 6.0 und Tolino ebenso. Am Gerät noch
+    nicht geprüft.
+  - [x] **du:** Dieselben Tests mit dem EPUB von Book R am **Libra 2**
+    (2026-11-02): KOReader R3-10 → Libra 2 öffnet bei R3-10 („Fortschritt
+    übernommen“, `chapter3.xhtml#point(/1/4/20/1:208)` geschrieben, Nickel
+    meldet genau diese Stelle zurück, die Stelle aus dem `Bookmark` hat
+    also auch beim Adobe-Leser die Form von `ChapterIDBookmarked`); offline
+    bis R3-51 → „Fortschritt vorgemerkt“; WLAN an, anderes Buch →
+    „Vorgemerktes gesendet / 1 Buch“; Libra 2 offline R3-95, KOReader R3-72
+    → „Konflikt, nicht geladen“. Die Meldung „Fortschritt vorgemerkt“ kam
+    einmal erst beim Öffnen von Book P: das Warten auf WLAN dauerte dort
+    35 s statt 15 (Nickel war beschäftigt) und der Push ohne DNS noch 8 s,
+    die Meldung gehörte zu Book R.
+  - [ ] **du:** Kobalt-Schutz am **Libra 2**: Kobalt (Qt5) installieren,
+    ohne `.adds/NickelInkSync/ignore-kobalt`; Öffnen und Schließen ändern
+    nichts, das Log meldet `inactive: Kobalt is installed`, die Meldung
+    „NickelInkSync ist aus“ kommt einmal (aus Zeitgründen am 2026-11-02
+    nicht mehr getestet).
+  - [ ] **du:** Ohne `library.json` öffnen: „Gerät nicht vorbereitet“
+    statt „Buch nicht zugeordnet“ (Änderung nach dem Gerätetest).
 - [ ] **C7 Tolino** (braucht C4 bis C6)
   - [ ] **ich:** Dasselbe Plugin auf dem Shine Color; Kobalts Schreibweg
     dort prüfen (Kobalt schreibt auf `develop` seit 8b144d2 auch auf dem

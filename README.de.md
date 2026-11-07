@@ -408,8 +408,9 @@ Ein Kobo mit Firmware **4.x** braucht stattdessen die Qt-5-Fassung:
 `KoboRoot.tgz` (im Gerätepaket des Releases unter `kobo-4.x/`, aus CI als
 `NickelInkSync-kobo4-KoboRoot` oder mit `just plugin-qt5`) kommt statt
 `Kobo.tgz` nach `.kobo/` (jede Firmware installiert nur ihre eigene
-Datei). Auf 4.x lädt das Plugin und
-meldet das im Log, synchronisiert aber noch nicht.
+Datei). Auf 4.x macht das Plugin dasselbe wie auf 6.x. 4.x speichert bei
+einem kepub nur den Span (`#kobo.N.M`, keine Stelle darin), ein kepub
+öffnet also am Anfang des Satzes, in dem die Server-Position liegt.
 
 Das Log steht in `.adds/NickelInkSync/NickelInkSync.log`. Das Plugin schaltet
 das WLAN selbst ein, wenn es es braucht; „Jetzt synchronisieren“ des

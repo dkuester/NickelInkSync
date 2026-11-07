@@ -294,6 +294,14 @@ fn without_an_index_nothing_is_sent() {
   let (output, out) = s.run(&["pull", "--live", "--emit", "--force", "--content-id", EPUB]);
   assert!(output.status.success(), "{out}");
   assert!(out.contains("\nNICKELINKSYNC_POSITION\t80\t"), "{out}");
+  // The plugin learns on opening why mapped books are unknown.
+  assert!(
+    out.contains("\nNICKELINKSYNC_NO_INDEX\tthe device is not prepared"),
+    "{out}"
+  );
+  s.prepare();
+  let (_, out) = s.run(&["pull", "--live", "--emit", "--content-id", EPUB]);
+  assert!(!out.contains("NICKELINKSYNC_NO_INDEX"), "{out}");
 }
 
 #[test]

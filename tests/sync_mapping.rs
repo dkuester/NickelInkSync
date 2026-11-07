@@ -447,3 +447,76 @@ fn a_configuration_without_a_server() {
   let stderr = String::from_utf8_lossy(&output.stderr);
   assert!(stderr.contains("no server set up in"), "{stderr}");
 }
+
+/// Kobo 4.x with the plugin (stage C10): `pull --live --nickel-writes
+/// --emit` hands Nickel the same 4.x forms `pull --write` stores (a kepub
+/// span without offset, an Adobe point with joined text), names no cached
+/// pages (4.38 has none) and writes nothing itself.
+#[test]
+fn live_pull_hands_nickel_the_kobo_4_forms() {
+  const LIBRA_2: &str =
+    "N000000000000,4.9.77,4.38.23852,4.9.77,4.9.77,00000000-0000-0000-0000-000000000388\n";
+  let s = Setup::new(
+    "map-live-nickel-4",
+    "kobo-clarabw-4.46-placeholder-books.sql",
+    LIBRA_2,
+  );
+  let kepub = "file:///mnt/onboard/Books/book-a.kepub.epub";
+  let epub = "file:///mnt/onboard/Books/book-a.epub";
+  let original = fixtures().join("epub/book-r.epub");
+  fs::copy(
+    fixtures().join("epub/book-r.kepub.epub"),
+    s.root.join("Books/book-a.kepub.epub"),
+  )
+  .unwrap();
+  fs::copy(&original, s.root.join("Books/book-a.epub")).unwrap();
+  s.library(&["book-r.epub"]);
+  s.map("book-a.kepub.epub", &original);
+  let (output, out) = s.run(&["device", "prepare"]);
+  assert!(output.status.success(), "{out}");
+  s.server.store(
+    &partial_md5(&original).unwrap(),
+    "/body[1]/DocFragment[3]/body[1]/p[63]/text()[1].13",
+    0.8,
+    1_900_000_000,
+  );
+  let mut handed = Vec::new();
+  for id in [kepub, epub] {
+    let before = s.stored(id);
+    let (output, out) = s.run(&[
+      "pull",
+      "--live",
+      "--content-id",
+      id,
+      "--nickel-writes",
+      "--emit",
+      "--force",
+    ]);
+    assert!(output.status.success(), "{out}");
+    let position = out
+      .lines()
+      .find_map(|l| l.strip_prefix("NICKELINKSYNC_POSITION\t80\t"))
+      .unwrap_or_else(|| panic!("{out}"))
+      .to_string();
+    assert!(out.contains("\nNICKELINKSYNC_STALE_PAGES\n"), "{out}");
+    let base = out
+      .lines()
+      .find_map(|l| l.strip_prefix("NICKELINKSYNC_BASE\t"))
+      .unwrap_or_else(|| panic!("{out}"));
+    let base: Value = serde_json::from_str(base).unwrap();
+    assert_eq!(base["device"], position.as_str());
+    assert_eq!(s.stored(id), before, "the plugin writes, not the CLI");
+    handed.push(position);
+  }
+  assert_eq!(handed[0], "OEBPS/text/chapter2.xhtml#kobo.64.1");
+  assert!(
+    handed[1].starts_with("OEBPS/text/chapter2.xhtml#point(/1/4/"),
+    "{}",
+    handed[1]
+  );
+  // The same strings `pull --write` stores over USB.
+  let (output, out) = s.run(&["pull", "--write", "--force"]);
+  assert!(output.status.success(), "{out}");
+  assert_eq!(s.stored(kepub), handed[0]);
+  assert_eq!(s.stored(epub), handed[1]);
+}

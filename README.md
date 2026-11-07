@@ -420,8 +420,10 @@ without a mapping never syncs.
 A Kobo on firmware **4.x** needs the Qt 5 build instead: `KoboRoot.tgz`
 (in the release's device package under `kobo-4.x/`, from CI as
 `NickelInkSync-kobo4-KoboRoot`, or `just plugin-qt5`) goes into `.kobo/`
-in place of `Kobo.tgz` (each firmware installs only its own file). On 4.x the plugin loads and says so in its log, but
-does not sync yet.
+in place of `Kobo.tgz` (each firmware installs only its own file). On 4.x
+the plugin does the same as on 6.x. 4.x stores only the span of a kepub
+position (`#kobo.N.M`, no place inside it), so a kepub opens at the start
+of the sentence the server's position is in.
 
 The log is `.adds/NickelInkSync/NickelInkSync.log`. The plugin switches
 Wi-Fi on when it needs it; there is no need for the e-reader's own
