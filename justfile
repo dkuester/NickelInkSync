@@ -67,6 +67,32 @@ package: build-device plugin
   cp plugin/config.ini.example dist/NickelInkSync/.adds/NickelInkSync/config.ini.example
   find dist/NickelInkSync -type f | sort
 
+# Before a device test: look at the mounted device (read-only) and compare
+# its program and plugin with the build in dist/. Usage:
+#   just device-check /Volumes/KOBOeReader
+# Kobo 4.x takes plugin/KoboRoot.tgz (just plugin-qt5) instead of Kobo.tgz.
+device-check device:
+  #!/usr/bin/env bash
+  set -u
+  stale=0
+  for f in dist/NickelInkSync/Kobo.tgz dist/NickelInkSync/.adds/NickelInkSync/nickelinksync; do
+    if [ ! -f "$f" ]; then echo "✗ $f is missing: just plugin && just package"; stale=1
+    elif [ -n "$(find src plugin/src -type f -newer "$f" 2>/dev/null | head -1)" ]; then
+      echo "✗ $f is older than the sources: just plugin && just package"; stale=1
+    fi
+  done
+  q5=()
+  if [ -f plugin/KoboRoot.tgz ]; then
+    q5=(--qt5-plugin plugin/KoboRoot.tgz)
+    if [ -n "$(find src plugin/src -type f -newer plugin/KoboRoot.tgz | head -1)" ]; then
+      echo "! plugin/KoboRoot.tgz is older than the sources: just plugin-qt5 (only matters for Kobo 4.x)"
+    fi
+  fi
+  cargo run -q -- device check --device {{ device }} --package dist/NickelInkSync "${q5[@]}"
+  rc=$?
+  [ $stale = 0 ] || { echo "The package in dist/ is stale, see above."; exit 1; }
+  exit $rc
+
 # Nickel VM: Kobo firmware 6.0 in Tolino mode under qemu-user, with a KOSync
 # mock (docs/nickel-vm.md). `just vm image`, `just vm up`, `just vm shot`, ...
 vm *args:

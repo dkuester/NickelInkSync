@@ -33,3 +33,25 @@ fn status_needs_a_device() {
   assert!(!output.status.success());
   assert!(String::from_utf8_lossy(&output.stderr).contains("--device"));
 }
+
+#[test]
+fn device_check_reports_and_fails_on_a_problem() {
+  let dir = std::env::temp_dir().join(format!("nickelinksync-cli-check-{}", std::process::id()));
+  let _ = std::fs::remove_dir_all(&dir);
+  std::fs::create_dir_all(dir.join(".kobo")).unwrap();
+  std::fs::write(
+    dir.join(".kobo/version"),
+    "N1,4.9.77,6.0.279225,4.9.77,4.9.77,00000000-0000-0000-0000-000000000391\n",
+  )
+  .unwrap();
+  let output = run(&["device", "check", "--device", dir.to_str().unwrap()]);
+  let stdout = String::from_utf8_lossy(&output.stdout);
+  assert!(!output.status.success(), "{stdout}");
+  assert!(
+    stdout.contains("Kobo Clara BW, firmware 6.0.279225 (tested)"),
+    "{stdout}"
+  );
+  assert!(stdout.contains("✗ Config"), "{stdout}");
+  assert!(!dir.join(".adds").exists(), "check must not write");
+  let _ = std::fs::remove_dir_all(&dir);
+}

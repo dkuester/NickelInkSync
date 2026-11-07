@@ -166,6 +166,16 @@ nickelinksync map add --device ~/Kindle-copy --book "Good Boy" --library ~/Calib
 nickelinksync push --device ~/Kindle-copy
 ```
 
+**Before a device test.** `nickelinksync device check --device /Volumes/KOBOeReader`
+looks at a mounted device and writes nothing: model and firmware (and
+whether they are among the tested ones), the plugin file and program on
+the device (with `--package dist/NickelInkSync`: are they the build you
+just made), `config.ini` (server, user, `confirm`, `notify`; never the
+password), Kobalt, whether the device is prepared, books waiting to be
+sent, and a database left open. Each line is ✓, ! (look at it) or ✗ (fix it
+first), with the next step. `just device-check /Volumes/KOBOeReader` also
+checks that `dist/` is not older than the sources.
+
 **Mappings on the device.** The plugin on the device has no library
 and no original EPUBs, so the computer prepares the device for it:
 

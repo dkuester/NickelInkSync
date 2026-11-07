@@ -178,6 +178,17 @@ nickelinksync map add --device ~/Kindle-Kopie --book "Good Boy" --library ~/Cali
 nickelinksync push --device ~/Kindle-Kopie
 ```
 
+**Vor einem Gerätetest.** `nickelinksync device check --device /Volumes/KOBOeReader`
+sieht sich ein eingehängtes Gerät an und schreibt nichts: Modell und
+Firmware (und ob sie zu den getesteten gehören), Plugin-Datei und
+Programm auf dem Gerät (mit `--package dist/NickelInkSync`: sind es die
+eben gebauten), `config.ini` (Server, Benutzer, `confirm`, `notify`; nie
+das Passwort), Kobalt, ob das Gerät vorbereitet ist, vorgemerkte Bücher
+und eine offen gebliebene Datenbank. Jede Zeile ist ✓, ! (ansehen) oder ✗
+(erst beheben), mit dem nächsten Schritt. `just device-check
+/Volumes/KOBOeReader` prüft zusätzlich, dass `dist/` nicht älter ist als
+der Quelltext.
+
 **Zuordnungen auf dem Gerät.** Das Plugin auf dem Gerät hat weder
 Bibliothek noch Original-EPUBs; deshalb bereitet der Rechner das Gerät vor:
 
