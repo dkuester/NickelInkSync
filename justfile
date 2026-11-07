@@ -76,9 +76,9 @@ device-check device:
   set -u
   stale=0
   for f in dist/NickelInkSync/Kobo.tgz dist/NickelInkSync/.adds/NickelInkSync/nickelinksync; do
-    if [ ! -f "$f" ]; then echo "✗ $f is missing: just plugin && just package"; stale=1
+    if [ ! -f "$f" ]; then echo "! $f is missing: just plugin && just package (the comparison below is then wrong)"; stale=1
     elif [ -n "$(find src plugin/src -type f -newer "$f" 2>/dev/null | head -1)" ]; then
-      echo "✗ $f is older than the sources: just plugin && just package"; stale=1
+      echo "! $f is older than the sources: if you built it after the last git pull, ignore this; else just plugin && just package"; stale=1
     fi
   done
   q5=()
@@ -90,7 +90,7 @@ device-check device:
   fi
   cargo run -q -- device check --device {{ device }} --package dist/NickelInkSync ${q5[@]+"${q5[@]}"}
   rc=$?
-  [ $stale = 0 ] || { echo "The package in dist/ is stale, see above."; exit 1; }
+  [ $stale = 0 ] || echo "! dist/ may be stale (see above): a ✗ at Plugin or Program may only mean that."
   exit $rc
 
 # Nickel VM: Kobo firmware 6.0 in Tolino mode under qemu-user, with a KOSync
