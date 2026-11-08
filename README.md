@@ -157,7 +157,11 @@ Nothing is written to the Kindle, and `pull` refuses. A recent Kindle
 offers only MTP, which a Mac does not mount: copy the `documents` folder,
 or only a book's `.kfx` file with its `.sdr` folder, with
 [OpenMTP](https://openmtp.ganeshrvel.com/) to a folder and give that as
-`--device`. Only books sent with **Send-to-Kindle** can be read; books
+`--device`. (Experimental, release 0.2.0 in progress: a build with
+`cargo build --release --features mtp` has `nickelinksync kindle-copy --to
+<folder>`, which does that copy over MTP itself, read only; `--list` shows
+what the Kindle offers and copies nothing. The released programs do not have
+it yet.) Only books sent with **Send-to-Kindle** can be read; books
 bought in the Kindle store are encrypted (DRM) and are skipped. A
 jailbreak is not needed.
 
