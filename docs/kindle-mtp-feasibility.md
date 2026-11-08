@@ -12,6 +12,16 @@ State of this study: **2026-11-08**. Source reading and metadata only
 manifests). Nothing was downloaded, built or run, and no device was touched.
 Everything marked *unverified* has to be checked on the device.
 
+## Status (2026-11-08)
+
+**The spike is stopped here by the owner's decision; work goes on with
+release 0.1.1.** Done and merged: M1 (macOS) and M2 (Windows), both on the
+Kindle Basic 2026 (section 6), the optional Cargo feature `mtp` with
+`nickelinksync kindle-copy`, and a Windows CI build that uploads a test
+binary. Paused: M3 (client integration, cache limit), M4 (licence files,
+`cargo deny`), timing, the writing study for release 0.3.0. Nothing of this
+is in the released programs; the OpenMTP copy stays documented in the README.
+
 ## Result in short
 
 - **Yes, and no new native dependency is needed.** `vdavid/mtp-rs` is a
@@ -304,7 +314,16 @@ server holding a newer one (87 %, from a Kobo Libra 2): "the Kindle is only
 read". So reading over MTP works end to end on macOS with the original
 program code. The first attempt of the day failed with the "another program
 is using the Kindle" message (holder not named, unplug and replug fixed it).
-Not yet tested: Windows (M2), the second Kindle, timing.
+**Windows (same day, test binary from CI, WPD backend, Kindle Basic 2026):**
+`kindle-copy --list` showed exactly the same tree (51 folders, 132 files, 14
+`.sdr` folders, 9 books; empty serial and firmware again) and the copy took
+25 files (10.2 MB) with no error and no "held by another program" message.
+So the WPD path works on this Kindle, without any driver change.
+`status` on the Windows copy reads the same 3 Send-to-Kindle books and skips
+the 6 DRM books; the books show as "not mapped" and the server as "not
+configured" only because that PC has no mapping or configuration yet (the
+position translation was shown on the Mac). Not yet tested: timing, WPD
+stalls over longer sessions.
 
 Consequences: the first version of `kindle-copy` would have fetched about 30
 MB of attachments and caches per run; it now fetches only `.yjf`/`.yjr`.
