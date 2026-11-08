@@ -16,7 +16,7 @@ Erledigte Punkte wandern in der Roadmap nach „Recently completed“.
 
 - **Release 0.1.0 ist veröffentlicht (2026-11-08):** [v0.1.0](https://github.com/dkuester/NickelInkSync/releases/tag/v0.1.0), Desktop-Client und CLI (macOS, Windows), Gerätepaket für Kobo (6.0 und 4.x) und Tolino; Kindle experimentell. Gerätetests an Clara BW, Libra 2 und Tolino bestanden, Freigabe-Checkliste unten abgehakt.
 - **Als Nächstes: Release 0.1.1** mit C5 (Konfliktdialog, PR #80, offen), C6 und C7, siehe [Release 0.1.1](#release-011).
-- **Danach Release 0.2.0** (geplant): Kindle über MTP, kepubify 5, Usability-Quick-Wins, siehe [Release 0.2.0](#release-020). **Release 0.3.0** (Lesefortschritt zurück zum Kindle) ist nur ein Plan mit Machbarkeits-Tor.
+- **Danach Release 0.2.0** (geplant): Kindle über MTP (Spike M1/M2 bestanden, **am 2026-11-08 gestoppt**, M3/M4 ruhen), kepubify 5, Usability-Quick-Wins, siehe [Release 0.2.0](#release-020). **Release 0.3.0** (Lesefortschritt zurück zum Kindle) ist nur ein Plan mit Machbarkeits-Tor.
 - **Regeln, damit es übersichtlich bleibt:** höchstens zwei Sessions gleichzeitig; Gerätetests bündeln; Doku-Updates gesammelt.
 
 **Reihenfolge der Geräte:** Erst wird alles, was mit dem **Tolino Shine Color
@@ -186,6 +186,14 @@ ist damit für 0.2.0 aufgehoben. Nur lesen, nur macOS und Windows, ohne
 Jailbreak. Testgerät für MTP ist der **Kindle Basic 2026** (nur MTP); der
 Paperwhite 11 (Firmware 5.19.2) hängt noch als normales Laufwerk am Mac und
 braucht MTP nicht (Stand 2026-11-08).
+
+**Stand 2026-11-08: Spike gestoppt (Entscheidung des Besitzers), es geht mit
+0.1.1 weiter.** M1 (Mac) und M2 (Windows) sind bestanden; M3, M4 und die
+Zeitmessung ruhen, bis der Besitzer sie wieder aufnimmt. Was im Repo liegt:
+das Cargo-Feature `mtp` mit `kindle-copy` (PR #94, nicht in den
+freigegebenen Programmen), die Windows-CI mit Testbinary (PR #99, Artefakt
+`nickelinksync-windows-mtp-test`), die Studie `docs/kindle-mtp-feasibility.md`
+mit allen Ergebnissen. Der Baum 0.3.0 (Schreiben) wartet ebenfalls.
 
 Entscheidungen des Besitzers (2026-11-08): Zeigt MTP die `.sdr`-Ordner nicht
 (M1), **fällt der Block weg**. `ptpcamerad` wird **nur erklärt**, nie

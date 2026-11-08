@@ -12,6 +12,16 @@ State of this study: **2026-11-08**. Source reading and metadata only
 manifests). Nothing was downloaded, built or run, and no device was touched.
 Everything marked *unverified* has to be checked on the device.
 
+## Status (2026-11-08)
+
+**The spike is stopped here by the owner's decision; work goes on with
+release 0.1.1.** Done and merged: M1 (macOS) and M2 (Windows), both on the
+Kindle Basic 2026 (section 6), the optional Cargo feature `mtp` with
+`nickelinksync kindle-copy`, and a Windows CI build that uploads a test
+binary. Paused: M3 (client integration, cache limit), M4 (licence files,
+`cargo deny`), timing, the writing study for release 0.3.0. Nothing of this
+is in the released programs; the OpenMTP copy stays documented in the README.
+
 ## Result in short
 
 - **Yes, and no new native dependency is needed.** `vdavid/mtp-rs` is a
