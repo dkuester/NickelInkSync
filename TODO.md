@@ -141,8 +141,11 @@ Entscheidung des Besitzers (2026-11-07): C5, C6 und C7 kommen erst nach 0.1.0. I
     die Stelle nur umschließt, reicht Nickel nicht (Kapitelanfang statt
     Stelle; CLI verwirft jetzt die Seiten, außer eine beginnt an der
     Stelle, auch beim normalen Pull, `docs/nickel-6.0-symbols.md`), und die
-    Prüfung nach dem Öffnen wartet bis 48 s auf Nickels Stelle. Offen:
-    Libra 2 (Qt5, 4.38) ungetestet; Tolino bis C7 nur Bericht.
+    Prüfung nach dem Öffnen wartet bis 48 s auf Nickels Stelle.
+    **Libra 2 (Qt5, 4.38.23852) ebenfalls bestanden** (2026-11-08, Plugin und
+    CLI `a77493c`): Dialog, „Gerät behalten“, „Server übernehmen“; „Später“
+    gilt nun auch, wenn ein anderer Client dieselbe Stelle mit neuer Zeit
+    sendet (`deferred_at` in `state.json`). Offen: Tolino bis C7 nur Bericht.
   - Stand 2026-11-08 (PR, TODO und Notizen vom 2026-11-02 und 2026-11-07 gelesen):
     Der Dialog erscheint am Clara BW mit beiden Ständen richtig. **Aber:** Kein
     Tap auf „Später“, „Gerät behalten“ oder „Server übernehmen“ ist je
