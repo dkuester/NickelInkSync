@@ -212,10 +212,12 @@ static const size_t kBookmarkBytes = 64;
 // test), so the check asks again every second, kCheckOpenTries times, up to
 // 15 s in all. Since stale cached pages are dropped (PR #48) Nickel renders
 // the chapter fresh and knew its place only after 8 s in a device test
-// (31.10.), close to the old limit of 11 s; a bigger book takes longer.
+// (31.10.), close to the old limit of 11 s; a bigger book takes longer. On
+// the Clara BW (8.11.) it took longer than 15 s after 51 dropped pages, so
+// the check waits up to 48 s and flags nothing if Nickel still has no place.
 static const int kCheckOpenMs = 3000;
 static const int kCheckOpenRetryMs = 1000;
-static const int kCheckOpenTries = 12;
+static const int kCheckOpenTries = 45;
 // Toasts: how long they stay (Nickel's own use 1500 ms), and how long after
 // setVolume the one about opening is queued, once the reading view is up.
 static const int kToastMs = 5000;
@@ -886,6 +888,10 @@ static void check_open(const QString &id, const QString &target, const QString &
         return;
     }
     log_line(QStringLiteral("after opening (%1 ms): Nickel is at %2, pulled %3").arg(waited_ms).arg(at, target));
+    if (at.isEmpty()) {
+        log_line(QStringLiteral("after opening: Nickel still shows no place, nothing flagged"));
+        return;
+    }
     if (near(at, target)) {
         log_line(QStringLiteral("after opening: Nickel is at %1, on the page with the pulled point").arg(at));
         taken_from_server(id, at, taken);
