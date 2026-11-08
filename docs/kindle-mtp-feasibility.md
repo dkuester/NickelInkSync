@@ -3,8 +3,8 @@
 Question (owner, 2026-11-08, release 0.2.0): can NickelInkSync read a
 stock Kindle (no jailbreak) directly over USB on macOS and Windows, read
 only, instead of asking the user to copy the `documents` folder by hand with
-OpenMTP (README, section Kindle; `TODO.md` L1)? Test device: the owner's
-Kindle Paperwhite 11 (firmware 5.19.2).
+OpenMTP (README, section Kindle; `TODO.md` L1)? Test devices: the owner's
+Kindle Paperwhite 11 (firmware 5.19.2) and a new Kindle Basic 2026.
 
 State of this study: **2026-11-08**. Source reading and metadata only
 (GitHub API, crates.io API, the projects' READMEs, changelogs and
@@ -142,8 +142,7 @@ release workflow is the clean way (stage M4).
   holder from the IORegistry (`UsbExclusiveOwner`, as the library's README
   suggests) and show a plain message, for example "Another program is using
   the Kindle: OpenMTP (quit it) or the macOS camera service. [Try again]
-  [How to free it]"; behind an opt-in button run the user-level `pkill`
-  once, with an explanation, as the owner decides (open question 3).
+  [How to free it]"; the app does not stop the process itself (owner decision 2026-11-08, section 5).
 - The app is not sandboxed or App-Store distributed (a `.dmg`), so USB
   access needs no entitlement. First access may show a macOS prompt for USB
   accessories on recent macOS versions: *unverified*, to see at the first
@@ -208,7 +207,7 @@ library reports speed (Kindle: USB 2.0).
 
 | Stage | Content | Effort | Owner test |
 | --- | --- | --- | --- |
-| **M1 Spike, go/no-go** | New optional module `src/kindle_mtp.rs` behind a Cargo feature (`mtp`), dependency `mtp-rs =0.38.x` (exact pin), read-only: list `documents/`, copy `.sdr` and (on demand) `.kfx` to a temp folder; CLI `nickelinksync kindle-copy --to <folder>` (name open) that prints what it found. macOS first. | 2 to 3 days | **du:** Paperwhite 11 at the Mac, quit OpenMTP first; run the command, send me the output. Decides: is `.sdr` visible? |
+| **M1 Spike, go/no-go** | New optional module `src/kindle_mtp.rs` behind a Cargo feature (`mtp`), dependency `mtp-rs =0.38.x` (exact pin), read-only: list `documents/`, copy `.sdr` and (on demand) `.kfx` to a temp folder; CLI `nickelinksync kindle-copy --to <folder>` (name open) that prints what it found. macOS first. | 2 to 3 days | **du:** Paperwhite 11 and Kindle Basic 2026 at the Mac, quit OpenMTP first; run the command, send me the output. Decides: is `.sdr` visible? |
 | **M2 Windows** | Same code through the WPD backend; timeouts for stalls; CI builds the Windows target with the feature (compile only). | 1 to 2 days | **du:** the same command on a Windows PC with the Paperwhite |
 | **M3 Integration** | `--device kindle:` (or auto-detect) in `status`/`push` with the temp-folder cache; client: detect the Kindle in the device list, messages for "in use by another program" and "disconnected", progress and cancel; the OpenMTP instructions in the README become the fallback. | 2 to 3 days | **du:** end to end on both systems: map a book, push a position, KOReader sees it |
 | **M4 Licences and release** | `THIRD-PARTY-LICENSES` from `cargo about` in the release workflow (also for the existing crates), notices in the app's About window and the packages, README (Kindle section, macOS and Windows hints), release notes ("experimental"), `cargo deny` job with an allow-list (MIT, Apache-2.0, BSD-2/3, ISC, Unicode-3.0, Zlib, CC0, Unlicense). | 1 day | none |
@@ -222,7 +221,7 @@ Windows PC; both can be bundled with the 0.2.0 Windows visual check (block D).
 | Risk | Likelihood | Mitigation |
 | --- | --- | --- |
 | `.sdr` not visible over MTP on this Kindle | unknown (critical) | M1 decides before anything else is built; fallback: the OpenMTP copy stays documented |
-| `ptpcamerad`/other holders on macOS make it flaky | high | clear message, retry, documented manual step, opt-in `pkill`; never touch system settings silently |
+| `ptpcamerad`/other holders on macOS make it flaky | high | clear message, retry, documented manual step; the app never stops processes or touches system settings |
 | Library churn: 0.x, breaking minors (0.36 to 0.38 within weeks), AI-assisted code, one maintainer | medium | exact version pin, only about 6 API calls used, update by hand after reading the changelog; read-only use limits the damage; if the library is abandoned we fork (permissive licence) |
 | Windows WPD stalls (5 to 6 min) | medium | timeouts, a progress message, cancel |
 | No documented Kindle test on Windows | medium | M2 test; Explorer should show the Kindle as a portable device, so WPD should see it |
@@ -249,20 +248,22 @@ Kindle MTP reading as **experimental**. Do not use `libmtp` or
 `libmtp-rs` (LGPL, C dependency, dead bindings), and do not write our own
 WPD or MTP code.
 
-## 5. Open questions for the owner
+## 5. Decisions of the owner (2026-11-08)
 
-1. Is "read only, into a temporary folder, existing `--device` path" the
-   whole scope, or should the client also copy the folder to a place you can
-   keep (for example for backups)?
-2. Is an exact-pinned young library (0.x, one maintainer) acceptable for a
-   feature that ships as experimental? (The alternative is to leave the
-   OpenMTP copy as the only way.)
-3. On macOS: may the app, after an explicit click, stop the user-level
-   `ptpcamerad` process once, or should it only explain the manual steps?
-4. Is a Windows PC with the Paperwhite available for M2 in the 0.2.0
-   time frame?
-5. Should the temporary copy be deleted after each run (safer, slower) or
-   cached (faster, leaves DRM-free KFX files on disk)?
+1. Scope as proposed: read only, into a temporary folder, through the
+   existing `--device` path.
+2. If M1 shows that `.sdr` is not visible over MTP, **the feature is dropped**
+   for 0.2.0 (the OpenMTP copy stays documented).
+3. On macOS the app **only explains** how to free the device (holder named,
+   manual steps); it never stops `ptpcamerad` or any other process.
+4. Test devices: the Paperwhite 11 (firmware 5.19.2) and a new **Kindle Basic
+   2026** (not yet checked: model, firmware and whether it shows `.sdr` over
+   MTP are *unverified*), plus a **Windows PC**.
+5. The copy is **cached** between runs, with a **limit** on what is kept
+   (total size and/or number of books, oldest removed first; the value is
+   set in M3). The cache holds DRM-free KFX from Send-to-Kindle only, in the
+   app's own cache folder, and the user can clear it.
+6. The macOS paragraph in 2.2 therefore reads: no opt-in `pkill`.
 
 ## Sources
 
