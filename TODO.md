@@ -137,17 +137,32 @@ Entscheidung des Besitzers (2026-11-07): C5, C6 und C7 kommen erst nach 0.1.0. I
     Tap auf „Später“, „Gerät behalten“ oder „Server übernehmen“ ist je
     angekommen, nur das × wirkt (im Log nie `answered 1` oder `2`); in der VM
     gehen alle drei. Der PR ist nicht mergebar (`CONFLICTING`). Es fehlt:
-    - [ ] **ich:** `main` in den Branch `claude/c5-conflict-dialog-c17794`
-      holen (Konflikte in `nickelinksync.cc`; `syms.gz` neu erzeugen).
-    - [ ] **ich:** Knöpfe auf `tapped(bool)` verbinden, jeden Tap mit Uhrzeit
-      loggen, Dialog statt in `exec()` im `setVolume`-Hook per `open()` zeigen
-      und die Antwort asynchron behandeln (die Vermutung dazu ist ungeprüft).
-    - [ ] **ich:** Knopfgrößen und -texte; Fehler „Später → erneutes Öffnen
-      überschreibt die Server-Position“ (laut C5-Session mit `90b9085`
-      behoben, am Gerät ungeprüft) im Test abdecken.
-    - [ ] **ich:** Qt5-Fassung für den Libra 2 (`just plugin-qt5`).
+    - [x] **ich:** `main` in den Branch `claude/c5-conflict-dialog-c17794`
+      geholt (2026-11-08, nur Dokumente in Konflikt; die Plugin-Datei und
+      `syms.gz` liefen ohne Konflikt durch).
+    - [x] **ich:** Dialog nicht mehr in `exec()` im `setVolume`-Hook: Der Hook
+      kehrt zurück, das Buch öffnet noch nicht; aus der Event-Loop (nicht
+      aus dem Tap, der das Buch öffnete) kommt der Dialog per `open()`, und
+      erst die Antwort öffnet das Buch (frisches `Volume` aus Nickels
+      Cache, leeres `Bookmark()`). Alle drei Knöpfe hören selbst auf
+      `tapped(bool)`; ein Ereignisfilter loggt Press, Release, Touch und
+      Gesture mit Uhrzeit und Empfänger (`tap log …`, die ersten 60), jeder
+      Knopf zusätzlich `conflict dialog: tapped …`. Kobo-VM: alle drei
+      Knöpfe, „Später“ → Schließen → erneut Öffnen fragt wieder. **Ob das am
+      Gerät hilft, ist offen:** Die Ursache, warum dort kein Tap ankam, ist
+      nicht bewiesen (Vermutung: verschachtelte Schleife im Tap-Handler); das
+      `tap log` am Gerät zeigt es. Nur auf dem Kobo (Tolino: Konflikt wie bisher
+      nur gemeldet, bis C7).
+    - [x] **ich:** Knöpfe untereinander (Nickel passt die Schrift der Breite an,
+      nebeneinander drei Größen); Fehler „Später → erneutes Öffnen
+      überschreibt die Server-Position“ im Test (`tests/state.rs`,
+      `a_put_off_conflict_is_asked_again_…`) und in der VM geprüft.
+    - [x] **ich:** Qt5-Fassung gebaut (`just plugin-qt5`, GCC 4.9); am Libra 2
+      ungetestet.
     - [ ] **du:** Gerätetest Clara BW (alle drei Knöpfe und ×; das Gerät vorher
-      von den 0.1.0-Testständen zurücksetzen) und Libra 2 (Qt5).
+      von den 0.1.0-Testständen zurücksetzen; danach das Log
+      `NickelInkSync.log` mit den Zeilen `tap log` und `conflict dialog`) und
+      Libra 2 (Qt5).
 - [ ] **C6 Oberfläche** (braucht C5)
   - [ ] **ich:** Vormerkliste, „Jetzt synchronisieren“, Zuordnen am Gerät
     aus dem Index (Vorschläge nach Titel und Autor); Einstieg über

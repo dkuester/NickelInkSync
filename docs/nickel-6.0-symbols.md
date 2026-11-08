@@ -122,6 +122,14 @@ in front of the reject button. Checked in the Kobo VM on 2026-11-02:
 - `setText` takes HTML: `<br>` breaks the line and `<b>` is bold.
 - Nickel shrinks a button's text to fit; with three buttons "Server
   übernehmen" is drawn smaller than "Später".
+- A tap on a button arrives in the VM as `TouchBegin` (main window),
+  `GestureOverride`/`Gesture` (button), `TouchEnd`; Nickel's own accept and
+  reject connections end the dialog first, the `tapped(bool)` signal comes
+  about 400 ms later (checked 2026-11-08 with an event filter on `qApp`).
+  On the Clara BW no tap on a button ever arrived while the dialog ran in
+  `exec()` inside the `setVolume` hook (only the close cross worked); the
+  plugin now shows it with `open()` from the event loop and opens the book
+  after the answer (a fresh `Volume` and a `Bookmark()`).
 - `getConfirmationDialog(nullptr)` parents the dialog to the main window;
   `QDialog::exec()` inside the `setVolume` hook shows it over the library
   and blocks the opening until it is answered.
