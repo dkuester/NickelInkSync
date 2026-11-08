@@ -193,6 +193,17 @@ jobs:
         with:
           name: NickelInkSync-windows
           path: dist/*.zip
+      # Kindle over MTP (release 0.2.0, stage M2): the CLI with the `mtp`
+      # feature, compiled and linted on Windows, as a test binary for the
+      # owner's Windows PC. Not a release file.
+      - name: Clippy with the mtp feature
+        run: cargo clippy -p nickelinksync --all-targets --features mtp -- -D warnings
+      - name: Build the CLI with the mtp feature
+        run: cargo build --release -p nickelinksync --features mtp
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nickelinksync-windows-mtp-test
+          path: target/release/nickelinksync.exe
 
   windows-tests:
     runs-on: windows-latest
