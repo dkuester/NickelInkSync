@@ -265,6 +265,35 @@ WPD or MTP code.
    app's own cache folder, and the user can clear it.
 6. The macOS paragraph in 2.2 therefore reads: no opt-in `pkill`.
 
+## 6. M1 result (2026-11-08, `kindle-copy --list`, a Kindle with USB ID 1949:9981)
+
+**Go.** Over MTP the Kindle shows its `documents/` tree including everything
+that matters:
+
+- 14 `.sdr` folders, 9 `.kfx` books, each `.sdr` with
+  `<title>_<id><devicehash>.yjf` and `.yjr` (50 to 580 bytes), next to
+  `.phl`, `.mf`, `AssetDownloadMetadata.meta`, `EndActions…asc`, `XRAY…`,
+  `LanguageLayer….kll`, `data/.pagination.cache/` and `assets/` (with
+  `voucher`, which marks store-bought, DRM-protected books). One device hash
+  only (`689fa069…`).
+- Send-to-Kindle books carry a 32-character id (`…_NKEAXN7….kfx`), store
+  books an ASIN (`…_B005MN22QK.kfx`); there are also `.azw`/`.azw3` books
+  (Mobipocket/KF8, reading state `.azw3f`; not supported) and the
+  dictionaries under `documents/dictionaries/`.
+- The root of the storage lists `fonts`, `documents`, `audible`,
+  `screenshots`, `metadata.calibre`, `driveinfo.calibre`,
+  `FILE_SYSTEM_ACCESSIBILITY_FLAG`.
+- The serial number and firmware fields of the MTP device info are **empty**
+  (so `--serial` cannot select by serial; the USB location is used).
+- The listing finished without an error or a holder problem on the Mac; the
+  time was not measured.
+
+Consequences: the first version of `kindle-copy` would have fetched about 30
+MB of attachments and caches per run; it now fetches only `.yjf`/`.yjr`.
+Which Kindle model this was, and the result for the second Kindle, are still
+to be noted. Writing (release 0.3.0) is a separate question: the `.yjf` is an
+ordinary visible object, but nothing is known yet about writes.
+
 ## Sources
 
 - [vdavid/mtp-rs](https://github.com/vdavid/mtp-rs): README, `crates/mtp-rs/README.md`, `Cargo.toml`, `Cargo.lock`, `deny.toml`, `CHANGELOG.md`, `docs/debugging.md`; issues
