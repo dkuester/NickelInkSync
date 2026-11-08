@@ -132,6 +132,17 @@ Entscheidung des Besitzers (2026-11-07): C5, C6 und C7 kommen erst nach 0.1.0. I
     Nickel-Widget sein, siehe C0).
   - [ ] **du:** Konflikt am Kobo nachstellen (KOReader und Kobo offline
     an verschiedenen Stellen), alle drei Knöpfe.
+  - **Gerätetest Clara BW 2026-11-08 bestanden** (Plugin `f354740`, CLI mit
+    neuer Seitencache-Regel): „Später“ fragt beim zweiten Öffnen wieder,
+    „Gerät behalten“ sendet (KOReader lädt den Stand), „Server übernehmen“
+    öffnet an der Stelle (R3-13, R3-39, R3-71, R3-81), alle Toasts stimmen.
+    Nickels Dialog endet bei jedem Tap mit 0; die Antwort bestimmt der Tap
+    (`intent`). Gefunden und behoben unterwegs: eine gecachte Seite, die
+    die Stelle nur umschließt, reicht Nickel nicht (Kapitelanfang statt
+    Stelle; CLI verwirft jetzt die Seiten, außer eine beginnt an der
+    Stelle, auch beim normalen Pull, `docs/nickel-6.0-symbols.md`), und die
+    Prüfung nach dem Öffnen wartet bis 48 s auf Nickels Stelle. Offen:
+    Libra 2 (Qt5, 4.38) ungetestet; Tolino bis C7 nur Bericht.
   - Stand 2026-11-08 (PR, TODO und Notizen vom 2026-11-02 und 2026-11-07 gelesen):
     Der Dialog erscheint am Clara BW mit beiden Ständen richtig. **Aber:** Kein
     Tap auf „Später“, „Gerät behalten“ oder „Server übernehmen“ ist je
