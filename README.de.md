@@ -495,6 +495,13 @@ entfernt ist (nach dem nächsten Start). Am Rechner verweigern `pull
 „Senden“ warnen nur. Ein übrig gebliebener Ordner `.adds/kobalt` ohne
 seine Datei `uninstall` (so entfernt man Kobalt von Hand) zählt nicht.
 
+*Override (nicht unterstützt, auf eigenes Risiko):* Eine leere Datei
+`.adds/NickelInkSync/ignore-kobalt` lässt das Plugin trotz installiertem
+Kobalt laufen (das Log sagt „Kobalt is installed, but ... exists: syncing
+anyway“). Vorher Kobalts eigenes KOSync abschalten. Das ist Pflicht, räumt
+den Konflikt aber nicht ganz aus: Kobalt schreibt die Leseposition auch
+selbst in Nickels Datenbank. Wer unsicher ist, legt die Datei nicht an.
+
 **Deinstallieren:** eine leere Datei `.adds/NickelInkSync/uninstall`
 anlegen, auswerfen und den E-Reader aus- und wieder einschalten (die Datei
 wird nur beim Start geprüft).

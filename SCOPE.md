@@ -262,7 +262,7 @@ Thin C++ layer, no sync logic of its own:
   visible over USB), `.adds/kobalt/uninstall` present and
   `.adds/kobalt/uninstall-now` absent, Kobalt's own uninstall flags. The
   rule is in `src/kobalt.rs`, the plugin repeats its paths (a test keeps
-  them equal); `.adds/NickelInkSync/ignore-kobalt` overrides it for tests.
+  them equal); `.adds/NickelInkSync/ignore-kobalt` overrides it for tests. It is now also a documented, unsupported user override (see the README, "With Kobalt").
   The plugin file stays and works again once Kobalt is gone.
 - Settings (server URL, user, device name) in `.adds/NickelInkSync/config.ini`,
   in the same format as the desktop configuration (see the README), passed

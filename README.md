@@ -506,6 +506,13 @@ on it; `push` and "Send" only warn. A leftover `.adds/kobalt` folder
 without its file `uninstall` (Kobalt's own way to remove it) does not
 count.
 
+*Override (not supported, at your own risk):* an empty file
+`.adds/NickelInkSync/ignore-kobalt` makes the plugin run even though Kobalt
+is installed (the log says "Kobalt is installed, but ... exists: syncing
+anyway"). Turn off Kobalt's own KOSync first. That is required, but it does
+not remove the whole conflict: Kobalt also writes the reading position into
+Nickel's database itself. If you are unsure, do not create the file.
+
 **Uninstall:** create an empty file `.adds/NickelInkSync/uninstall`, eject
 and power the e-reader off and on again (the file is only checked when it
 starts).
