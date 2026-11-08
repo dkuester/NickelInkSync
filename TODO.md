@@ -198,9 +198,10 @@ Windows-PC. Die Studie ist angepasst.
 
 - [x] **du:** Entscheidung nach dem Bericht (2026-11-08: Vorgehen mit M1 als
   Spike, Antworten oben).
-- [~] **ich:** M1 (PR #94, `kindle-copy --list`) **Go am 2026-11-08**: `.sdr`, `.yjf`
-  und `.yjr` sind über MTP sichtbar (Mac). Offen: das echte Kopieren und
-  `status` auf der Kopie, der zweite Kindle, Windows.
+- [x] **ich:** M1 (PR #94, `kindle-copy`) am Mac **bestanden am 2026-11-08**:
+  `.sdr`, `.yjf` und `.yjr` sind über MTP sichtbar, Kopieren (mit Cache) und
+  `status` auf der Kopie laufen, Position übersetzt (Book „Good Boy“, Kindle
+  52 %, Server 87 %). Offen: zweiter Kindle, Windows (M2), Zeitmessung.
 - [ ] **ich:** M1 Lesen aus Kopie ersetzen: MTP-Speicher des Kindle in einen
   temporären Ordner kopieren (nur `documents/`), dann der vorhandene Weg
   (`--device <Ordner>`). Zuerst als CLI-Unterbefehl, danach im Client.
