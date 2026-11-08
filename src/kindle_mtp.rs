@@ -65,13 +65,19 @@ fn is_sdr(name: &str) -> bool {
 
 impl Wanted {
   /// Whether the file at `path` (a file, with its folders before it) is
-  /// fetched: everything inside a `.sdr` folder, and with `books` the
-  /// `.kfx` files.
+  /// fetched: in a `.sdr` folder only the reading state (`.yjf`, `.yjr`;
+  /// the rest of it is X-Ray data, caches and megabytes of attachments),
+  /// and with `books` the `.kfx` books (not those inside a `.sdr` folder).
   pub fn file(&self, path: &[String]) -> bool {
     let Some((name, folders)) = path.split_last() else {
       return false;
     };
-    folders.iter().any(|f| is_sdr(f)) || (self.books && name.to_lowercase().ends_with(".kfx"))
+    let name = name.to_lowercase();
+    if folders.iter().any(|f| is_sdr(f)) {
+      name.ends_with(".yjf") || name.ends_with(".yjr")
+    } else {
+      self.books && name.ends_with(".kfx")
+    }
   }
 }
 
@@ -93,6 +99,7 @@ pub struct Report {
   pub files: usize,
   /// `.sdr` folders seen: zero means the reading states are not visible.
   pub sdr_folders: usize,
+  /// `.kfx` books (not the `.kfx` attachments inside `.sdr` folders).
   pub kfx_files: usize,
   pub fetched: usize,
   pub fetched_bytes: u64,
@@ -111,7 +118,9 @@ impl Report {
     let _ = writeln!(s, "Device: {}", self.device);
     let _ = writeln!(s, "Root of the storage: {}", self.root.join(", "));
     if list {
-      for e in &self.entries {
+      let mut entries: Vec<&Entry> = self.entries.iter().collect();
+      entries.sort_by(|a, b| a.path.cmp(&b.path));
+      for e in entries {
         let _ = writeln!(
           s,
           "  {}{}{}",
@@ -182,7 +191,7 @@ mod device {
   use mtp_rs::{ByteRange, MtpDevice, ObjectHandle, Storage};
 
   use super::{
-    explain, is_current, local_path, safe_component, Entry, Report, Wanted, MAX_FILE_BYTES,
+    explain, is_current, is_sdr, local_path, safe_component, Entry, Report, Wanted, MAX_FILE_BYTES,
   };
 
   /// Amazon's USB vendor ID.
@@ -266,7 +275,6 @@ mod device {
       ),
       ..Report::default()
     };
-    progress(&report.device.clone());
     let storages = device.storages().await.map_err(|e| explain(&e))?;
     let mut found = None;
     for storage in &storages {
@@ -339,7 +347,7 @@ mod device {
           continue;
         }
         report.files += 1;
-        if child.filename.to_lowercase().ends_with(".kfx") {
+        if child.filename.to_lowercase().ends_with(".kfx") && !path.iter().any(|f| is_sdr(f)) {
           report.kfx_files += 1;
         }
         report.entries.push(Entry {
@@ -446,10 +454,22 @@ mod tests {
     let other = p(&["Downloads", "Items01", "a.epub"]);
     assert!(states.file(&yjf) && books.file(&yjf));
     assert!(!states.file(&kfx) && books.file(&kfx));
+    // Inside a .sdr folder only the reading state: not the attachments or
+    // the X-Ray data, not even a .kfx.
+    for junk in [
+      "a.sdr/assets/attachables/CR!X.kfx",
+      "a.sdr/x.kll",
+      "a.sdr/a.azw6",
+      "a.sdr/a.yjf.bad_file",
+    ] {
+      let path: Vec<String> = junk.split('/').map(String::from).collect();
+      assert!(!books.file(&path), "{junk}");
+    }
+    assert!(states.file(&p(&["a.sdr", "a.yjr"])));
     assert!(!states.file(&other) && !books.file(&other));
     assert!(!states.file(&[]));
     // Case does not matter.
-    assert!(books.file(&p(&["X.KFX"])) && states.file(&p(&["X.SDR", "y"])));
+    assert!(books.file(&p(&["X.KFX"])) && states.file(&p(&["X.SDR", "y.YJF"])));
   }
 
   #[test]
