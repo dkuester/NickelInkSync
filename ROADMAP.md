@@ -59,6 +59,10 @@ tagged; C5 to C7 stay in 0.1.1). Details, status boxes and device tests are in
 [TODO.md](TODO.md#release-020).
 
 1. **Read a Kindle over MTP** (macOS and Windows, read only, no jailbreak).
+   *Status 2026-11-08: the spike (stages M1 on macOS and M2 on Windows)
+   passed on a Kindle Basic 2026; the owner stopped it there and goes on with
+   0.1.1. Stages M3 (client, cache limit) and M4 (licence files) are paused.
+   The code stays behind the Cargo feature `mtp`.*
    Today the CLI reads only a copy made by hand with OpenMTP. This lifts the
    earlier "Kindle waits until Kobo and Tolino are stable" for 0.2.0. A
    feasibility study with a licence check and a staged plan is in

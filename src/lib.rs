@@ -18,6 +18,7 @@ pub mod ion;
 pub mod kfx;
 pub mod kindle;
 pub mod kindle_device;
+pub mod kindle_mtp;
 pub mod kobalt;
 pub mod kosync;
 pub mod krds;

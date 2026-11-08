@@ -24,6 +24,15 @@ serde_json = "1.0.154"
 ureq = { version = "3.5.0", default-features = false, features = ["rustls", "json"] }
 zip = { version = "9.0.5", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
+# Reading a Kindle over MTP (`kindle-copy`), read only. Off by default, so the
+# device build and the GUI stay as they are. Pinned exactly: 0.x, minor
+# versions break (docs/kindle-mtp-feasibility.md).
+mtp-rs = { version = "=0.38.0", optional = true }
+futures = { version = "0.3", optional = true }
+
+[features]
+mtp = ["dep:mtp-rs", "dep:futures"]
+
 # The KOSync key in the system keychain (macOS) or Credential Manager
 # (Windows); not on the device or Linux, where it stays in config.ini.
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]

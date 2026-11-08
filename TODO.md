@@ -16,7 +16,7 @@ Erledigte Punkte wandern in der Roadmap nach „Recently completed“.
 
 - **Release 0.1.0 ist veröffentlicht (2026-11-08):** [v0.1.0](https://github.com/dkuester/NickelInkSync/releases/tag/v0.1.0), Desktop-Client und CLI (macOS, Windows), Gerätepaket für Kobo (6.0 und 4.x) und Tolino; Kindle experimentell. Gerätetests an Clara BW, Libra 2 und Tolino bestanden, Freigabe-Checkliste unten abgehakt.
 - **Als Nächstes: Release 0.1.1** mit C5 (Konfliktdialog, PR #80, offen), C6 und C7, siehe [Release 0.1.1](#release-011).
-- **Danach Release 0.2.0** (geplant): Kindle über MTP, kepubify 5, Usability-Quick-Wins, siehe [Release 0.2.0](#release-020). **Release 0.3.0** (Lesefortschritt zurück zum Kindle) ist nur ein Plan mit Machbarkeits-Tor.
+- **Danach Release 0.2.0** (geplant): Kindle über MTP (Spike M1/M2 bestanden, **am 2026-11-08 gestoppt**, M3/M4 ruhen), kepubify 5, Usability-Quick-Wins, siehe [Release 0.2.0](#release-020). **Release 0.3.0** (Lesefortschritt zurück zum Kindle) ist nur ein Plan mit Machbarkeits-Tor.
 - **Regeln, damit es übersichtlich bleibt:** höchstens zwei Sessions gleichzeitig; Gerätetests bündeln; Doku-Updates gesammelt.
 
 **Reihenfolge der Geräte:** Erst wird alles, was mit dem **Tolino Shine Color
@@ -212,17 +212,36 @@ C laufen höchstens zwei Sessions gleichzeitig.
 Grundlage: `docs/kindle-mtp-feasibility.md`
 (eigener PR). Die Zurückstellung des Kindle „bis Kobo und Tolino stabil sind“
 ist damit für 0.2.0 aufgehoben. Nur lesen, nur macOS und Windows, ohne
-Jailbreak, Testgerät Paperwhite 11 (Firmware 5.19.2).
+Jailbreak. Testgerät für MTP ist der **Kindle Basic 2026** (nur MTP); der
+Paperwhite 11 (Firmware 5.19.2) hängt noch als normales Laufwerk am Mac und
+braucht MTP nicht (Stand 2026-11-08).
+
+**Stand 2026-11-08: Spike gestoppt (Entscheidung des Besitzers), es geht mit
+0.1.1 weiter.** M1 (Mac) und M2 (Windows) sind bestanden; M3, M4 und die
+Zeitmessung ruhen, bis der Besitzer sie wieder aufnimmt. Was im Repo liegt:
+das Cargo-Feature `mtp` mit `kindle-copy` (PR #94, nicht in den
+freigegebenen Programmen), die Windows-CI mit Testbinary (PR #99, Artefakt
+`nickelinksync-windows-mtp-test`), die Studie `docs/kindle-mtp-feasibility.md`
+mit allen Ergebnissen. Der Baum 0.3.0 (Schreiben) wartet ebenfalls.
 
 Entscheidungen des Besitzers (2026-11-08): Zeigt MTP die `.sdr`-Ordner nicht
 (M1), **fällt der Block weg**. `ptpcamerad` wird **nur erklärt**, nie
 beendet. Die Kopie im temporären Ordner wird **zwischengespeichert, mit
 Obergrenze** (Größe oder Anzahl, in M3 festlegen; älteste zuerst löschen).
-Testgeräte: Paperwhite 11 und ein neuer **Kindle Basic 2026**, dazu ein
+Testgeräte: Kindle Basic 2026 (MTP) und Paperwhite 11 (Laufwerk, zum Vergleich), dazu ein
 Windows-PC. Die Studie ist angepasst.
 
 - [x] **du:** Entscheidung nach dem Bericht (2026-11-08: Vorgehen mit M1 als
   Spike, Antworten oben).
+- [x] **ich:** M1 (PR #94, `kindle-copy`) am Mac, am **Basic 2026**, **bestanden am 2026-11-08**:
+  `.sdr`, `.yjf` und `.yjr` sind über MTP sichtbar, Kopieren (mit Cache) und
+  `status` auf der Kopie laufen, Position übersetzt (Book „Good Boy“, Kindle
+  52 %, Server 87 %). **Windows (WPD, CI-Testbinary aus PR #99) am
+  2026-11-08 ebenfalls:** gleicher Baum (51 Ordner, 132 Dateien, 14 `.sdr`, 9 Bücher),
+  25 Dateien (10,2 MB) kopiert. `status` auf dem PC liest dieselben 3 Bücher
+  (6 DRM-Bücher übersprungen); „nicht zugeordnet“ und „Server not configured“,
+  weil dort noch keine Zuordnung und Konfiguration liegen (Übersetzung der
+  Stelle am Mac gezeigt). **M2 damit bestanden.** Offen: Zeitmessung, M3, M4.
 - [ ] **ich:** M1 Lesen aus Kopie ersetzen: MTP-Speicher des Kindle in einen
   temporären Ordner kopieren (nur `documents/`), dann der vorhandene Weg
   (`--device <Ordner>`). Zuerst als CLI-Unterbefehl, danach im Client.
@@ -349,10 +368,17 @@ in `SCOPE.md` mit dem Ergebnis ersetzt).
 
 ### Tor: Machbarkeit (vor jeder Umsetzung)
 
-Zwei Fragen, in dieser Reihenfolge. Alles ohne Jailbreak, am Paperwhite 11
-und am neuen Kindle Basic 2026 (**empfohlen: erst am Basic 2026**, weil er
-nicht jailbroken ist wie der Paperwhite, also das, was echte Nutzer haben,
-und weil dort nichts verloren geht). Kein Produktcode außer einem
+Zwei Fragen. Alles ohne Jailbreak-Hilfsmittel. Der Paperwhite 11 hängt noch als
+**Laufwerk** am Mac: Dort lässt sich die `.yjf` ohne MTP direkt ändern, also
+beantwortet **T1 am Paperwhite 11 ohne MTP-Schreiben**, ob der Kindle eine
+geänderte Stelle übernimmt (der Paperwhite ist **jailbroken**, Stand 2026-11-08; das kann
+Amazons Sync und das Verhalten beeinflussen, ein Ergebnis dort gilt nur mit
+Vorbehalt). Am **Basic 2026** (nur MTP, nicht jailbroken) gilt T0 und T1 über
+MTP; das ist der Weg, den echte Nutzer neuer Kindles gehen müssten.
+**Maßgeblich ist der Basic 2026**, weil er ein unveränderter Kindle ist (nach
+Wissen des Besitzers noch nicht jailbreakbar). Das Tor gilt also erst als
+bestanden, wenn T0 und T1 dort bestanden sind; der Paperwhite-Versuch ist
+nur ein früher Hinweis und die Sicherung für den Rückweg. Kein Produktcode außer einem
 Wegwerf-Werkzeug für den Versuch, das nur auf Zuruf läuft.
 
 - [ ] **ich:** Recherche zum Schreiben über MTP (Quellen und Metadaten, nichts
