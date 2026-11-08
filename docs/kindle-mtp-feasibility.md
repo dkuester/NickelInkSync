@@ -288,6 +288,18 @@ that matters:
 - The listing finished without an error or a holder problem on the Mac; the
   time was not measured.
 
+**Full run on the Mac (same day).** `kindle-copy` copied 9 `.kfx` books
+(10.2 MB) and 16 reading-state files (`.yjf`, `.yjr`; 3.9 KB); a second run
+found all of them current (the cache works). `status --device` on the copy
+read it as it reads a USB copy: 3 Send-to-Kindle books, 6 store books skipped
+for DRM (as designed). For the mapped book "Good Boy" it translated the
+Kindle position (block 79, offset 86, 52 %) to KOReader's XPointer and saw the
+server holding a newer one (87 %, from a Kobo Libra 2): "the Kindle is only
+read". So reading over MTP works end to end on macOS with the original
+program code. The first attempt of the day failed with the "another program
+is using the Kindle" message (holder not named, unplug and replug fixed it).
+Not yet tested: Windows (M2), the second Kindle, timing.
+
 Consequences: the first version of `kindle-copy` would have fetched about 30
 MB of attachments and caches per run; it now fetches only `.yjf`/`.yjr`.
 Which Kindle model this was, and the result for the second Kindle, are still
