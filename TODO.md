@@ -19,8 +19,8 @@ Erledigte Punkte wandern in der Roadmap nach „Recently completed“.
 - **Erledigt am 2026-11-07:** Vorprüfung `device check`, Gerätetest-Tabellen, Release-Notes und READMEs; Gerätetests am Clara BW (6.0) und Libra 2 (4.38) bestanden.
 - **Als Nächstes (du):** Release-Probelauf (Actions → Release → Run workflow), dann der Tag `v0.1.0` (Checkliste unten).
 - **Was dich braucht:** die [Freigabe-Checkliste 0.1.0](#freigabe-checkliste-010), nichts anderes. Pro Gerät ein Termin (Tabellen in [`docs/device-tests/`](docs/device-tests/)).
-- **Offen, nicht in 0.1.0:** PR #80 (Konfliktdialog, C5) bleibt offen und kommt in 0.2.0 (Block A).
-- **Release 0.2.0 geplant (2026-11-08):** vier Blöcke (C5, Kindle über MTP, kepubify 5, Usability-Quick-Wins), siehe [Release 0.2.0](#release-020).
+- **Offen, nicht in 0.1.0:** PR #80 (Konfliktdialog, C5) bleibt offen und wartet auf 0.1.1.
+- **Release 0.2.0 geplant (2026-11-08):** drei Blöcke (Kindle über MTP, kepubify 5, Usability-Quick-Wins), siehe [Release 0.2.0](#release-020).
 - **Regeln, damit es übersichtlich bleibt:** höchstens zwei Sessions gleichzeitig; Gerätetests bündeln; Doku-Updates gesammelt.
 
 **Reihenfolge der Geräte:** Erst wird alles, was mit dem **Tolino Shine Color
@@ -48,7 +48,7 @@ dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
 fertig, D2 läuft (E0 bis E7 und O5 erledigt; als Nächstes der Release-Workflow). **Der
 Kobo-Client** (Abschnitt Kobo-Client, C0–C10, geplant am 2026-10-31) gehörte
 seit 2026-11-01 zu **Release 0.1.0**; seit 2026-11-07 kommen C5 bis C7 erst
-in **0.1.1**; C5 seit 2026-11-08 in **0.2.0** (Abschnitte Release 0.1.1 und 0.2.0).
+in **0.1.1** (Abschnitt Release 0.1.1).
 
 ## Release 0.1.0
 
@@ -98,8 +98,8 @@ fehlerhaftes Plugin erscheinen. Umfang von 0.1.0:
 - unterstützt und getestet nur: Kobo 6.0.279225 (Clara BW), Kobo 4.38.23852
   (Libra 2), Tolino 5.18.279364 (Shine Color).
 
-C5 (Konfliktdialog) liegt nur in PR #80 und bleibt dort; C5 steht seit
-2026-11-08 unter „Release 0.2.0“, C6 und C7 unter „Release 0.1.1“.
+C5 (Konfliktdialog) liegt nur in PR #80 und bleibt dort; C5, C6 und C7 stehen
+unter „Release 0.1.1“.
 
 ### Freigabe-Checkliste 0.1.0
 
@@ -127,11 +127,31 @@ die Schritte stehen in den Tabellen unter [`docs/device-tests/`](docs/device-tes
 
 ## Release 0.1.1
 
-Entscheidung des Besitzers (2026-11-07): C5, C6 und C7 kommen erst nach 0.1.0.
-**C5 ist seit 2026-11-08 in [Release 0.2.0](#release-020), Block A**; C6 und C7
-bleiben hier, solange du nichts anderes sagst. Inhalt, Abhängigkeiten und Status bleiben wie sie waren; die übrigen Etappen
+Entscheidung des Besitzers (2026-11-07): C5, C6 und C7 kommen erst nach 0.1.0. Inhalt, Abhängigkeiten und Status bleiben wie sie waren; die übrigen Etappen
 (C0–C4, C8–C10) stehen im Abschnitt [Kobo-Client](#kobo-client).
 
+- [ ] **C5 Dialog bei Konflikten** (braucht C4) · **PR #80 (offen, nicht auf `main`)**; Stand und Übergabe dort und in der Notiz `2026-11-02-kobo-c5-handover.md`
+  - [ ] **ich:** Qt-Dialog beim Öffnen mit beiden Ständen und drei Knöpfen
+    (`ConfirmationDialog` hat zwei eigene; der dritte muss ein
+    Nickel-Widget sein, siehe C0).
+  - [ ] **du:** Konflikt am Kobo nachstellen (KOReader und Kobo offline
+    an verschiedenen Stellen), alle drei Knöpfe.
+  - Stand 2026-11-08 (PR, TODO und Notizen vom 2026-11-02 und 2026-11-07 gelesen):
+    Der Dialog erscheint am Clara BW mit beiden Ständen richtig. **Aber:** Kein
+    Tap auf „Später“, „Gerät behalten“ oder „Server übernehmen“ ist je
+    angekommen, nur das × wirkt (im Log nie `answered 1` oder `2`); in der VM
+    gehen alle drei. Der PR ist nicht mergebar (`CONFLICTING`). Es fehlt:
+    - [ ] **ich:** `main` in den Branch `claude/c5-conflict-dialog-c17794`
+      holen (Konflikte in `nickelinksync.cc`; `syms.gz` neu erzeugen).
+    - [ ] **ich:** Knöpfe auf `tapped(bool)` verbinden, jeden Tap mit Uhrzeit
+      loggen, Dialog statt in `exec()` im `setVolume`-Hook per `open()` zeigen
+      und die Antwort asynchron behandeln (die Vermutung dazu ist ungeprüft).
+    - [ ] **ich:** Knopfgrößen und -texte; Fehler „Später → erneutes Öffnen
+      überschreibt die Server-Position“ (laut C5-Session mit `90b9085`
+      behoben, am Gerät ungeprüft) im Test abdecken.
+    - [ ] **ich:** Qt5-Fassung für den Libra 2 (`just plugin-qt5`).
+    - [ ] **du:** Gerätetest Clara BW (alle drei Knöpfe und ×; das Gerät vorher
+      von den 0.1.0-Testständen zurücksetzen) und Libra 2 (Qt5).
 - [ ] **C6 Oberfläche** (braucht C5)
   - [ ] **ich:** Vormerkliste, „Jetzt synchronisieren“, Zuordnen am Gerät
     aus dem Index (Vorschläge nach Titel und Autor); Einstieg über
@@ -148,50 +168,21 @@ bleiben hier, solange du nichts anderes sagst. Inhalt, Abhängigkeiten und Statu
 
 ## Release 0.2.0
 
-Entscheidung des Besitzers (2026-11-08): vier Blöcke. Reihenfolge und
+Entscheidung des Besitzers (2026-11-08): drei Blöcke. (C5, C6 und C7 bleiben in
+[Release 0.1.1](#release-011); der Besitzer hat das am selben Tag korrigiert.) Reihenfolge und
 Aufteilung (höchstens zwei Sessions gleichzeitig, Gerätetests gebündelt):
 
 | Block | Inhalt | Termin mit dir |
 | --- | --- | --- |
-| **A** | C5 Konfliktdialog fertigstellen (PR #80) | Clara BW, Libra 2 |
-| **B** | Kindle über MTP lesen (macOS, Windows) | Paperwhite 11, Mac, Windows-PC |
-| **C** | kepubify 5.0 mitliefern | Clara BW (zusammen mit A) |
-| **D** | Desktop-Client: Usability und Barrierefreiheit (Quick-Wins) | Sichtprüfung am Mac, einmal Windows |
+| **A** | Kindle über MTP lesen (macOS, Windows) | Paperwhite 11, Mac, Windows-PC |
+| **B** | kepubify 5.0 mitliefern | Clara BW |
+| **C** | Desktop-Client: Usability und Barrierefreiheit (Quick-Wins) | Sichtprüfung am Mac, einmal Windows |
 
-**Gebündelte Termine:** Clara BW einmal für A und C; Libra 2 einmal für A
-(Qt5); Paperwhite einmal für B; Windows-PC einmal für B und D am Ende.
-Mit B und D laufen höchstens zwei Sessions gleichzeitig (A und C teilen
-sich die Plugin- und CLI-Dateien nicht mit D).
+**Gebündelte Termine:** Clara BW einmal für B (und für C5, wenn es dann dran
+ist); Paperwhite einmal für A; Windows-PC einmal für A und C am Ende. Mit A und
+C laufen höchstens zwei Sessions gleichzeitig.
 
-### Block A: C5 Konfliktdialog (PR #80)
-
-Stand 2026-11-08 (PR, TODO und Notizen vom 2026-11-02 und 2026-11-07 gelesen):
-Der Dialog erscheint am Clara BW mit beiden Ständen richtig. **Aber:** Kein
-Tap auf „Später“, „Gerät behalten“ oder „Server übernehmen“ ist je
-angekommen, nur das × wirkt (im Log nie `answered 1` oder `2`); in der VM
-gehen alle drei. Der PR ist **nicht mergebar** (`CONFLICTING`).
-
-- [ ] **ich:** `main` in den Branch `claude/c5-conflict-dialog-c17794`
-  holen (Konflikte in `nickelinksync.cc`; `syms.gz` neu erzeugen statt
-  mergen).
-- [ ] **ich:** Taps am Gerät: Knöpfe auf `tapped(bool)` verbinden, jeden Tap
-  mit Uhrzeit loggen, Dialog nicht in `exec()` im `setVolume`-Hook, sondern
-  per `open()` zeigen und die Antwort asynchron behandeln (Buch erst nach der
-  Antwort öffnen). Das ist die eigentliche Arbeit; die Vermutung (Touch
-  kommt in verschachtelter Event-Schleife nicht an) ist ungeprüft.
-- [ ] **ich:** Knopfgrößen und -texte prüfen („Server übernehmen“ wird von
-  Nickel verkleinert; Knöpfe untereinander seit `eb455e3`).
-- [ ] **ich:** Fehler „Später → erneutes Öffnen überschreibt die Server-Position“
-  (laut C5-Session mit `90b9085` behoben, am Gerät ungeprüft) im Test abdecken.
-- [ ] **ich:** Qt5-Fassung für den Libra 2 bauen (gleicher Quelltext,
-  `just plugin-qt5`), Symbole gegen 4.38 prüfen.
-- [ ] **du:** Gerätetest Clara BW: alle drei Knöpfe und ×, danach Log
-  schicken. Vorher das Gerät von den 0.1.0-Testständen zurücksetzen
-  (auf dem Kobo liegt noch das C5-Plugin vom 2026-11-07).
-- [ ] **du:** Gerätetest Libra 2 (Qt5), derselbe Ablauf.
-- Offen: Tolino nutzt denselben Weg erst mit C7 (bleibt 0.1.1).
-
-### Block B: Kindle über MTP lesen
+### Block A: Kindle über MTP lesen
 
 Grundlage: `docs/kindle-mtp-feasibility.md`
 (eigener PR). Die Zurückstellung des Kindle „bis Kobo und Tolino stabil sind“
@@ -210,7 +201,7 @@ Jailbreak, Testgerät Paperwhite 11 (Firmware 5.19.2).
   Hinweise), M4 `NOTICE`/Lizenzhinweise im Paket, README.
 - [ ] **du:** Windows-PC: dieselbe Prüfung mit dem Paperwhite.
 
-### Block C: kepubify 5.0 mitliefern
+### Block B: kepubify 5.0 mitliefern
 
 v5.0.0 vom 2026-11-08 (MIT). 0.1.0 bleibt bei 4.0.4. Die Prüfsummen auf
 GitHub stimmen mit den vom Besitzer genannten überein (Gegenprobe). Risiko laut
@@ -232,10 +223,10 @@ Spans in Spezialelementen); „KEPUBs are now rejected by default“.
   `packaging/macos/package.sh` (arm64 `bd9e40cb…`, x86_64 `c007999e…`),
   `packaging/windows/package.ps1` (`3b833ee3…`), Lizenzdatei, Release-Notes
   und READMEs. Nur wenn die CI-Prüfung grün ist.
-- [ ] **du:** Gerätetest Clara BW im Termin von Block A: ein mit v5
+- [ ] **du:** Gerätetest Clara BW im Clara-BW-Termin: ein mit v5
   konvertiertes Buch senden, öffnen, Position gegen KOReader prüfen.
 
-### Block D: Desktop-Client, Usability und Barrierefreiheit (Quick-Wins)
+### Block C: Desktop-Client, Usability und Barrierefreiheit (Quick-Wins)
 
 Grundlage: `docs/usability-requirements.md` (PR #79). Die Zeilenangaben der
 Tabelle dort sind veraltet; gegen `gui/src/` am 2026-11-08 geprüft: Es gibt
@@ -282,7 +273,7 @@ unten).
 - [ ] **du:** Sichtprüfung am Mac mit leerer Konfiguration (Erststart),
   dann die drei Testaufgaben (I11: Gerät einrichten, Buch zuordnen,
   Position holen) und sagen, wo es hakt; einmal am Windows-PC (Kontrast,
-  Zoom, Tab), zusammen mit Block B.
+  Zoom, Tab), zusammen mit Block A.
 
 **Später in 0.2.0, falls Zeit** (mittel): I3 Tastenkürzel und macOS-Menü
 (E6: nur Cmd-, und Cmd-Q), I5 Rückgängig nach „Entfernen“ und Abbrechen von
@@ -1263,7 +1254,7 @@ Konformitätserklärung**, nur ein Abschnitt in den READMEs (E5);
 Client auf dem Gerät (ein Plugin für Kobo 6.0 und Tolino 5.18, dazu eine
 Qt5-Fassung für Kobo 4.x), geplant
 am 2026-10-31 (deine Antworten auf meine Rückfragen). **Teil von Release
-0.1.0** (geändert am 2026-11-01; **C5 bis C7 seit 2026-11-07 in 0.1.1, C5 seit 2026-11-08 in 0.2.0**); C0 bis C3 sind erledigt (PRs #66, #55,
+0.1.0** (geändert am 2026-11-01; **C5 bis C7 seit 2026-11-07 in 0.1.1**); C0 bis C3 sind erledigt (PRs #66, #55,
 #64, #67), C4 läuft. **Kobo 4.x** (seit 2026-11-01, Libra 2 mit
 4.38.23852): C8 (Rust, PR #70) und C9 (Qt5-Erkundung und -Build) sind
 erledigt, C10 (Plugin in Qt5) ist gebaut, der Gerätetest am Libra 2 steht aus. **Kobalt-Schutz (N7):** Jeder neue Einstieg des
@@ -1442,7 +1433,7 @@ Auf dem Kobo ist das Plugin inaktiv.
     ist aktuell“. Kein Seitenverwerfen nötig: Nickel hatte das ganze
     Kapitel schon gerendert, eine Seite hielt die Stelle. Das Verwerfen
     selbst ist in der Kobo-VM geprüft (5 Seiten, richtig geöffnet).
-- [ ] **C5 Dialog bei Konflikten** → nach [Release 0.2.0](#release-020), Block A, verschoben (2026-11-08; vorher 0.1.1).
+- [ ] **C5 Dialog bei Konflikten** → nach [Release 0.1.1](#release-011) verschoben (2026-11-07).
 - [ ] **C6 Oberfläche** → nach [Release 0.1.1](#release-011) verschoben (2026-11-07).
 - [x] **C8 Kobo 4.x lesen und zurückschreiben** (Rust, CLI und GUI; kann
   sofort parallel laufen) · neues Testgerät **Kobo Libra 2, Firmware

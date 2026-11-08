@@ -48,33 +48,27 @@ workflow, release notes, and the tag (owner only). The checklist is in
 
 ## Release 0.1.1
 
-C6 (the plugin's own screens: pending list, "sync now", mapping on the
-device) and C7 (the Tolino on the same write path as the Kobo), moved here
-from 0.1.0 on 2026-11-07. C5 (the conflict dialog, PR #80) moved on to 0.2.0
-on 2026-11-08; C6 and C7 stay here unless the owner says otherwise.
+C5 (the conflict dialog, PR #80, open), C6 (the plugin's own screens:
+pending list, "sync now", mapping on the device) and C7 (the Tolino on the
+same write path as the Kobo), moved here from 0.1.0 on 2026-11-07.
 
 ## Release 0.2.0
 
-Four things, decided by the owner on 2026-11-08 (0.1.0 was about to be
-tagged). Details, status boxes and device tests are in
+Three things, decided by the owner on 2026-11-08 (0.1.0 was about to be
+tagged; C5 to C7 stay in 0.1.1). Details, status boxes and device tests are in
 [TODO.md](TODO.md#release-020).
 
-1. **Finish the conflict dialog (C5, PR #80).** The dialog shows both
-   positions on the Clara BW, but no tap on its buttons has arrived on the
-   device yet (only the close cross works; the VM is fine). Needs `main`
-   merged in, tap handling that does not run in a nested event loop, button
-   sizes, a device test on the Clara BW (6.0) and the Libra 2 (Qt5).
-2. **Read a Kindle over MTP** (macOS and Windows, read only, no jailbreak).
+1. **Read a Kindle over MTP** (macOS and Windows, read only, no jailbreak).
    Today the CLI reads only a copy made by hand with OpenMTP. This lifts the
    earlier "Kindle waits until Kobo and Tolino are stable" for 0.2.0. A
    feasibility study with a licence check and a staged plan is in
    `docs/kindle-mtp-feasibility.md`.
-3. **Bundle kepubify 5.0** (v5.0.0, MIT, released 2026-11-08; 0.1.0 keeps
+2. **Bundle kepubify 5.0** (v5.0.0, MIT, released 2026-11-08; 0.1.0 keeps
    4.0.4). Its output can differ from v4 (koboSpan numbering, whitespace), so
    the position translation is checked against v5 output in CI first;
    plus the minimum macOS of the v5 binaries, converting a book twice
    (v4 kepub already on the device) and a test on the Clara BW.
-4. **Desktop client: usability and accessibility quick wins**, based on the
+3. **Desktop client: usability and accessibility quick wins**, based on the
    review against DIN EN ISO 9241 in `docs/usability-requirements.md`
    (PR #79): keyboard and focus, labelled fields, contrast, zoom, help, a
    first-run checklist, tooltips and notices, in three stages that touch
@@ -345,12 +339,12 @@ reading and USB write-back (C8) and the plugin as a Qt5 build (C9, C10).
   opening within the chapter last read. Still to do: English texts (the
   plugin logs `QLocale()`, `de_DE` so far).
 - **On-device client for the Kobo 6.0 and the Tolino** (L, release
-  0.1.0, experimental; C5 moves to 0.2.0, C6 and C7 to 0.1.1): one plugin for both devices, plus a Qt5 build
+  0.1.0, experimental; C5–C7 move to 0.1.1): one plugin for both devices, plus a Qt5 build
   (`KoboRoot.tgz`) for Kobo 4.x (C9, C10); stages C0–C4 are done (PRs
   #66, #55, #64, #67, #72), and so are C9 (the Qt5 symbols on 4.38.23852
   and a Qt5 build) and C10 (the Qt5 build behaves as C4 on Kobo 4.x;
-  device test on the Libra 2 pending); the plugin's own screens (C6) and the Tolino (C7) follow in 0.1.1, the
-  conflict dialog (C5) in 0.2.0. Like today's plugin
+  device test on the Libra 2 pending); the conflict dialog (C5), the
+  plugin's own screens (C6) and the Tolino (C7) follow in 0.1.1. Like today's plugin
   it stays idle while Kobalt is installed (N7). Opening a book takes a
   newer server position, written through Nickel itself as Kobalt (MIT)
   does (`VolumeManager::updateBookmark`/`updateFields` in Nickel's
