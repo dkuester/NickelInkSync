@@ -80,6 +80,30 @@ tagged; C5 to C7 stay in 0.1.1). Details, status boxes and device tests are in
    close yet are worked around, reported upstream and documented; no formal
    conformance statement.
 
+## Release 0.3.0
+
+Wished for by the owner (2026-11-08): **reading progress back to the Kindle**
+through the desktop client (today the Kindle is read only and `pull`
+refuses). This is a plan, not a decision to build. A **feasibility gate**
+comes first, and if it fails the block is dropped without code:
+
+- Does the Kindle accept a write into `documents/` over MTP at all (MTP has
+  no in-place overwrite: delete the `.yjf` and create it again)? Does the
+  chosen library (`mtp-rs`, WPD on Windows) support it on a Kindle (listed
+  as tested for reading only)?
+- Does the Kindle take a changed position (`.yjf`, `lpr`) from a single test
+  book, also after a restart, keep it once Wi-Fi and Amazon's sync are back
+  on, leave the library intact, and can the backup of the book's `.sdr`
+  folder be put back? Tried in flight mode first, on the Kindle Basic 2026
+  (not jailbroken) before the Paperwhite 11.
+
+If the gate passes: a CLI `pull --write` for the Kindle with a backup and
+`confirm`, the reverse translation (XPointer to Kindle position, `pid`) as a
+check of its own, then "Get" at the Kindle in the desktop client, marked
+experimental, tested by the owner in one bundled session. README and
+`SCOPE.md` keep saying "nothing is written to the Kindle" until the gate has
+passed. Details and status boxes: [TODO.md](TODO.md#release-030).
+
 ## Recently completed
 
 - [x] Scope fixed: Rust core + CLI (desktop and on-device) plus a NickelHook plugin

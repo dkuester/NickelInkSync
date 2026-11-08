@@ -20,7 +20,7 @@ Erledigte Punkte wandern in der Roadmap nach „Recently completed“.
 - **Als Nächstes (du):** Release-Probelauf (Actions → Release → Run workflow), dann der Tag `v0.1.0` (Checkliste unten).
 - **Was dich braucht:** die [Freigabe-Checkliste 0.1.0](#freigabe-checkliste-010), nichts anderes. Pro Gerät ein Termin (Tabellen in [`docs/device-tests/`](docs/device-tests/)).
 - **Offen, nicht in 0.1.0:** PR #80 (Konfliktdialog, C5) bleibt offen und wartet auf 0.1.1.
-- **Release 0.2.0 geplant (2026-11-08):** drei Blöcke (Kindle über MTP, kepubify 5, Usability-Quick-Wins), siehe [Release 0.2.0](#release-020).
+- **Release 0.2.0 geplant (2026-11-08):** drei Blöcke (Kindle über MTP, kepubify 5, Usability-Quick-Wins), siehe [Release 0.2.0](#release-020). **Release 0.3.0** (Lesefortschritt zurück zum Kindle) ist nur ein Plan mit Machbarkeits-Tor.
 - **Regeln, damit es übersichtlich bleibt:** höchstens zwei Sessions gleichzeitig; Gerätetests bündeln; Doku-Updates gesammelt.
 
 **Reihenfolge der Geräte:** Erst wird alles, was mit dem **Tolino Shine Color
@@ -308,6 +308,106 @@ und melden, kein Wechsel weg von egui (E3); **Tests** du mit der
 Sprachausgabe (Windows), ich mit VoiceOver (macOS) (E4); **keine formale
 Konformitätserklärung**, nur ein Abschnitt in den READMEs (E5);
 **macOS-Menüleiste** nur Tastenkürzel, ohne neue Abhängigkeit (E6).
+
+## Release 0.3.0
+
+Wunsch des Besitzers (2026-11-08): **Lesefortschritt zurück zum Kindle** über
+den Desktop-Client (heute lesen wir nur; `pull` lehnt beim Kindle ab). Das ist
+ein **Plan, kein Beschluss zur Umsetzung**. Vorsichtig einplanen: **Zuerst
+muss die Machbarkeit geprüft werden** (Tor unten). Besteht das Tor nicht,
+wird der Block gestrichen, ohne dass Code entstanden ist. Voraussetzung ist
+Block A aus 0.2.0 (Kindle über MTP lesen), sonst gibt es keinen Weg zum
+Gerät. README und `SCOPE.md` sagen heute „Nichts wird auf den Kindle
+geschrieben, `pull` lehnt ab“; das **bleibt so, bis das Tor bestanden ist**
+und wird erst dann geändert (und der Abschnitt „Writing back is not checked“
+in `SCOPE.md` mit dem Ergebnis ersetzt).
+
+### Tor: Machbarkeit (vor jeder Umsetzung)
+
+Zwei Fragen, in dieser Reihenfolge. Alles ohne Jailbreak, am Paperwhite 11
+und am neuen Kindle Basic 2026 (**empfohlen: erst am Basic 2026**, weil er
+nicht jailbroken ist wie der Paperwhite, also das, was echte Nutzer haben,
+und weil dort nichts verloren geht). Kein Produktcode außer einem
+Wegwerf-Werkzeug für den Versuch, das nur auf Zuruf läuft.
+
+- [ ] **ich:** Recherche zum Schreiben über MTP (Quellen und Metadaten, nichts
+  ausführen), Ergebnis in `docs/kindle-mtp-feasibility.md` (Abschnitt
+  „Writing“). Stand heute (aus der README von `mtp-rs`, ungeprüft am Kindle):
+  - Die Bibliothek kann Hochladen, Löschen, Umbenennen, Verschieben und
+    Kopieren, auch über WPD unter Windows; ein Kindle ist nur zum **Lesen**
+    als getestet gelistet.
+  - MTP kennt **kein Überschreiben in place**: Eine geänderte `.yjf` hieße
+    das alte Objekt löschen und ein neues gleichen Namens anlegen
+    (`SendObjectInfo`/`SendObject`). Ob Amazons MTP-Antwort das in
+    `documents/*.sdr/` zulässt, ob die Datei danach als dieselbe gilt oder
+    der Indexer sie ignoriert, ist offen.
+  - Unter Windows kann WPD das Löschen und das Neuanlegen minutenlang
+    verzögern (ihre Issues #52, #59).
+- [ ] **du + ich:** **Versuch T0, Schreiben überhaupt:** Eine harmlose neue
+  Datei (kein Buch, z. B. `nickelinksync-test.txt`) in `documents/` anlegen,
+  wieder lesen, wieder löschen. Antwortet der Kindle mit einem Fehler
+  („access denied“, „unsupported“), ist die Frage entschieden und der Block
+  wird gestrichen.
+- [ ] **du + ich:** **Versuch T1, übernimmt der Kindle eine geänderte
+  Stelle?** Risikoarm aufgebaut:
+  1. Ein einziges **Testbuch** (Book R, ein Send-to-Kindle-Buch ohne Wert).
+  2. **Sicherung** des ganzen `.sdr`-Ordners dieses Buches auf den Rechner
+     (mit `kindle-copy`, plus die Dateigrößen und -zeiten notiert), dazu eine
+     Liste der Bibliothek (Anzahl und Titel).
+  3. **Flugmodus an** (damit Amazons Sync, `sync_lpr`, nicht dazwischenfunkt).
+  4. Nur die `.yjf` dieses einen Buches ändern: `lpr` auf eine bekannte
+     andere Stelle (die wir aus KOReader kennen), über MTP löschen und neu
+     anlegen. Alles andere bleibt unberührt.
+  5. Buch öffnen: **übernimmt der Kindle die Stelle?** Dann Kindle neu
+     starten und noch einmal prüfen.
+  6. **Flugmodus aus, WLAN an**, warten: **überschreibt Whispersync die
+     Stelle wieder** (mit dem Stand von Amazon oder dem alten vom Gerät)?
+  7. **Bibliothek unbeschadet?** Gleiche Anzahl und Titel, das Buch öffnet,
+     Markierungen und Lesezeichen des Buches noch da, keine neuen
+     `.bad_file`-Kopien oder nur die bekannten.
+  8. **Rückweg:** Die Sicherung des `.sdr`-Ordners zurückspielen und
+     prüfen, dass der alte Stand wieder da ist. Ohne funktionierenden
+     Rückweg wird T1 nicht auf ein zweites Buch ausgedehnt.
+- [ ] **du:** Entscheidung nach T0 und T1.
+
+**Das Tor ist bestanden, wenn alle fünf zutreffen** (sonst wird der Block
+gestrichen, der Besitzer entscheidet):
+1. Der Kindle lässt das Schreiben in `documents/` (T0) zu.
+2. Er übernimmt die geänderte Stelle auch nach Neustart (T1, Schritt 5).
+3. Sie bleibt, nachdem das WLAN wieder an ist (Schritt 6), oder Amazons Sync
+   macht sie nach dem gleichen Muster auch ohne uns richtig (die neuere
+   Stelle gewinnt); ein stilles Zurückdrehen heißt „nein“.
+4. Die Bibliothek bleibt unbeschadet (Schritt 7).
+5. Der Rückweg geht (Schritt 8).
+
+### Wenn das Tor bestanden ist: Etappen (experimentell gekennzeichnet)
+
+- [ ] **ich:** **W0 Rückrichtung prüfen** (eigener Prüfpunkt, vor W1):
+  XPointer (EPUB/KOReader) → Kindle-Position. Heute geht nur `eid` +
+  Offset → XPointer (`src/kindle.rs`). Zurück braucht es den Abgleich in
+  umgekehrter Richtung (Block des Spine-Elements → KFX-Abschnitt, Offset in
+  Codepoints) und die lineare Position `pid` aus den Positionskarten des
+  KFX (`$264`/`$265`/`$609`), damit `lpr` (`base64(01 | eid | offset) : pid`)
+  stimmt, dazu `fpr` und der Verlauf `page.history.record`. Test an
+  Book P, Q, R (Hin- und Rückweg müssen sich decken); wo das nicht
+  zeichengenau geht (CDATA), wird gerundet und das gesagt.
+- [ ] **ich:** **W1 CLI:** `pull --write` für einen Kindle (nur Buch für
+  Buch, nur mit Zuordnung), mit **Sicherung des `.sdr`-Ordners** vor jeder
+  Änderung (neben dem Zielordner, wie `restore` es bei Kobo macht), mit
+  `confirm` wie bei den anderen Geräten, `restore` für den Kindle, `--dry-run`
+  zuerst. `--answered`-Schutz wie bei C5 entfällt (kein Plugin).
+- [ ] **ich:** **W2 Desktop-Client:** „Holen“ am Kindle mit Rückfrage („Der
+  Kindle wird verändert“), Hinweis „experimentell“, Hinweis auf Flugmodus,
+  Fortschritt und Abbrechen; unter Windows mit Zeitgrenze für WPD.
+- [ ] **du:** **Gerätetests gebündelt in einem Termin** am Paperwhite 11
+  (Mac und Windows-PC): ein Buch holen, öffnen, Flugmodus aus, Stelle
+  bleibt, Rückweg per `restore`; danach am Basic 2026 dasselbe.
+- [ ] **ich:** Erst jetzt: README und `SCOPE.md` ändern („Nichts wird auf
+  den Kindle geschrieben“ → was gilt), Release-Notes „experimentell“.
+
+Offene Punkte für später: Wie lange gilt ein Test? Amazon kann die Firmware
+ändern; der Kindle bleibt „experimentell“. Mehrere Bücher auf einmal erst
+nach einem Release Erfahrung mit einzelnen.
 
 ## Grundlagen
 
@@ -1668,4 +1768,5 @@ Auf dem Kobo ist das Plugin inaktiv.
   - [x] **ich:** Kindle in die CLI: `status`/`push` über die Zuordnung,
     nur lesend (D1 Etappe 4).
   - [ ] **du:** Prüfen, ob der Kindle eine geänderte `.yjf` übernimmt
-    (Flugmodus, damit Amazons Sync nicht dazwischenfunkt).
+    (Flugmodus, damit Amazons Sync nicht dazwischenfunkt). **Jetzt als
+    Machbarkeits-Tor in [Release 0.3.0](#release-030) (Versuch T1).**
