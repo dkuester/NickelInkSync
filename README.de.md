@@ -24,6 +24,8 @@ teilen.
 > Sicherungskopie). Den Scope und die Datenbank-Befunde, auf denen er beruht,
 > findest du in [SCOPE.md](SCOPE.md), die nächsten Schritte in
 > [ROADMAP.md](ROADMAP.md) (beides auf Englisch).
+>
+> **Download:** Release 0.1.0 ist veröffentlicht, siehe [Releases](https://github.com/dkuester/NickelInkSync/releases/tag/v0.1.0).
 
 ## Benutzung
 

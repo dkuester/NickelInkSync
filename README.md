@@ -22,6 +22,8 @@ the same progress.
 > backup first). The scope and the device-database findings it
 > rests on are in [SCOPE.md](SCOPE.md), the next steps are in
 > [ROADMAP.md](ROADMAP.md).
+>
+> **Download:** release 0.1.0 is published, see [Releases](https://github.com/dkuester/NickelInkSync/releases/tag/v0.1.0).
 
 ## Usage
 
