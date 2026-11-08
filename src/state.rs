@@ -86,6 +86,11 @@ pub struct Entry {
   /// Nickel's `DateLastRead` has moved since.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub deferred: Option<i64>,
+  /// The server's position (the XPointer) that "later" was said about. Another
+  /// device may send the same position again, with a newer time: the answer
+  /// still holds (device test on the Libra 2, 8 Nov 2026).
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub deferred_at: Option<String>,
 }
 
 impl Entry {
@@ -94,6 +99,7 @@ impl Entry {
       && self.not_in_line.is_none()
       && self.pending.is_none()
       && self.deferred.is_none()
+      && self.deferred_at.is_none()
   }
 }
 
@@ -147,9 +153,12 @@ impl State {
 
   /// The base of `content_id` for `document`, if it has one.
   /// Whether the reader put off the conflict about the server position
-  /// stored at `server_time`.
-  pub fn deferred(&self, content_id: &str, server_time: i64) -> bool {
-    self.get(content_id).and_then(|e| e.deferred) == Some(server_time)
+  /// stored at `server_time`, or the server holding the same position
+  /// `server_position` again.
+  pub fn deferred(&self, content_id: &str, server_time: i64, server_position: &str) -> bool {
+    self.get(content_id).is_some_and(|e| {
+      e.deferred == Some(server_time) || e.deferred_at.as_deref() == Some(server_position)
+    })
   }
 
   pub fn base(&self, content_id: &str, document: &str) -> Option<&Base> {
@@ -182,6 +191,7 @@ impl State {
     entry.not_in_line = None;
     entry.pending = None;
     entry.deferred = None;
+    entry.deferred_at = None;
     if title.is_some() {
       entry.title = title.map(str::to_string);
     }

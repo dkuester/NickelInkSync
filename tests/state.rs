@@ -392,6 +392,7 @@ fn an_answered_conflict_is_handed_to_nickel() {
 fn defer(s: &Setup, server_time: i64) {
   let mut state = s.state();
   state["books"][BOOK]["deferred"] = json!(server_time);
+  state["books"][BOOK]["deferred_at"] = json!(at(20));
   fs::write(s.state_path(), state.to_string()).unwrap();
 }
 
@@ -414,7 +415,12 @@ fn a_put_off_conflict_is_asked_again_although_the_device_was_read_later() {
   }
   assert!(s.server.puts().is_empty());
   assert_eq!(s.position(), STORED);
-  // Another device sent meanwhile: the old "later" does not apply.
+  // Another device sends the same position again, later: "later" still holds
+  // (Libra 2, 8 Nov 2026).
+  s.server.store(&hash(), &at(20), 0.2, time + 200);
+  let (_, out) = s.run(&["pull", "--write", "--emit", "--content-id", BOOK]);
+  assert!(out.contains("NICKELINKSYNC_CONFLICT"), "{out}");
+  // Another device sent a different position: the old "later" does not apply.
   s.server.store(&hash(), &at(30), 0.3, time + 300);
   let (_, out) = s.run(&["pull", "--write", "--emit", "--content-id", BOOK]);
   assert!(!out.contains("NICKELINKSYNC_CONFLICT"), "{out}");

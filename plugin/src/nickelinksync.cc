@@ -739,7 +739,8 @@ static bool update_state(const QString &id, F change)
     QJsonObject entry = books.value(id).toObject();
     change(entry);
     if (entry.contains(QStringLiteral("base")) || entry.contains(QStringLiteral("not_in_line"))
-        || entry.contains(QStringLiteral("pending")) || entry.contains(QStringLiteral("deferred"))) {
+        || entry.contains(QStringLiteral("pending")) || entry.contains(QStringLiteral("deferred"))
+        || entry.contains(QStringLiteral("deferred_at"))) {
         books.insert(id, entry);
     } else {
         books.remove(id);
@@ -787,6 +788,7 @@ static bool set_base(const QString &id, const QJsonObject &base)
         entry.remove(QStringLiteral("not_in_line"));
         entry.remove(QStringLiteral("pending"));
         entry.remove(QStringLiteral("deferred"));
+        entry.remove(QStringLiteral("deferred_at"));
     });
 }
 
@@ -794,10 +796,11 @@ static bool set_base(const QString &id, const QJsonObject &base)
 // The CLI asks again while the server holds that position, however Nickel's
 // DateLastRead moves (opening and leaving bump it, which would make the
 // device the newer side).
-static void set_deferred(const QString &id, qint64 server_time)
+static void set_deferred(const QString &id, qint64 server_time, const QString &server_position)
 {
-    update_state(id, [server_time](QJsonObject &entry) {
+    update_state(id, [server_time, server_position](QJsonObject &entry) {
         entry.insert(QStringLiteral("deferred"), static_cast<double>(server_time));
+        entry.insert(QStringLiteral("deferred_at"), server_position);
     });
 }
 
@@ -1567,7 +1570,8 @@ static void conflict_answered(const std::shared_ptr<ConflictAsk> &c, int dialog_
         return;
     } else {
         if (answer == Answer::Later) {
-            set_deferred(id, c->pulled.conflict_fields.value(6).toLongLong());
+            set_deferred(id, c->pulled.conflict_fields.value(6).toLongLong(),
+                         QString::fromUtf8(c->pulled.conflict_fields.value(8)));
         }
         g_not_synced = id;
         g_not_synced_why = QStringLiteral("Konflikt, später entscheiden");

@@ -901,7 +901,7 @@ impl Session {
       && self
         .state
         .borrow()
-        .deferred(&book.content_id, remote.timestamp);
+        .deferred(&book.content_id, remote.timestamp, &remote.progress);
     match decision {
       Decision::Apply | Decision::Keep if deferred => Decision::Ask {
         backwards: goes_backwards(direction, local, remote),
