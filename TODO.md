@@ -333,10 +333,14 @@ in `SCOPE.md` mit dem Ergebnis ersetzt).
 Zwei Fragen. Alles ohne Jailbreak-Hilfsmittel. Der Paperwhite 11 hängt noch als
 **Laufwerk** am Mac: Dort lässt sich die `.yjf` ohne MTP direkt ändern, also
 beantwortet **T1 am Paperwhite 11 ohne MTP-Schreiben**, ob der Kindle eine
-geänderte Stelle übernimmt (zu klären: ob er jailbroken ist, `SCOPE.md` sagt
-ja; das kann Amazons Sync beeinflussen, und das Ergebnis gilt dann nur mit
+geänderte Stelle übernimmt (der Paperwhite ist **jailbroken**, Stand 2026-11-08; das kann
+Amazons Sync und das Verhalten beeinflussen, ein Ergebnis dort gilt nur mit
 Vorbehalt). Am **Basic 2026** (nur MTP, nicht jailbroken) gilt T0 und T1 über
-MTP; das ist der Weg, den echte Nutzer neuer Kindles gehen müssten. Kein Produktcode außer einem
+MTP; das ist der Weg, den echte Nutzer neuer Kindles gehen müssten.
+**Maßgeblich ist der Basic 2026**, weil er ein unveränderter Kindle ist (nach
+Wissen des Besitzers noch nicht jailbreakbar). Das Tor gilt also erst als
+bestanden, wenn T0 und T1 dort bestanden sind; der Paperwhite-Versuch ist
+nur ein früher Hinweis und die Sicherung für den Rückweg. Kein Produktcode außer einem
 Wegwerf-Werkzeug für den Versuch, das nur auf Zuruf läuft.
 
 - [ ] **ich:** Recherche zum Schreiben über MTP (Quellen und Metadaten, nichts
