@@ -190,8 +190,7 @@ device pattern "the first opening after a start fails, the second works".
 **Result:** Kobalt's write path works on 6.0 for kepub and EPUB, also on
 the first opening after a start, but it does **not** get around the page
 cache: Nickel opens from its cache whatever wrote the row. Dropping the
-target chapter's cached pages when none holds the place, as the CLI has
-done since N5, fixes it (D, H), here on Nickel's own connection inside the
+target chapter's cached pages when none starts at the place (since 8 Nov 2026; before, when none held it: see below), fixes it (D, H), here on Nickel's own connection inside the
 same transaction and without a restart.
 
 Limits of the VM: everything is emulated and slow; before this test the
@@ -293,7 +292,7 @@ the Tolino check before it.
    `updateBookmark` with `ContentLocation::create(…).toString()` (refuse a
    position for which `isValid()` is false or `toString()` differs),
    `setPercentRead`, `updateFields` with only the changed columns, then
-   **drop the target chapter's cached pages** if none holds the place
+   **drop the target chapter's cached pages** unless one starts at the place
    (`drop_stale_pages`' rule, on `dbConnection(db, false)` in the same
    transaction), `endTransaction`; on any failure roll back and
    `refreshCache<Volume>`. Then hand the original a `Volume` from a fresh
@@ -319,3 +318,18 @@ the Tolino check before it.
    that chapter, restart the Kobo, open. And one opening of a book already
    opened in that session, to see whether Nickel's in-memory pages undo the
    drop (the device test of 31.10.).
+
+## A cached page that holds the place is not enough (8 Nov 2026)
+
+Clara BW, 6.0.279225, Book R (kepub), "Server übernehmen" in the C5 dialog
+wrote `kobo.87.1` through Nickel, 0 cached pages dropped, and Nickel
+opened at the chapter start `kobo.1.1:0`. The cached page `86.1:236` to
+`89.1:0` (last used 18:25 UTC, when the book was read to 85 %) held the
+place, so the old rule dropped nothing. Three other pulls whose place no
+cached page held (`109.1:49`, `41.1:47`, `15.1:53`) opened right: Nickel
+rendered live and the new pages are dated at the opening. Not settled
+whether Nickel fails to find a page that only wraps the place or the missing
+offset (`kobo.87.1`, no `:0`) is the cause. `stale_pages` therefore drops
+the chapter's pages unless one starts at the place (a missing offset equals
+`:0`). To confirm on the device: read on to a place, have the server move
+the position inside a cached page, open.

@@ -81,10 +81,10 @@ rollback journal (`-journal`) lies next to the database. The `-wal` and
 `-shm` files that Tolino 5.18.279364 leaves on the USB partition are folded
 into the database (the backup then holds their content too). Eject the device before you open
 the book. On Kobo 6.0 and Tolino 5.18.279364 Nickel opens a book from its
-cache of rendered pages and, when no cached page holds the written place,
+cache of rendered pages and, when no cached page starts at the written place,
 at the first page of that chapter if that page is cached. So the write also
 drops the cached pages of that chapter (only of that chapter, and only when
-none holds the place) and says so. Nickel looks these pages up in the
+none starts at the place) and says so. Nickel looks these pages up in the
 database each time it opens a book, so ejecting is enough; should the book
 still open at the start of the chapter, restart the device.
 
@@ -465,8 +465,8 @@ runs: on a Kobo through Nickel's own database functions, as the reader
 [Kobalt](https://github.com/nicoverbruggen/kobalt) does, on a Tolino with
 the `nickelinksync` program. Either way it first keeps one backup of the
 database a day in `.adds/NickelInkSync/backups/` (the two newest), and
-drops the pages of that chapter Nickel has kept rendered when none of them
-holds the place (else Nickel would open at the chapter start).
+drops the pages of that chapter Nickel has kept rendered unless one of them
+starts at the place (else Nickel would open at the chapter start).
 
 Leaving a book never waits: the push follows when Wi-Fi is up, or after
 15 seconds anyway. If it cannot reach the server (no Wi-Fi, a server
