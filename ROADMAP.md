@@ -48,7 +48,7 @@ workflow, release notes, and the tag (owner only). The checklist is in
 
 ## Release 0.1.1
 
-C5 (the conflict dialog, PR #80, open), C6 (the plugin's own screens:
+C5 (the conflict dialog, done and checked on two Kobos, PR #80 waiting for the merge), C6 (the plugin's own screens:
 pending list, "sync now", mapping on the device) and C7 (the Tolino on the
 same write path as the Kobo), moved here from 0.1.0 on 2026-11-07.
 
@@ -110,6 +110,7 @@ passed. Details and status boxes: [TODO.md](TODO.md#release-030).
 
 ## Recently completed
 
+- [x] Kobo client C5, the conflict dialog (PR #80, 2026-11-08): opening a book with both positions asks "take the server's", "keep the device's" or "later" (the CLI takes `--answered`; "later" asks again while the server holds that position). Checked on the Kobo Clara BW (Qt 6, 6.0) and the Libra 2 (Qt 5, 4.38); the Tolino follows with C7. The CLI now drops a chapter's cached pages unless one starts at the place.
 - [x] Release 0.1.0 published (2026-11-08): [v0.1.0](https://github.com/dkuester/NickelInkSync/releases/tag/v0.1.0), tag on the merge commit of PR #91, six assets (macOS disk image, Windows ZIP, CLI ZIPs, device package, `SHA256SUMS`)
 - [x] Scope fixed: Rust core + CLI (desktop and on-device) plus a NickelHook plugin
 - [x] Project renamed to NickelInkSync (GitHub); Codeberg stays as a read-only archive
