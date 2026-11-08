@@ -267,18 +267,6 @@ passed. Details and status boxes: [TODO.md](TODO.md#release-030).
       dialog is C5); without `device prepare` a message says nothing is
       sent. CI checks the plugin's symbols against 5.18 and 6.0.
       Replaces N2
-- [x] The conflict dialog (stage C5 of the on-device client; checked in
-      the Nickel VM on 2026-11-02, device test on the Clara BW pending):
-      when a book needs an answer on opening, the plugin asks in Nickel's
-      `ConfirmationDialog` with both sides (percent, section, device,
-      time) and three buttons, the third an `N3ButtonLabel` of its own:
-      take the server's, keep the device's, later. The answer goes back
-      to the CLI (`--answered <server time>` for `pull` and `push`), which
-      overwrites only while the server still holds what the dialog showed
-      and keeps the base as before. "Later" is kept in `state.json`
-      (`deferred`, the server time shown), so the next opening asks again
-      although opening and leaving bump Nickel's `DateLastRead`. Built for Qt 6 and Qt 5; the dialog's
-      symbols exist on 4.38, 5.18 and 6.0
 
 ## Quick wins
 
