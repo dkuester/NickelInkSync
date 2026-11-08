@@ -121,7 +121,7 @@ enum Command {
     #[command(subcommand)]
     command: MapCommand,
   },
-  /// Copy a Kindle's reading states (and with --books the KFX files) over
+  /// Copy a Kindle's KFX books and reading states over
   /// MTP into a folder, read only; the folder then works as `--device`
   /// (experimental)
   #[cfg(feature = "mtp")]
@@ -129,9 +129,10 @@ enum Command {
     /// Folder to copy into (`documents/` is made inside it)
     #[arg(long)]
     to: PathBuf,
-    /// Also copy the .kfx books, not only the reading states
+    /// Copy only the reading states (.yjf, .yjr), not the .kfx books;
+    /// `status` and `map` need the books, so this is for a quick refresh
     #[arg(long)]
-    books: bool,
+    states_only: bool,
     /// Only list what the Kindle shows over MTP; copy nothing, make no folder
     #[arg(long)]
     list: bool,
@@ -290,10 +291,13 @@ fn main() -> ExitCode {
     #[cfg(feature = "mtp")]
     Command::KindleCopy {
       to,
-      books,
+      states_only,
       list,
       serial,
-    } => (kindle_copy(&to, books, list, serial.as_deref()), false),
+    } => (
+      kindle_copy(&to, !states_only, list, serial.as_deref()),
+      false,
+    ),
     Command::Restore { device, backup } => (restore(&device, backup.as_deref()), false),
   };
   match result {
