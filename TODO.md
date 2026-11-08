@@ -189,8 +189,15 @@ Grundlage: `docs/kindle-mtp-feasibility.md`
 ist damit für 0.2.0 aufgehoben. Nur lesen, nur macOS und Windows, ohne
 Jailbreak, Testgerät Paperwhite 11 (Firmware 5.19.2).
 
-- [ ] **du:** Entscheidung nach dem Bericht (Empfehlung: `mtp-rs`, Etappen
-  M1 bis M4 im Bericht).
+Entscheidungen des Besitzers (2026-11-08): Zeigt MTP die `.sdr`-Ordner nicht
+(M1), **fällt der Block weg**. `ptpcamerad` wird **nur erklärt**, nie
+beendet. Die Kopie im temporären Ordner wird **zwischengespeichert, mit
+Obergrenze** (Größe oder Anzahl, in M3 festlegen; älteste zuerst löschen).
+Testgeräte: Paperwhite 11 und ein neuer **Kindle Basic 2026**, dazu ein
+Windows-PC. Die Studie ist angepasst.
+
+- [x] **du:** Entscheidung nach dem Bericht (2026-11-08: Vorgehen mit M1 als
+  Spike, Antworten oben).
 - [ ] **ich:** M1 Lesen aus Kopie ersetzen: MTP-Speicher des Kindle in einen
   temporären Ordner kopieren (nur `documents/`), dann der vorhandene Weg
   (`--device <Ordner>`). Zuerst als CLI-Unterbefehl, danach im Client.
@@ -215,7 +222,8 @@ Spans in Spezialelementen); „KEPUBs are now rejected by default“.
   testen; Abweichungen zu v4 auflisten.
 - [ ] **ich:** Mindest-macOS der v5-Binaries prüfen (Go 1.26 verlangt
   vermutlich macOS 12; unsere Pakete sagen 11.0). Wenn nötig:
-  Mindestversion anheben oder v4 für macOS 11 behalten, in den Notizen sagen.
+  Mindestversion anheben oder v4 für macOS 11 weiter mitliefern (so
+  entschieden am 2026-11-08), in den Notizen sagen.
 - [ ] **ich:** Mehrfach-Konvertierung: v4-kepub liegt schon auf dem Gerät,
   danach kommt ein v5-kepub (andere Prüfsumme, eigene Zuordnung, nichts
   überschreiben, Hinweis im Client).
