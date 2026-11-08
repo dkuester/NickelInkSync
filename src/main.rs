@@ -121,6 +121,25 @@ enum Command {
     #[command(subcommand)]
     command: MapCommand,
   },
+  /// Copy a Kindle's KFX books and reading states over
+  /// MTP into a folder, read only; the folder then works as `--device`
+  /// (experimental)
+  #[cfg(feature = "mtp")]
+  KindleCopy {
+    /// Folder to copy into (`documents/` is made inside it)
+    #[arg(long)]
+    to: PathBuf,
+    /// Copy only the reading states (.yjf, .yjr), not the .kfx books;
+    /// `status` and `map` need the books, so this is for a quick refresh
+    #[arg(long)]
+    states_only: bool,
+    /// Only list what the Kindle shows over MTP; copy nothing, make no folder
+    #[arg(long)]
+    list: bool,
+    /// Serial number, if more than one MTP device is connected
+    #[arg(long)]
+    serial: Option<String>,
+  },
   /// List the backups of a device database that `pull --write` made, and
   /// with --backup put one back (after a backup of the database as it is)
   Restore {
@@ -269,6 +288,16 @@ fn main() -> ExitCode {
     } => (sync_pending(&target, emit), emit),
     Command::Map { command } => (map(command), false),
     Command::Device { command } => (device(command), false),
+    #[cfg(feature = "mtp")]
+    Command::KindleCopy {
+      to,
+      states_only,
+      list,
+      serial,
+    } => (
+      kindle_copy(&to, !states_only, list, serial.as_deref()),
+      false,
+    ),
     Command::Restore { device, backup } => (restore(&device, backup.as_deref()), false),
   };
   match result {
@@ -286,6 +315,30 @@ fn main() -> ExitCode {
       ExitCode::FAILURE
     }
   }
+}
+
+/// `kindle-copy`: what the Kindle shows over MTP, and a copy of its reading
+/// states. Writes only below `to`, nothing to the Kindle.
+#[cfg(feature = "mtp")]
+fn kindle_copy(to: &Path, books: bool, list: bool, serial: Option<&str>) -> Result<bool> {
+  use nickelinksync::kindle_mtp::{self, Wanted};
+  let mut say = |line: &str| eprintln!("{line}");
+  let report = kindle_mtp::copy(kindle_mtp::Options {
+    dest: to,
+    wanted: Wanted { books },
+    list_only: list,
+    serial,
+    progress: &mut say,
+  })?;
+  print!("{}", report.render(list));
+  if !list {
+    println!("Copy: {}", to.display());
+    println!(
+      "Use it with: nickelinksync status --device {}",
+      to.display()
+    );
+  }
+  Ok(report.sdr_folders > 0 && report.skipped.is_empty())
 }
 
 /// For the plugin: one line `NICKELINKSYNC_<name>` with tab-separated
