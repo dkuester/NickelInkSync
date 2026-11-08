@@ -23,8 +23,8 @@ and so is full Kobo 4.x support (reading, USB write-back, the Qt5
 plugin), tested on a Kobo Libra 2 with 4.38.23852. No Linux yet: the AppImage (E8) follows in the
 release after. The Kindle stays in 0.1.0 (reading, sending), marked
 experimental; no further Kindle work or test before 0.1.0, and sending the
-Kindle copy, reading over MTP and the rest of L1 wait until the Kobo and
-the Tolino are stable. A kepub syncs only through a valid mapping, under
+Kindle copy, reading over MTP and the rest of L1 waited until the Kobo and
+the Tolino are stable (lifted for reading over MTP on 2026-11-08, see 0.2.0). A kepub syncs only through a valid mapping, under
 the MD5 of the mapped EPUB, never under its own checksum (PRs #55, #60);
 on the device the mappings come with `device prepare` (C3, PR #67), and
 without it the device sends nothing, the Tolino included (to say in the
@@ -54,18 +54,55 @@ same write path as the Kobo), moved here from 0.1.0 on 2026-11-07.
 
 ## Release 0.2.0
 
-Wished for by the owner (2026-11-02), for the desktop client: it should meet
-general ergonomics and usability requirements, based on the review against
-DIN EN ISO 9241 (parts 110, 11, 112, 125, 143, 210) in
-`docs/usability-requirements.md` (PR #79). Accessibility to WCAG 2.2 level
-AA (decided 2026-11-02 instead of 2.1: EN 301 549 V4.1.1 builds on it),
-carried over to desktop software through WCAG2ICT and EN 301 549
-(chapter 11), should be in place by release 1.0.0 at the latest, on macOS
-and Windows. 0.2.0 does the groundwork: understandable errors, undo and
-cancel, feedback, shortcuts, help, labelled fields, contrast, keyboard and
-focus, zoom, and audits with VoiceOver and Narrator. Gaps egui cannot close
-yet are worked around, reported upstream and documented; no formal
-conformance statement.
+Three things, decided by the owner on 2026-11-08 (0.1.0 was about to be
+tagged; C5 to C7 stay in 0.1.1). Details, status boxes and device tests are in
+[TODO.md](TODO.md#release-020).
+
+1. **Read a Kindle over MTP** (macOS and Windows, read only, no jailbreak).
+   Today the CLI reads only a copy made by hand with OpenMTP. This lifts the
+   earlier "Kindle waits until Kobo and Tolino are stable" for 0.2.0. A
+   feasibility study with a licence check and a staged plan is in
+   `docs/kindle-mtp-feasibility.md`.
+2. **Bundle kepubify 5.0** (v5.0.0, MIT, released 2026-11-08; 0.1.0 keeps
+   4.0.4). Its output can differ from v4 (koboSpan numbering, whitespace), so
+   the position translation is checked against v5 output in CI first;
+   plus the minimum macOS of the v5 binaries, converting a book twice
+   (v4 kepub already on the device) and a test on the Clara BW.
+3. **Desktop client: usability and accessibility quick wins**, based on the
+   review against DIN EN ISO 9241 in `docs/usability-requirements.md`
+   (PR #79): keyboard and focus, labelled fields, contrast, zoom, help, a
+   first-run checklist, tooltips and notices, in three stages that touch
+   different parts of `gui/src/app.rs`. Larger items (undo and cancel,
+   understandable errors, menu shortcuts) only if time allows. Accessibility
+   to WCAG 2.2 level AA (decided 2026-11-02; EN 301 549 V4.1.1 builds on it)
+   stays the goal for 1.0.0, carried over to desktop software through
+   WCAG2ICT and EN 301 549 chapter 11, on macOS and Windows. Gaps egui cannot
+   close yet are worked around, reported upstream and documented; no formal
+   conformance statement.
+
+## Release 0.3.0
+
+Wished for by the owner (2026-11-08): **reading progress back to the Kindle**
+through the desktop client (today the Kindle is read only and `pull`
+refuses). This is a plan, not a decision to build. A **feasibility gate**
+comes first, and if it fails the block is dropped without code:
+
+- Does the Kindle accept a write into `documents/` over MTP at all (MTP has
+  no in-place overwrite: delete the `.yjf` and create it again)? Does the
+  chosen library (`mtp-rs`, WPD on Windows) support it on a Kindle (listed
+  as tested for reading only)?
+- Does the Kindle take a changed position (`.yjf`, `lpr`) from a single test
+  book, also after a restart, keep it once Wi-Fi and Amazon's sync are back
+  on, leave the library intact, and can the backup of the book's `.sdr`
+  folder be put back? Tried in flight mode first, on the Kindle Basic 2026
+  (not jailbroken) before the Paperwhite 11.
+
+If the gate passes: a CLI `pull --write` for the Kindle with a backup and
+`confirm`, the reverse translation (XPointer to Kindle position, `pid`) as a
+check of its own, then "Get" at the Kindle in the desktop client, marked
+experimental, tested by the owner in one bundled session. README and
+`SCOPE.md` keep saying "nothing is written to the Kindle" until the gate has
+passed. Details and status boxes: [TODO.md](TODO.md#release-030).
 
 ## Recently completed
 
@@ -377,7 +414,8 @@ what follows from a positive one. Both families are outside the current scope (N
 
 - **Kindle ↔ KOSync** (M): reading `lpr` and pushing it through the book
   mapping is done (D1 stage 4). Open: reading a Kindle directly over MTP
-  (recent Kindles offer nothing else; the CLI reads a copy so far), and
+  (recent Kindles offer nothing else; the CLI reads a copy so far; planned for
+  0.2.0, see `docs/kindle-mtp-feasibility.md`), and
   writing back, which is unchecked (`cc.db` and Amazon's own sync also
   hold the position).
   Users are assumed to have no jailbreak: the base feature set is the
