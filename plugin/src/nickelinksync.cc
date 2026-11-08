@@ -1454,6 +1454,10 @@ static void open_original(ReadingController *self, const Volume *volume, const B
     g_in_original = false;
 }
 
+// How long after the dialog ended its answer is carried out: a tap's slot
+// follows within a few milliseconds and may name the answer (ConflictAsk).
+static const int kAnswerDelayMs = 400;
+
 // What the conflict dialog shows and answers (stage C5). The book is not
 // opened when the CLI reports the conflict: the hook returns, the dialog
 // comes up from the event loop (not from inside the tap that opened the
@@ -1465,6 +1469,11 @@ struct ConflictAsk {
     QString id;
     Pulled pulled;
     bool answered;
+    // What a tap on one of our connected buttons asked for (the dialog's
+    // result code), or -1. On the Clara BW the dialog ended with 0 on every
+    // tap, also on "Server übernehmen" and our own button, before the tap
+    // reached its slot: the dialog's result cannot be trusted, the tap is.
+    int intent;
 };
 
 // A fresh Volume from Nickel's cache opens the book; false if Nickel does
@@ -1526,17 +1535,20 @@ static void take_server_answer(const std::shared_ptr<ConflictAsk> &c)
 }
 
 // The dialog is over: carries out the answer and opens the book.
-static void conflict_answered(const std::shared_ptr<ConflictAsk> &c, int result)
+static void conflict_answered(const std::shared_ptr<ConflictAsk> &c, int dialog_ended_with)
 {
     if (c->answered) {
         return;
     }
     c->answered = true;
+    const int dialog_result = dialog_ended_with;
+    const int result = c->intent >= 0 ? c->intent : dialog_ended_with;
     const Answer answer = result == QDialog::Accepted ? Answer::Server : result == 2 ? Answer::Device : Answer::Later;
-    log_line(QStringLiteral("conflict dialog: answered %1 (%2)")
+    log_line(QStringLiteral("conflict dialog: answered %1 (%2), the dialog itself ended with %3")
                  .arg(result)
                  .arg(QLatin1String(answer == Answer::Server ? "take the server's"
-                                    : answer == Answer::Device ? "keep the device's" : "later")));
+                                    : answer == Answer::Device ? "keep the device's" : "later"))
+                 .arg(dialog_result));
     const QString id = c->id;
     if (answer == Answer::Server && !kobalt_blocks()) {
         take_server_answer(c);
@@ -1599,11 +1611,13 @@ private:
 // A tap on one of the dialog's buttons ends it with `code`: connected by
 // name to a QAction's trigger(), because tapped(bool) is a signal of
 // Nickel's TouchLabel and not known here.
-static void answer_on_tap(QWidget *button, QDialog *dialog, int code, const QString &what)
+static void answer_on_tap(QWidget *button, QDialog *dialog, const std::shared_ptr<ConflictAsk> &c, int code,
+                          const QString &what)
 {
     QAction *action = new QAction(button);
     const bool connected = QObject::connect(button, SIGNAL(tapped(bool)), action, SLOT(trigger()));
-    QObject::connect(action, &QAction::triggered, dialog, [dialog, code, what] {
+    QObject::connect(action, &QAction::triggered, dialog, [dialog, c, code, what] {
+        c->intent = code;
         log_line(QStringLiteral("conflict dialog: tapped %1 at %2").arg(what, QTime::currentTime().toString(QStringLiteral("HH:mm:ss.zzz"))));
         dialog->done(code);
     });
@@ -1650,9 +1664,9 @@ static bool show_conflict_dialog(const std::shared_ptr<ConflictAsk> &c)
         delete d;
         return false;
     }
-    answer_on_tap(ConfirmationDialog__acceptButton(d), dialog, QDialog::Accepted, QStringLiteral("accept (server)"));
-    answer_on_tap(keep, dialog, 2, QStringLiteral("keep (device)"));
-    answer_on_tap(ConfirmationDialog__rejectButton(d), dialog, QDialog::Rejected, QStringLiteral("reject (later)"));
+    answer_on_tap(ConfirmationDialog__acceptButton(d), dialog, c, QDialog::Accepted, QStringLiteral("accept (server)"));
+    answer_on_tap(keep, dialog, c, 2, QStringLiteral("keep (device)"));
+    answer_on_tap(ConfirmationDialog__rejectButton(d), dialog, c, QDialog::Rejected, QStringLiteral("reject (later)"));
     // Nickel's own connections end the dialog too (its reject and close
     // buttons); the first done() wins, and finished() comes once.
     // The answer is carried out from the event loop, after the dialog is
@@ -1660,7 +1674,7 @@ static bool show_conflict_dialog(const std::shared_ptr<ConflictAsk> &c)
     QObject::connect(dialog, &QDialog::finished, qApp, [c, dialog](int result) {
         dialog->hide();
         dialog->deleteLater();
-        QTimer::singleShot(100, qApp, [c, result] { conflict_answered(c, result); });
+        QTimer::singleShot(kAnswerDelayMs, qApp, [c, result] { conflict_answered(c, result); });
     });
     // Without a finished() (the dialog destroyed by Nickel) the book would
     // never open: that counts as "later".
@@ -1750,7 +1764,7 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
             // Not from inside this call, which Nickel makes from the tap on
             // the book: the dialog comes from the event loop, and the book
             // opens once it is answered. Without a dialog it opens as it is.
-            auto ask = std::make_shared<ConflictAsk>(ConflictAsk{self, id, p, false});
+            auto ask = std::make_shared<ConflictAsk>(ConflictAsk{self, id, p, false, -1});
             QTimer::singleShot(0, qApp, [ask] {
                 if (!show_conflict_dialog(ask)) {
                     g_not_synced = ask->id;
