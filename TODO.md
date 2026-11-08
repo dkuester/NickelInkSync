@@ -19,7 +19,8 @@ Erledigte Punkte wandern in der Roadmap nach „Recently completed“.
 - **Erledigt am 2026-11-07:** Vorprüfung `device check`, Gerätetest-Tabellen, Release-Notes und READMEs; Gerätetests am Clara BW (6.0) und Libra 2 (4.38) bestanden.
 - **Als Nächstes (du):** Release-Probelauf (Actions → Release → Run workflow), dann der Tag `v0.1.0` (Checkliste unten).
 - **Was dich braucht:** die [Freigabe-Checkliste 0.1.0](#freigabe-checkliste-010), nichts anderes. Pro Gerät ein Termin (Tabellen in [`docs/device-tests/`](docs/device-tests/)).
-- **Offen, nicht in 0.1.0:** PR #80 (Konfliktdialog, C5) bleibt offen und wartet auf 0.1.1.
+- **Offen, nicht in 0.1.0:** PR #80 (Konfliktdialog, C5) bleibt offen und kommt in 0.2.0 (Block A).
+- **Release 0.2.0 geplant (2026-11-08):** vier Blöcke (C5, Kindle über MTP, kepubify 5, Usability-Quick-Wins), siehe [Release 0.2.0](#release-020).
 - **Regeln, damit es übersichtlich bleibt:** höchstens zwei Sessions gleichzeitig; Gerätetests bündeln; Doku-Updates gesammelt.
 
 **Reihenfolge der Geräte:** Erst wird alles, was mit dem **Tolino Shine Color
@@ -47,7 +48,7 @@ dürfen jederzeit dazwischengeschoben werden. **Stand 2026-10-29:** D1 ist
 fertig, D2 läuft (E0 bis E7 und O5 erledigt; als Nächstes der Release-Workflow). **Der
 Kobo-Client** (Abschnitt Kobo-Client, C0–C10, geplant am 2026-10-31) gehörte
 seit 2026-11-01 zu **Release 0.1.0**; seit 2026-11-07 kommen C5 bis C7 erst
-in **0.1.1** (Abschnitt Release 0.1.1).
+in **0.1.1**; C5 seit 2026-11-08 in **0.2.0** (Abschnitte Release 0.1.1 und 0.2.0).
 
 ## Release 0.1.0
 
@@ -97,8 +98,8 @@ fehlerhaftes Plugin erscheinen. Umfang von 0.1.0:
 - unterstützt und getestet nur: Kobo 6.0.279225 (Clara BW), Kobo 4.38.23852
   (Libra 2), Tolino 5.18.279364 (Shine Color).
 
-C5 (Konfliktdialog) liegt nur in PR #80 und bleibt dort; C5, C6, C7 stehen
-jetzt unter „Release 0.1.1“.
+C5 (Konfliktdialog) liegt nur in PR #80 und bleibt dort; C5 steht seit
+2026-11-08 unter „Release 0.2.0“, C6 und C7 unter „Release 0.1.1“.
 
 ### Freigabe-Checkliste 0.1.0
 
@@ -127,15 +128,10 @@ die Schritte stehen in den Tabellen unter [`docs/device-tests/`](docs/device-tes
 ## Release 0.1.1
 
 Entscheidung des Besitzers (2026-11-07): C5, C6 und C7 kommen erst nach 0.1.0.
-Inhalt, Abhängigkeiten und Status bleiben wie sie waren; die übrigen Etappen
+**C5 ist seit 2026-11-08 in [Release 0.2.0](#release-020), Block A**; C6 und C7
+bleiben hier, solange du nichts anderes sagst. Inhalt, Abhängigkeiten und Status bleiben wie sie waren; die übrigen Etappen
 (C0–C4, C8–C10) stehen im Abschnitt [Kobo-Client](#kobo-client).
 
-- [ ] **C5 Dialog bei Konflikten** (braucht C4) · **PR #80 (offen, nicht auf `main`)**; Stand und Übergabe dort und in der Notiz `2026-11-02-kobo-c5-handover.md`
-  - [ ] **ich:** Qt-Dialog beim Öffnen mit beiden Ständen und drei Knöpfen
-    (`ConfirmationDialog` hat zwei eigene; der dritte muss ein
-    Nickel-Widget sein, siehe C0).
-  - [ ] **du:** Konflikt am Kobo nachstellen (KOReader und Kobo offline
-    an verschiedenen Stellen), alle drei Knöpfe.
 - [ ] **C6 Oberfläche** (braucht C5)
   - [ ] **ich:** Vormerkliste, „Jetzt synchronisieren“, Zuordnen am Gerät
     aus dem Index (Vorschläge nach Titel und Autor); Einstieg über
@@ -152,74 +148,167 @@ Inhalt, Abhängigkeiten und Status bleiben wie sie waren; die übrigen Etappen
 
 ## Release 0.2.0
 
-Wünsche des Besitzers (2026-11-02) für den **Desktop-Client** (`gui/`).
-Grundlage ist die Normenprüfung in `docs/usability-requirements.md`
-(PR #79); die Nummern in Klammern verweisen auf deren Tabellen.
+Entscheidung des Besitzers (2026-11-08): vier Blöcke. Reihenfolge und
+Aufteilung (höchstens zwei Sessions gleichzeitig, Gerätetests gebündelt):
+
+| Block | Inhalt | Termin mit dir |
+| --- | --- | --- |
+| **A** | C5 Konfliktdialog fertigstellen (PR #80) | Clara BW, Libra 2 |
+| **B** | Kindle über MTP lesen (macOS, Windows) | Paperwhite 11, Mac, Windows-PC |
+| **C** | kepubify 5.0 mitliefern | Clara BW (zusammen mit A) |
+| **D** | Desktop-Client: Usability und Barrierefreiheit (Quick-Wins) | Sichtprüfung am Mac, einmal Windows |
+
+**Gebündelte Termine:** Clara BW einmal für A und C; Libra 2 einmal für A
+(Qt5); Paperwhite einmal für B; Windows-PC einmal für B und D am Ende.
+Mit B und D laufen höchstens zwei Sessions gleichzeitig (A und C teilen
+sich die Plugin- und CLI-Dateien nicht mit D).
+
+### Block A: C5 Konfliktdialog (PR #80)
+
+Stand 2026-11-08 (PR, TODO und Notizen vom 2026-11-02 und 2026-11-07 gelesen):
+Der Dialog erscheint am Clara BW mit beiden Ständen richtig. **Aber:** Kein
+Tap auf „Später“, „Gerät behalten“ oder „Server übernehmen“ ist je
+angekommen, nur das × wirkt (im Log nie `answered 1` oder `2`); in der VM
+gehen alle drei. Der PR ist **nicht mergebar** (`CONFLICTING`).
+
+- [ ] **ich:** `main` in den Branch `claude/c5-conflict-dialog-c17794`
+  holen (Konflikte in `nickelinksync.cc`; `syms.gz` neu erzeugen statt
+  mergen).
+- [ ] **ich:** Taps am Gerät: Knöpfe auf `tapped(bool)` verbinden, jeden Tap
+  mit Uhrzeit loggen, Dialog nicht in `exec()` im `setVolume`-Hook, sondern
+  per `open()` zeigen und die Antwort asynchron behandeln (Buch erst nach der
+  Antwort öffnen). Das ist die eigentliche Arbeit; die Vermutung (Touch
+  kommt in verschachtelter Event-Schleife nicht an) ist ungeprüft.
+- [ ] **ich:** Knopfgrößen und -texte prüfen („Server übernehmen“ wird von
+  Nickel verkleinert; Knöpfe untereinander seit `eb455e3`).
+- [ ] **ich:** Fehler „Später → erneutes Öffnen überschreibt die Server-Position“
+  (laut C5-Session mit `90b9085` behoben, am Gerät ungeprüft) im Test abdecken.
+- [ ] **ich:** Qt5-Fassung für den Libra 2 bauen (gleicher Quelltext,
+  `just plugin-qt5`), Symbole gegen 4.38 prüfen.
+- [ ] **du:** Gerätetest Clara BW: alle drei Knöpfe und ×, danach Log
+  schicken. Vorher das Gerät von den 0.1.0-Testständen zurücksetzen
+  (auf dem Kobo liegt noch das C5-Plugin vom 2026-11-07).
+- [ ] **du:** Gerätetest Libra 2 (Qt5), derselbe Ablauf.
+- Offen: Tolino nutzt denselben Weg erst mit C7 (bleibt 0.1.1).
+
+### Block B: Kindle über MTP lesen
+
+Grundlage: `docs/kindle-mtp-feasibility.md`
+(eigener PR). Die Zurückstellung des Kindle „bis Kobo und Tolino stabil sind“
+ist damit für 0.2.0 aufgehoben. Nur lesen, nur macOS und Windows, ohne
+Jailbreak, Testgerät Paperwhite 11 (Firmware 5.19.2).
+
+- [ ] **du:** Entscheidung nach dem Bericht (Empfehlung: `mtp-rs`, Etappen
+  M1 bis M4 im Bericht).
+- [ ] **ich:** M1 Lesen aus Kopie ersetzen: MTP-Speicher des Kindle in einen
+  temporären Ordner kopieren (nur `documents/`), dann der vorhandene Weg
+  (`--device <Ordner>`). Zuerst als CLI-Unterbefehl, danach im Client.
+- [ ] **du:** Paperwhite am Mac anschließen und `kindle`-Test ausführen
+  (Anleitung folgt mit M1); Meldung, wenn `ptpcamerad` oder ein anderes
+  Programm das Gerät belegt.
+- [ ] **ich:** M2 Windows (WPD-Weg der Bibliothek), M3 Client (Gerät erkennen,
+  Hinweise), M4 `NOTICE`/Lizenzhinweise im Paket, README.
+- [ ] **du:** Windows-PC: dieselbe Prüfung mit dem Paperwhite.
+
+### Block C: kepubify 5.0 mitliefern
+
+v5.0.0 vom 2026-11-08 (MIT). 0.1.0 bleibt bei 4.0.4. Die Prüfsummen auf
+GitHub stimmen mit den vom Besitzer genannten überein (Gegenprobe). Risiko laut
+Notizen: die Ausgabe kann abweichen (koboSpan-Nummerierung, Leerraum, keine
+Spans in Spezialelementen); „KEPUBs are now rejected by default“.
+
+- [ ] **ich:** Erst in der CI prüfen, nichts lokal: Linux-Binary
+  (`kepubify-linux-64bit`, SHA-256 `cb77fe36…9069`) mit geprüfter Prüfsumme
+  laden, die synthetischen Fixture-EPUBs (`tests/fixtures/epub`) damit
+  konvertieren und die Positionsübersetzung (EPUB ↔ kepub) gegen die v5-Ausgabe
+  testen; Abweichungen zu v4 auflisten.
+- [ ] **ich:** Mindest-macOS der v5-Binaries prüfen (Go 1.26 verlangt
+  vermutlich macOS 12; unsere Pakete sagen 11.0). Wenn nötig:
+  Mindestversion anheben oder v4 für macOS 11 behalten, in den Notizen sagen.
+- [ ] **ich:** Mehrfach-Konvertierung: v4-kepub liegt schon auf dem Gerät,
+  danach kommt ein v5-kepub (andere Prüfsumme, eigene Zuordnung, nichts
+  überschreiben, Hinweis im Client).
+- [ ] **ich:** Pins ändern: `gui/src/app.rs` (`KEPUBIFY`),
+  `packaging/macos/package.sh` (arm64 `bd9e40cb…`, x86_64 `c007999e…`),
+  `packaging/windows/package.ps1` (`3b833ee3…`), Lizenzdatei, Release-Notes
+  und READMEs. Nur wenn die CI-Prüfung grün ist.
+- [ ] **du:** Gerätetest Clara BW im Termin von Block A: ein mit v5
+  konvertiertes Buch senden, öffnen, Position gegen KOReader prüfen.
+
+### Block D: Desktop-Client, Usability und Barrierefreiheit (Quick-Wins)
+
+Grundlage: `docs/usability-requirements.md` (PR #79). Die Zeilenangaben der
+Tabelle dort sind veraltet; gegen `gui/src/` am 2026-11-08 geprüft: Es gibt
+noch kein `labelled_by`, keine eigenen `Visuals`, keine gespeicherte
+Zoomstufe; der Rückfrage-Dialog (`ask_dialog`) schließt nicht mit Escape; die
+Meldung (`notice`) hat keine Zeit. Die großen Stellen in `gui/src/app.rs` sind
+getrennt: Kopfleiste (≈ Zeile 465), Meldung und Dialoge (≈ 590–830),
+Gerätekopf und Buchtabelle (≈ 1177–1610). Neue Texte kommen in
+`gui/src/i18n.rs`; deshalb erst eine Etappe mergen, dann die nächste.
+Erledigt: Normenprüfung (PR #79) und Entscheidungen E1–E6 (2026-11-02,
+unten).
+
+**Etappe D1: ohne `app.rs`** (Nutzen hoch, Aufwand klein)
+- [ ] **ich:** A5 Kontrast: eigene Farben (hell/dunkel) für schwachen Text,
+  Warnung, Fehler, Links, ≥ 4,5 : 1, an Screenshots nachgemessen.
+- [ ] **ich:** I9 und A2 im Einstellungsdialog und Kopierdialog:
+  Beschriftungen mit Feldern verbinden (`labelled_by`), Hilfetext unter
+  `confirm`/`position`, Passwort-Status als Text.
+- [ ] **ich:** A7 Zoom: gespeicherte Stufe (`gui/src/settings.rs`), Anzeige in
+  `main.rs`/Einstellungen; alle Dialoge bei 200 % prüfen.
+- [ ] **ich:** A13 Abschnitt „Barrierefreiheit“ in `README.md` und
+  `README.de.md`; I11 Seite „Nutzungskontext“ mit drei Testaufgaben in
+  `docs/usability-requirements.md`.
+- [ ] **du:** Sichtprüfung am Mac (hell und dunkel, Zoom 200 %).
+
+**Etappe D2: Kopfleiste, Meldung, Dialoge** (oberer Teil von `app.rs`)
+- [ ] **ich:** Zuerst ein Hilfsaufruf `set_notice` (ersetzt die ≈ 12
+  Zuweisungen an `self.notice`), dann I7: Uhrzeit und Schließen-Knopf an der
+  Meldung, Text neben dem Spinner.
+- [ ] **ich:** A1 Kopfleiste in Leserichtung, A2 für Sprachauswahl und
+  Linux-Pfadfelder, I4 Knopf „Hilfe“.
+- [ ] **ich:** A9 Escape/Enter und Fokus beim Öffnen und Schließen der
+  Dialoge (Rückfrage-Dialog zuerst).
+- [ ] **ich:** A1 Tastatur-Audit als Checkliste in `docs/`.
+- [ ] **du:** Tastaturdurchlauf am Mac mit der Checkliste (Tab-Reihenfolge,
+  Escape, Enter, Hilfe-Knopf).
+
+**Etappe D3: Gerätekopf und Buchzeilen** (unterer Teil von `app.rs`)
+- [ ] **ich:** P1 Gerätekopf zu einer Zeile (Einzelheiten aufklappbar) und
+  I1 Erststart-Checkliste (Server, Bibliothek, Gerät vorbereitet), zusammen,
+  weil beides `loaded_view` ändert.
+- [ ] **ich:** I2 Tooltips an Zuordnen/Entfernen/Senden/Holen mit
+  Buchtitel, Legende der Wörter in der Server-Spalte.
+- [ ] **du:** Sichtprüfung am Mac mit leerer Konfiguration (Erststart),
+  dann die drei Testaufgaben (I11: Gerät einrichten, Buch zuordnen,
+  Position holen) und sagen, wo es hakt; einmal am Windows-PC (Kontrast,
+  Zoom, Tab), zusammen mit Block B.
+
+**Später in 0.2.0, falls Zeit** (mittel): I3 Tastenkürzel und macOS-Menü
+(E6: nur Cmd-, und Cmd-Q), I5 Rückgängig nach „Entfernen“ und Abbrechen von
+Kopieren/Vorbereiten, I6 verständliche Fehler (bilingual, mit nächstem
+Schritt; Einstellungen vor dem Speichern prüfen), A4 kurz (Zeilen mit einer
+Beschriftung für Screenreader).
+
+**U2 Rest (Bestandsaufnahme und 1.0.0)**
+- [ ] **ich:** Bestandsaufnahme mit VoiceOver (macOS) nach EN 301 549,
+  Kapitel 11; Ergebnis in `docs/usability-requirements.md`.
+- [ ] **du:** Dieselbe Bestandsaufnahme mit der Sprachausgabe unter Windows
+  (ich schreibe dir eine Checkliste).
+- [ ] **ich:** Für 1.0.0: Details zum gewählten Buch ohne Maus (A3), Tabellen
+  (A4 lang), Meldungen vorlesen (A6), Hochkontrast unter Windows (A8),
+  größere Knöpfe in den Buchzeilen (A10, WCAG 2.5.8), Lücken von egui melden
+  (E3).
+- [ ] **du:** Vor 1.0.0 ein Test mit einer blinden oder sehbehinderten Person
+  (E4).
 
 Entscheidungen des Besitzers (2026-11-02, jeweils die Empfehlung aus der
-Normenprüfung):
-
-- **Ziel WCAG 2.2 AA** statt 2.1 (E2): EN 301 549 V4.1.1 (September 2026)
-  beruht darauf; 2.2 enthält 2.1 ganz.
-- **Plattformen** (E1): macOS und Windows für 1.0.0; Linux nach Kräften.
-- **Grenzen von egui** (E3: Tabellen, Überschriften, Live-Meldungen): in
-  0.2.0 umgehen, bei egui/AccessKit melden oder beitragen, den Rest in den
-  READMEs nennen; kein Wechsel weg von egui.
-- **Tests** (E4): du mit der Sprachausgabe (Windows), ich mit VoiceOver
-  (macOS); vor 1.0.0 ein Test mit einer blinden oder sehbehinderten Person.
-- **Keine formale Konformitätserklärung** (E5), nur ein kurzer Abschnitt in
-  den READMEs mit erreichter Stufe und bekannten Grenzen.
-- **macOS-Menüleiste** (E6): in 0.2.0 nur Tastenkürzel (Cmd-, und Cmd-Q),
-  ohne neue Abhängigkeit; ein echtes Menü, wenn es beim Testen fehlt.
-
-- [~] **U1 Ergonomie und Usability** nach DIN EN ISO 9241 (Teile 110, 11,
-  112, 125, 143, 210).
-  - [x] **ich:** Normenprüfung (PR #79).
-  - [x] **du:** Punkte für 0.2.0 und Entscheidungen festgelegt (2026-11-02).
-  - [ ] **ich:** Verständliche Fehler (I6, A12): häufige Fehler (Server
-    nicht erreichbar, falsches Passwort, Bibliothek fehlt, Gerät nur lesbar)
-    deutsch und englisch, mit dem nächsten Schritt; Server-URL und
-    Bibliotheksordner im Einstellungsdialog vor dem Speichern prüfen.
-  - [ ] **ich:** Rückgängig und Abbrechen (I5): „Rückgängig“ in der Meldung
-    nach dem Entfernen einer Zuordnung; Kopieren und Vorbereiten zwischen
-    zwei Büchern abbrechen.
-  - [ ] **ich:** Rückmeldung (I2, I7): Tooltips an Zuordnen, Entfernen,
-    Senden und Holen in den Buchzeilen; Meldung mit Uhrzeit und
-    Schließen-Knopf; Text neben dem Spinner („3 Bücher werden gesendet …“);
-    Erklärung der Wörter in der Server-Spalte.
-  - [ ] **ich:** Tastenkürzel unter macOS (I3, E6): Cmd-, öffnet die
-    Einstellungen, Cmd-Q beendet; Windows entsprechend Strg-,.
-  - [ ] **ich:** Hilfe (I4, A13): Knopf „Hilfe“ oben, öffnet den
-    README-Abschnitt zum Client; Abschnitt „Barrierefreiheit“ in
-    `README.md` und `README.de.md` (Tastatur, Zoom, Screenreader, Grenzen).
-  - [ ] **du:** Nach diesen Punkten den Client mit drei Aufgaben ausprobieren
-    (I11: Gerät einrichten, Buch zuordnen, Position holen) und sagen, wo es
-    hakt.
-- [~] **U2 Barrierefreiheit nach WCAG 2.2** (Stufe AA, sinngemäß auf
-  Desktop-Software übertragen über WCAG2ICT und DIN EN 301 549, Kapitel 11):
-  wenn möglich **spätestens in Release 1.0.0**. In 0.2.0 die Vorarbeit und
-  die ersten Punkte:
-  - [ ] **ich:** Beschriftungen mit den Feldern verbinden (A2,
-    `labelled_by`): Einstellungen, Sprache, Suche im Kopierdialog,
-    Pfadfelder.
-  - [ ] **ich:** Kontrast (A5): eigene Farben für hell und dunkel
-    (schwacher Text, Warnung, Fehler, Links) mit mindestens 4,5 : 1, an
-    Screenshots nachgemessen.
-  - [ ] **ich:** Tastatur und Fokus (A1, A9): obere Leiste in Leserichtung,
-    Escape bricht den Rückfrage-Dialog ab, Enter löst die Hauptaktion aus,
-    Fokus beim Öffnen in den Dialog und danach zurück.
-  - [ ] **ich:** Zoom (A7): sichtbar machen und speichern; alle Dialoge bei
-    200 % prüfen.
-  - [ ] **ich:** Bestandsaufnahme mit VoiceOver (macOS) nach EN 301 549,
-    Kapitel 11; Ergebnis in `docs/usability-requirements.md`.
-  - [ ] **du:** Dieselbe Bestandsaufnahme mit der Sprachausgabe unter
-    Windows (ich schreibe dir eine Checkliste).
-  - [ ] **ich:** Für 1.0.0: Details zum gewählten Buch ohne Maus (A3),
-    Tabellenzeilen mit eigener Beschriftung (A4), Meldungen vorlesen (A6),
-    Hochkontrast unter Windows (A8), größere Knöpfe in den Buchzeilen
-    (A10); Lücken von egui melden (E3).
-  - [ ] **du:** Vor 1.0.0 ein Test mit einer blinden oder sehbehinderten
-    Person (E4).
+Normenprüfung): **Ziel WCAG 2.2 AA** (E2); **Plattformen** macOS und Windows
+für 1.0.0, Linux nach Kräften (E1); **Grenzen von egui** in 0.2.0 umgehen
+und melden, kein Wechsel weg von egui (E3); **Tests** du mit der
+Sprachausgabe (Windows), ich mit VoiceOver (macOS) (E4); **keine formale
+Konformitätserklärung**, nur ein Abschnitt in den READMEs (E5);
+**macOS-Menüleiste** nur Tastenkürzel, ohne neue Abhängigkeit (E6).
 
 ## Grundlagen
 
@@ -1174,7 +1263,7 @@ Normenprüfung):
 Client auf dem Gerät (ein Plugin für Kobo 6.0 und Tolino 5.18, dazu eine
 Qt5-Fassung für Kobo 4.x), geplant
 am 2026-10-31 (deine Antworten auf meine Rückfragen). **Teil von Release
-0.1.0** (geändert am 2026-11-01; **C5 bis C7 seit 2026-11-07 in 0.1.1**); C0 bis C3 sind erledigt (PRs #66, #55,
+0.1.0** (geändert am 2026-11-01; **C5 bis C7 seit 2026-11-07 in 0.1.1, C5 seit 2026-11-08 in 0.2.0**); C0 bis C3 sind erledigt (PRs #66, #55,
 #64, #67), C4 läuft. **Kobo 4.x** (seit 2026-11-01, Libra 2 mit
 4.38.23852): C8 (Rust, PR #70) und C9 (Qt5-Erkundung und -Build) sind
 erledigt, C10 (Plugin in Qt5) ist gebaut, der Gerätetest am Libra 2 steht aus. **Kobalt-Schutz (N7):** Jeder neue Einstieg des
@@ -1353,7 +1442,7 @@ Auf dem Kobo ist das Plugin inaktiv.
     ist aktuell“. Kein Seitenverwerfen nötig: Nickel hatte das ganze
     Kapitel schon gerendert, eine Seite hielt die Stelle. Das Verwerfen
     selbst ist in der Kobo-VM geprüft (5 Seiten, richtig geöffnet).
-- [ ] **C5 Dialog bei Konflikten** → nach [Release 0.1.1](#release-011) verschoben (2026-11-07).
+- [ ] **C5 Dialog bei Konflikten** → nach [Release 0.2.0](#release-020), Block A, verschoben (2026-11-08; vorher 0.1.1).
 - [ ] **C6 Oberfläche** → nach [Release 0.1.1](#release-011) verschoben (2026-11-07).
 - [x] **C8 Kobo 4.x lesen und zurückschreiben** (Rust, CLI und GUI; kann
   sofort parallel laufen) · neues Testgerät **Kobo Libra 2, Firmware
