@@ -17,7 +17,7 @@ Erledigte Punkte wandern in der Roadmap nach „Recently completed“.
 - **Fertig auf `main`:** Desktop-Client und CLI (macOS, Windows), Release-Workflow, Plugin C4/C9/C10 (Kobo 6.0, Kobo 4.x, Tolino).
 - **0.1.0 kommt früher, ohne C5, C6, C7** (Entscheidung vom 2026-11-07); die drei stehen unter „Release 0.1.1“.
 - **Erledigt am 2026-11-07:** Vorprüfung `device check`, Gerätetest-Tabellen, Release-Notes und READMEs; Gerätetests am Clara BW (6.0) und Libra 2 (4.38) bestanden.
-- **Als Nächstes (du):** Tolino-Retest, Release-Probelauf, Notes lesen, Tag (Checkliste unten).
+- **Als Nächstes (du):** Release-Probelauf (Actions → Release → Run workflow), dann der Tag `v0.1.0` (Checkliste unten).
 - **Was dich braucht:** die [Freigabe-Checkliste 0.1.0](#freigabe-checkliste-010), nichts anderes. Pro Gerät ein Termin (Tabellen in [`docs/device-tests/`](docs/device-tests/)).
 - **Offen, nicht in 0.1.0:** PR #80 (Konfliktdialog, C5) bleibt offen und wartet auf 0.1.1.
 - **Regeln, damit es übersichtlich bleibt:** höchstens zwei Sessions gleichzeitig; Gerätetests bündeln; Doku-Updates gesammelt.
@@ -105,7 +105,7 @@ jetzt unter „Release 0.1.1“.
 Das ist die einzige Stelle, an der du den Stand siehst. Je Gerät ein Termin;
 die Schritte stehen in den Tabellen unter [`docs/device-tests/`](docs/device-tests/).
 
-- [ ] **(a) Tolino Shine Color (5.18):** Retest mit dem Paket aus dem aktuellen
+- [x] **(a) Tolino Shine Color (5.18):** (bestanden am 2026-11-08, Wartezeit 3000 ms) Retest mit dem Paket aus dem aktuellen
   `main` (wie C4 ohne Dialog: Server-Stand beim Öffnen übernehmen, offline
   lesen → vorgemerkt, offline öffnen ohne Lesen → nichts, anderes Buch
   öffnen → nachgeholt, Konflikt nicht geladen/nicht gesendet, ohne `device
