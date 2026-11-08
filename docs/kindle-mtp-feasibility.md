@@ -309,7 +309,11 @@ is using the Kindle" message (holder not named, unplug and replug fixed it).
 `.sdr` folders, 9 books; empty serial and firmware again) and the copy took
 25 files (10.2 MB) with no error and no "held by another program" message.
 So the WPD path works on this Kindle, without any driver change.
-Not yet tested: `status` on Windows, timing, WPD stalls over longer sessions.
+`status` on the Windows copy reads the same 3 Send-to-Kindle books and skips
+the 6 DRM books; the books show as "not mapped" and the server as "not
+configured" only because that PC has no mapping or configuration yet (the
+position translation was shown on the Mac). Not yet tested: timing, WPD
+stalls over longer sessions.
 
 Consequences: the first version of `kindle-copy` would have fetched about 30
 MB of attachments and caches per run; it now fetches only `.yjf`/`.yjr`.

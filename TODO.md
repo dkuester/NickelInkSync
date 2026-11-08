@@ -201,7 +201,10 @@ Windows-PC. Die Studie ist angepasst.
   `status` auf der Kopie laufen, Position übersetzt (Book „Good Boy“, Kindle
   52 %, Server 87 %). **Windows (WPD, CI-Testbinary aus PR #99) am
   2026-11-08 ebenfalls:** gleicher Baum (51 Ordner, 132 Dateien, 14 `.sdr`, 9 Bücher),
-  25 Dateien (10,2 MB) kopiert. Offen: `status` auf dem PC, Zeitmessung, M3, M4.
+  25 Dateien (10,2 MB) kopiert. `status` auf dem PC liest dieselben 3 Bücher
+  (6 DRM-Bücher übersprungen); „nicht zugeordnet“ und „Server not configured“,
+  weil dort noch keine Zuordnung und Konfiguration liegen (Übersetzung der
+  Stelle am Mac gezeigt). **M2 damit bestanden.** Offen: Zeitmessung, M3, M4.
 - [ ] **ich:** M1 Lesen aus Kopie ersetzen: MTP-Speicher des Kindle in einen
   temporären Ordner kopieren (nur `documents/`), dann der vorhandene Weg
   (`--device <Ordner>`). Zuerst als CLI-Unterbefehl, danach im Client.
