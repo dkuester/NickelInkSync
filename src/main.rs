@@ -202,6 +202,21 @@ enum DeviceCommand {
     #[command(flatten)]
     library: LibraryArgs,
   },
+  /// Look at a mounted device before a test, and write nothing: model and
+  /// firmware, plugin and program (against a new build), config.ini
+  /// (never the password), Kobalt, whether it is prepared, what is pending
+  Check {
+    /// Mount point of the device (Kobo or Tolino)
+    #[arg(long)]
+    device: PathBuf,
+    /// Folder laid out like dist/NickelInkSync (`just package`): the plugin
+    /// and program on the device must be these files
+    #[arg(long)]
+    package: Option<PathBuf>,
+    /// KoboRoot.tgz of the Qt 5 build for Kobo 4.x (`just plugin-qt5`)
+    #[arg(long)]
+    qt5_plugin: Option<PathBuf>,
+  },
 }
 
 #[derive(Args)]
@@ -1623,7 +1638,27 @@ fn open_library(args: &LibraryArgs) -> Result<Option<Library>> {
 
 /// Says which library is used, and what in it was skipped.
 fn device(command: DeviceCommand) -> Result<bool> {
-  let DeviceCommand::Prepare { device, library } = command;
+  let (device, library) = match command {
+    DeviceCommand::Prepare { device, library } => (device, library),
+    DeviceCommand::Check {
+      device,
+      package,
+      qt5_plugin,
+    } => {
+      let mut build = package
+        .as_deref()
+        .map(nickelinksync::check::Build::from_package)
+        .unwrap_or_default();
+      if qt5_plugin.is_some() {
+        build.plugin_qt5 = qt5_plugin;
+      }
+      let system = std::env::var_os("NICKELINKSYNC_SYSTEM_ROOT").map(PathBuf::from);
+      let report = nickelinksync::check::check(&device, system.as_deref(), &build);
+      println!("Device check of {} (nothing is written)", device.display());
+      print!("{}", report.render());
+      return Ok(report.ok());
+    }
+  };
   let path = Store::default_path().ok_or("no data directory (HOME is not set)")?;
   let mut store = Store::load(&path)?;
   let library = map::open_library(library.library.as_deref(), library.config.as_deref())?

@@ -26,6 +26,18 @@ jobs:
             echo "::error::Device database committed. Test fixtures must be trimmed and anonymized first."
             exit 1
           fi
+      - name: No odd file names committed
+        run: |
+          python3 - <<'PY'
+          import subprocess, sys
+          names = subprocess.check_output(["git", "ls-files", "-z"]).decode().split("\0")[:-1]
+          bad = [n for n in names
+                 if any(ord(c) < 32 or ord(c) == 127 for c in n)
+                 or n.startswith("/") or "var/folders" in n or ".." in n.split("/")]
+          for n in bad:
+              print("::error::Odd file name committed (control characters, an absolute or temp path?): " + repr(n))
+          sys.exit(1 if bad else 0)
+          PY
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -52,14 +64,14 @@ jobs:
       - name: Device binary is a static 32-bit ARM ELF and runs under QEMU
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq qemu-user-static file
+          sudo apt-get install -y -qq qemu-user file
           bin=target/armv7-unknown-linux-musleabihf/release/nickelinksync
           info=$(file "$bin")
           echo "$info"
           echo "$info" | grep -q 'ELF 32-bit LSB executable, ARM' || { echo "::error::Not a 32-bit ARM executable"; exit 1; }
           echo "$info" | grep -qE 'statically linked|static-pie linked' || { echo "::error::Not statically linked"; exit 1; }
           version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "nickelinksync") | .version')
-          actual=$(qemu-arm-static "$bin" --version)
+          actual=$(qemu-arm "$bin" --version)
           echo "$actual"
           test "$actual" = "nickelinksync $version" || { echo "::error::Expected 'nickelinksync $version'"; exit 1; }
       - uses: actions/upload-artifact@v4
