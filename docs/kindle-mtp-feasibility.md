@@ -42,7 +42,7 @@ Everything marked *unverified* has to be checked on the device.
   (the existing copy path) stays.
 - **Recommendation: build on `mtp-rs`, behind a feature flag, in four
   stages (M1 to M4), about 6 to 9 working days, with the first stage as a
-  go/no-go on the owner's Paperwhite 11.**
+  go/no-go on a Kindle that offers only MTP (done on the Basic 2026, see section 6).**
 
 ## 1. Candidates
 
@@ -172,7 +172,7 @@ with `0xFFFFFFFF` first). Its vendor extension string is
 `microsoft.com/WMDRMPD:10.1;microsoft.com/playready:1.10`, no `android.com`.
 
 *Unverified, to check at the first device test (M1):* that the MTP view of
-the Paperwhite 11 shows the **same tree** (`documents/...`) **including the
+a Kindle Basic 2026 shows the **same tree** (`documents/...`) **including the
 `.sdr` folders and the hidden-looking dot-files**. Amazon's MTP responder is
 a layer over the file system and may hide folders. If `.sdr` is not visible,
 the position cannot be read over MTP and the feature is dead for
@@ -208,7 +208,7 @@ library reports speed (Kindle: USB 2.0).
 
 | Stage | Content | Effort | Owner test |
 | --- | --- | --- | --- |
-| **M1 Spike, go/no-go** | New optional module `src/kindle_mtp.rs` behind a Cargo feature (`mtp`), dependency `mtp-rs =0.38.x` (exact pin), read-only: list `documents/`, copy `.sdr` and (on demand) `.kfx` to a temp folder; CLI `nickelinksync kindle-copy --to <folder>` (name open) that prints what it found. macOS first. | 2 to 3 days | **du:** Paperwhite 11 and Kindle Basic 2026 at the Mac, quit OpenMTP first; run the command, send me the output. Decides: is `.sdr` visible? |
+| **M1 Spike, go/no-go** | New optional module `src/kindle_mtp.rs` behind a Cargo feature (`mtp`), dependency `mtp-rs =0.38.x` (exact pin), read-only: list `documents/`, copy `.sdr` and (on demand) `.kfx` to a temp folder; CLI `nickelinksync kindle-copy --to <folder>` (name open) that prints what it found. macOS first. | 2 to 3 days | **du:** Kindle Basic 2026 at the Mac, quit OpenMTP first; run the command, send me the output. Decides: is `.sdr` visible? |
 | **M2 Windows** | Same code through the WPD backend; timeouts for stalls; CI builds the Windows target with the feature (compile only). | 1 to 2 days | **du:** the same command on a Windows PC with the Paperwhite |
 | **M3 Integration** | `--device kindle:` (or auto-detect) in `status`/`push` with the temp-folder cache; client: detect the Kindle in the device list, messages for "in use by another program" and "disconnected", progress and cancel; the OpenMTP instructions in the README become the fallback. | 2 to 3 days | **du:** end to end on both systems: map a book, push a position, KOReader sees it |
 | **M4 Licences and release** | `THIRD-PARTY-LICENSES` from `cargo about` in the release workflow (also for the existing crates), notices in the app's About window and the packages, README (Kindle section, macOS and Windows hints), release notes ("experimental"), `cargo deny` job with an allow-list (MIT, Apache-2.0, BSD-2/3, ISC, Unicode-3.0, Zlib, CC0, Unlicense). | 1 day | none |
@@ -243,7 +243,7 @@ Windows PC; both can be bundled with the 0.2.0 Windows visual check (block D).
 ## 4. Recommendation
 
 Do **M1 first**, as a spike with an exact-pinned `mtp-rs` behind a Cargo
-feature, and decide after the Paperwhite 11 test whether `.sdr` is
+feature, and decide after the first device test whether `.sdr` is
 readable over MTP. If yes, continue with M2 to M4 for 0.2.0 and ship the
 Kindle MTP reading as **experimental**. Do not use `libmtp` or
 `libmtp-rs` (LGPL, C dependency, dead bindings), and do not write our own
@@ -257,8 +257,8 @@ WPD or MTP code.
    for 0.2.0 (the OpenMTP copy stays documented).
 3. On macOS the app **only explains** how to free the device (holder named,
    manual steps); it never stops `ptpcamerad` or any other process.
-4. Test devices: the Paperwhite 11 (firmware 5.19.2) and a new **Kindle Basic
-   2026** (not yet checked: model, firmware and whether it shows `.sdr` over
+4. Test devices: the new **Kindle Basic 2026** (MTP only) and, for comparison,
+   the Paperwhite 11 (firmware 5.19.2, still a normal drive) (not yet checked: model, firmware and whether it shows `.sdr` over
    MTP are *unverified*), plus a **Windows PC**.
 5. The copy is **cached** between runs, with a **limit** on what is kept
    (total size and/or number of books, oldest removed first; the value is
