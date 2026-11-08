@@ -4,7 +4,8 @@ Question (owner, 2026-11-08, release 0.2.0): can NickelInkSync read a
 stock Kindle (no jailbreak) directly over USB on macOS and Windows, read
 only, instead of asking the user to copy the `documents` folder by hand with
 OpenMTP (README, section Kindle; `TODO.md` L1)? Test devices: the owner's
-Kindle Paperwhite 11 (firmware 5.19.2) and a new Kindle Basic 2026.
+new Kindle Basic 2026 (MTP only) and, for comparison, the Kindle Paperwhite 11
+(firmware 5.19.2, which still mounts as a drive).
 
 State of this study: **2026-11-08**. Source reading and metadata only
 (GitHub API, crates.io API, the projects' READMEs, changelogs and
@@ -265,9 +266,14 @@ WPD or MTP code.
    app's own cache folder, and the user can clear it.
 6. The macOS paragraph in 2.2 therefore reads: no opt-in `pkill`.
 
-## 6. M1 result (2026-11-08, `kindle-copy --list`, a Kindle with USB ID 1949:9981)
+## 6. M1 result (2026-11-08, `kindle-copy`, the Kindle Basic 2026, USB ID 1949:9981)
 
-**Go.** Over MTP the Kindle shows its `documents/` tree including everything
+**Go.** The connected device was the **Kindle Basic 2026**, which offers only
+MTP. The **Paperwhite 11 (firmware 5.19.2) still mounts as a normal drive**
+on the Mac (owner, 2026-11-08), so it does not need this feature: the
+existing `--device /Volumes/Kindle` path reads it. The README's "a recent
+Kindle offers only MTP" is true for new models (here the Basic 2026), not for
+every Kindle. Over MTP the Basic 2026 shows its `documents/` tree including everything
 that matters:
 
 - 14 `.sdr` folders, 9 `.kfx` books, each `.sdr` with
@@ -302,8 +308,8 @@ Not yet tested: Windows (M2), the second Kindle, timing.
 
 Consequences: the first version of `kindle-copy` would have fetched about 30
 MB of attachments and caches per run; it now fetches only `.yjf`/`.yjr`.
-Which Kindle model this was, and the result for the second Kindle, are still
-to be noted. Writing (release 0.3.0) is a separate question: the `.yjf` is an
+The Paperwhite 11 is no MTP test device; it is the reference for the USB-mount
+path. Writing (release 0.3.0) is a separate question: the `.yjf` is an
 ordinary visible object, but nothing is known yet about writes.
 
 ## Sources
