@@ -304,7 +304,12 @@ server holding a newer one (87 %, from a Kobo Libra 2): "the Kindle is only
 read". So reading over MTP works end to end on macOS with the original
 program code. The first attempt of the day failed with the "another program
 is using the Kindle" message (holder not named, unplug and replug fixed it).
-Not yet tested: Windows (M2), the second Kindle, timing.
+**Windows (same day, test binary from CI, WPD backend, Kindle Basic 2026):**
+`kindle-copy --list` showed exactly the same tree (51 folders, 132 files, 14
+`.sdr` folders, 9 books; empty serial and firmware again) and the copy took
+25 files (10.2 MB) with no error and no "held by another program" message.
+So the WPD path works on this Kindle, without any driver change.
+Not yet tested: `status` on Windows, timing, WPD stalls over longer sessions.
 
 Consequences: the first version of `kindle-copy` would have fetched about 30
 MB of attachments and caches per run; it now fetches only `.yjf`/`.yjr`.

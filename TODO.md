@@ -199,7 +199,9 @@ Windows-PC. Die Studie ist angepasst.
 - [x] **ich:** M1 (PR #94, `kindle-copy`) am Mac, am **Basic 2026**, **bestanden am 2026-11-08**:
   `.sdr`, `.yjf` und `.yjr` sind über MTP sichtbar, Kopieren (mit Cache) und
   `status` auf der Kopie laufen, Position übersetzt (Book „Good Boy“, Kindle
-  52 %, Server 87 %). Offen: Windows (M2), Zeitmessung.
+  52 %, Server 87 %). **Windows (WPD, CI-Testbinary aus PR #99) am
+  2026-11-08 ebenfalls:** gleicher Baum (51 Ordner, 132 Dateien, 14 `.sdr`, 9 Bücher),
+  25 Dateien (10,2 MB) kopiert. Offen: `status` auf dem PC, Zeitmessung, M3, M4.
 - [ ] **ich:** M1 Lesen aus Kopie ersetzen: MTP-Speicher des Kindle in einen
   temporären Ordner kopieren (nur `documents/`), dann der vorhandene Weg
   (`--device <Ordner>`). Zuerst als CLI-Unterbefehl, danach im Client.
