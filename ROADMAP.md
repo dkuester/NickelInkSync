@@ -106,6 +106,7 @@ passed. Details and status boxes: [TODO.md](TODO.md#release-030).
 
 ## Recently completed
 
+- [x] Release 0.1.0 published (2026-11-08): [v0.1.0](https://github.com/dkuester/NickelInkSync/releases/tag/v0.1.0), tag on the merge commit of PR #91, six assets (macOS disk image, Windows ZIP, CLI ZIPs, device package, `SHA256SUMS`)
 - [x] Scope fixed: Rust core + CLI (desktop and on-device) plus a NickelHook plugin
 - [x] Project renamed to NickelInkSync (GitHub); Codeberg stays as a read-only archive
 - [x] Legacy Obsidian export (`inksync.py`, `reading_stats.py`) and its CI removed

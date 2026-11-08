@@ -12,15 +12,11 @@ Wer: **du** = braucht dich (Gerät, Entscheidung, Zugang) · **ich** = kann ich 
 
 Erledigte Punkte wandern in der Roadmap nach „Recently completed“.
 
-## Aktueller Stand (2026-11-07)
+## Aktueller Stand (2026-11-08)
 
-- **Fertig auf `main`:** Desktop-Client und CLI (macOS, Windows), Release-Workflow, Plugin C4/C9/C10 (Kobo 6.0, Kobo 4.x, Tolino).
-- **0.1.0 kommt früher, ohne C5, C6, C7** (Entscheidung vom 2026-11-07); die drei stehen unter „Release 0.1.1“.
-- **Erledigt am 2026-11-07:** Vorprüfung `device check`, Gerätetest-Tabellen, Release-Notes und READMEs; Gerätetests am Clara BW (6.0) und Libra 2 (4.38) bestanden.
-- **Als Nächstes (du):** Release-Probelauf (Actions → Release → Run workflow), dann der Tag `v0.1.0` (Checkliste unten).
-- **Was dich braucht:** die [Freigabe-Checkliste 0.1.0](#freigabe-checkliste-010), nichts anderes. Pro Gerät ein Termin (Tabellen in [`docs/device-tests/`](docs/device-tests/)).
-- **Offen, nicht in 0.1.0:** PR #80 (Konfliktdialog, C5) bleibt offen und wartet auf 0.1.1.
-- **Release 0.2.0 geplant (2026-11-08):** drei Blöcke (Kindle über MTP, kepubify 5, Usability-Quick-Wins), siehe [Release 0.2.0](#release-020). **Release 0.3.0** (Lesefortschritt zurück zum Kindle) ist nur ein Plan mit Machbarkeits-Tor.
+- **Release 0.1.0 ist veröffentlicht (2026-11-08):** [v0.1.0](https://github.com/dkuester/NickelInkSync/releases/tag/v0.1.0), Desktop-Client und CLI (macOS, Windows), Gerätepaket für Kobo (6.0 und 4.x) und Tolino; Kindle experimentell. Gerätetests an Clara BW, Libra 2 und Tolino bestanden, Freigabe-Checkliste unten abgehakt.
+- **Als Nächstes: Release 0.1.1** mit C5 (Konfliktdialog, PR #80, offen), C6 und C7, siehe [Release 0.1.1](#release-011).
+- **Danach Release 0.2.0** (geplant): Kindle über MTP, kepubify 5, Usability-Quick-Wins, siehe [Release 0.2.0](#release-020). **Release 0.3.0** (Lesefortschritt zurück zum Kindle) ist nur ein Plan mit Machbarkeits-Tor.
 - **Regeln, damit es übersichtlich bleibt:** höchstens zwei Sessions gleichzeitig; Gerätetests bündeln; Doku-Updates gesammelt.
 
 **Reihenfolge der Geräte:** Erst wird alles, was mit dem **Tolino Shine Color
@@ -118,12 +114,12 @@ die Schritte stehen in den Tabellen unter [`docs/device-tests/`](docs/device-tes
   [`kobo-libra-2-4.38.md`](docs/device-tests/kobo-libra-2-4.38.md);
   **Clara BW (6.0)** dasselbe in Kurzform · bestanden am 2026-11-07 ·
   [`kobo-clara-bw-6.0.md`](docs/device-tests/kobo-clara-bw-6.0.md)
-- [ ] **(c) Release-Probelauf:** GitHub → Actions → Release → Run workflow;
-  Artefakte ansehen (Disk-Image, ZIPs, Gerätepaket mit `Kobo.tgz` und
+- [x] **(c) Release-Probelauf:** (grün am 2026-11-08) GitHub → Actions → Release → Run workflow;
+  Artefakte angesehen (Disk-Image, ZIPs, Gerätepaket mit `Kobo.tgz` und
   `kobo-4.x/KoboRoot.tgz`, `SHA256SUMS`)
 - [x] **(d) Release-Notes** aktualisiert (`.github/release-notes.md`, READMEs)
-  und von dir gelesen (2026-11-07, keine Änderungen)
-- [ ] **(e) Tag `v0.1.0`** setzt nur du
+  und von dir gelesen (2026-11-07; am 2026-11-08 mit Highlights ergänzt und erneut gelesen)
+- [x] **(e) Tag `v0.1.0`** gesetzt und veröffentlicht am 2026-11-08 (Tag-Lauf grün, alle fünf Jobs): [Release v0.1.0](https://github.com/dkuester/NickelInkSync/releases/tag/v0.1.0)
 
 ## Release 0.1.1
 
