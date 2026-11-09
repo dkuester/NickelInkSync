@@ -145,10 +145,11 @@ jobs:
       - name: Package for Kobo 6.0 and Tolino
         run: |
           d=dist/NickelInkSync
-          mkdir -p "$d/.adds/NickelInkSync"
+          mkdir -p "$d/.adds/NickelInkSync" "$d/.adds/nm"
           cp plugin/Kobo.tgz "$d/"
           install -m 755 target/armv7-unknown-linux-musleabihf/release/nickelinksync "$d/.adds/NickelInkSync/"
           cp plugin/config.ini.example "$d/.adds/NickelInkSync/"
+          cp plugin/nickelmenu.nm "$d/.adds/nm/nickelinksync"
       - uses: actions/upload-artifact@v4
         with:
           name: NickelInkSync-device

@@ -110,11 +110,12 @@ jobs:
         run: |
           name="NickelInkSync-$VERSION-device"
           d="dist/$name"
-          mkdir -p "$d/.adds/NickelInkSync" "$d/kobo-4.x"
+          mkdir -p "$d/.adds/NickelInkSync" "$d/.adds/nm" "$d/kobo-4.x"
           cp plugin/Kobo.tgz "$d/"
           cp plugin/KoboRoot.tgz "$d/kobo-4.x/"
           install -m 755 target/armv7-unknown-linux-musleabihf/release/nickelinksync "$d/.adds/NickelInkSync/"
           cp plugin/config.ini.example "$d/.adds/NickelInkSync/"
+          cp plugin/nickelmenu.nm "$d/.adds/nm/nickelinksync"
           cp LICENSE "$d/LICENSE.txt"
           (cd dist && zip -r -X "$name.zip" "$name")
       - uses: actions/upload-artifact@v4
@@ -162,7 +163,7 @@ jobs:
           done
           # the device package holds what the notes tell people to copy
           zip=$(ls assets/NickelInkSync-*-device.zip)
-          for e in Kobo.tgz kobo-4.x/KoboRoot.tgz .adds/NickelInkSync/nickelinksync .adds/NickelInkSync/config.ini.example; do
+          for e in Kobo.tgz kobo-4.x/KoboRoot.tgz .adds/NickelInkSync/nickelinksync .adds/NickelInkSync/config.ini.example .adds/nm/nickelinksync; do
             unzip -Z1 "$zip" | grep -qF "/$e" || { echo "::error::$zip lacks $e"; fail=1; }
           done
           exit $fail
