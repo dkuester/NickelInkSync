@@ -185,6 +185,13 @@ Entscheidung des Besitzers (2026-11-07): C5, C6 und C7 kommen erst nach 0.1.0. I
       entsteht aus dem Original, und das liegt nie auf dem Gerät. Sie kommt
       beim nächsten „Gerät vorbereiten“ am Rechner; bis dahin „Zuordnung
       nicht vorbereitet“.
+    - **Entscheidung des Besitzers (2026-11-09):** Für 0.1.1 bleibt das
+      Zuordnen am Gerät wie gebaut (Variante a: Zuordnung vormerken, die
+      Tabelle kommt beim nächsten „Gerät vorbereiten“). Später soll
+      Variante (b), Tabellen der besten Vorschläge je Buch vorab zu
+      erzeugen, eine **Option des Clients** werden (Messung: Tabelle etwa
+      0,5 bis 0,8 Mal so groß wie das Buch, Dateiname dann
+      `<Gerät>-<Original>.json`; siehe [Optional](#optional-später)).
   - [ ] **du:** Am Kobo: vorgemerkte Bücher senden, ein kepub zuordnen
     (Termin je Gerät, [`docs/device-tests/kobo-c6-surface.md`](docs/device-tests/kobo-c6-surface.md)).
 - [ ] **C7 Tolino** (braucht C4 bis C6)
@@ -1778,6 +1785,14 @@ Auf dem Kobo ist das Plugin inaktiv.
     lesbar.
 
 ## Optional (später)
+
+- [ ] **Tabellen der besten Vorschläge vorab (Option im Client)**: `device
+  prepare` erzeugt für jedes nicht zugeordnete Buch auf dem Gerät die
+  Tabellen seiner besten Vorschläge (höchstens 5), damit „Zuordnen“ am
+  Gerät sofort wirkt. Braucht ein neues Dateiformat
+  (`tables/<Gerät>-<Original>.json`, `Session::table` prüft heute
+  `table.original`), Aufräumen und eine Einstellung. Entscheidung des
+  Besitzers am 2026-11-09 (Variante b der C6-Vorlage).
 
 - [x] **O1 Manuelle Zuordnung** von Büchern (kepub ↔ EPUB), Testfall Heat 2.
   **Geht in D1 auf** (CLI mit manueller Buchzuordnung, höchste Priorität).
