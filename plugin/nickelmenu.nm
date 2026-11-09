@@ -1,0 +1,9 @@
+# NickelInkSync for NickelMenu: copy this file to .adds/nm/ on the e-reader
+# (as .adds/nm/nickelinksync). Without NickelMenu it does nothing.
+#
+# Each entry runs the program, which puts an order into
+# .adds/NickelInkSync/trigger; the plugin picks it up and shows its dialog.
+# On Kobo 6.0 NickelMenu is only available as the Qt 6 fork, on Kobo 4.x
+# as upstream NickelMenu.
+menu_item :main :NickelInkSync :cmd_spawn :quiet :/mnt/onboard/.adds/NickelInkSync/nickelinksync device trigger menu
+menu_item :main :NickelInkSync jetzt synchronisieren :cmd_spawn :quiet :/mnt/onboard/.adds/NickelInkSync/nickelinksync device trigger sync

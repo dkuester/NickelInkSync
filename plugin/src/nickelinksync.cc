@@ -101,6 +101,13 @@
  * Nickel's reader (with Kobalt as the default reader Nickel's own is not
  * used); `ignore-kobalt` next to the CLI syncs anyway (tests).
  *
+ * Surface (Kobo, stage C6): a dialog (pending books, books that do not
+ * sync, "Jetzt synchronisieren", mapping a book on the device from the
+ * library index by title and author), opened from a file `trigger` that a
+ * NickelMenu entry writes (`nickelinksync device trigger …`) or from an entry
+ * in a sideloaded book's menu. A mapping made here waits for the table the
+ * computer builds at the next `device prepare`. Kobalt stops every entry.
+ *
  * Symbols and signatures: docs/nickel-6.0-symbols.md (Kobo 6.0, the write
  * path) and docs/nickel-5.18-symbols.md (Tolino 5.18).
  *
@@ -129,12 +136,14 @@
 #include <QDialog>
 #include <QEventLoop>
 #include <QFile>
+#include <QFileSystemWatcher>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
 #include <QLocale>
 #include <QMap>
+#include <QMenu>
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QSqlDatabase>
@@ -148,6 +157,7 @@
 #include <QWidget>
 
 #include <cstdio>
+#include <functional>
 #include <memory>
 #include <dlfcn.h>
 #include <unistd.h>
@@ -1240,7 +1250,7 @@ static bool write_through_nickel(const QString &id, const Pulled &p)
 }
 
 // What a finished `sync --pending` means, for the log and the message.
-static void pending_finished(QProcess *p)
+static void pending_finished(QProcess *p, bool asked = false)
 {
     const QByteArray out = p->readAll();
     log_line(QStringLiteral("sync --pending (exit %1):\n%2").arg(p->exitCode()).arg(QString::fromUtf8(out).trimmed()));
@@ -1263,6 +1273,17 @@ static void pending_finished(QProcess *p)
     }
     if (conflicts > 0) {
         toast(true, QStringLiteral("Vorgemerkt: Konflikt"), QStringLiteral("Server und Gerät bewegt, bleibt liegen"));
+    }
+    if (asked && sent == 0 && conflicts == 0) {
+        // "Jetzt synchronisieren": never end without an answer.
+        const QList<QList<QByteArray>> left = machine_lines(out, "PENDING_LEFT");
+        const int n = left.isEmpty() ? 0 : left.first().value(0).toInt();
+        if (n > 0) {
+            toast(true, QStringLiteral("Noch vorgemerkt"),
+                  n == 1 ? QStringLiteral("1 Buch, Server nicht erreicht") : QStringLiteral("%1 Bücher, Server nicht erreicht").arg(n));
+        } else {
+            toast(false, QStringLiteral("Nichts vorgemerkt"), QStringLiteral("Alles ist abgeglichen"));
+        }
     }
 }
 
@@ -1307,9 +1328,12 @@ static bool g_pending_running = false;
 
 // Sends the pending list in the background, if state.json has one; called
 // whenever the server answered.
-static void sync_pending()
+static void sync_pending(bool asked = false)
 {
     if (!g_active || kobalt_blocks() || g_pending_running || !has_pending()) {
+        if (asked && g_active && !kobalt_blocks() && !g_pending_running) {
+            toast(false, QStringLiteral("Nichts vorgemerkt"), QStringLiteral("Alles ist abgeglichen"));
+        }
         return;
     }
     log_line(QStringLiteral("sync --pending"));
@@ -1317,9 +1341,9 @@ static void sync_pending()
     QStringList args = book_args("sync", QString());
     args << QStringLiteral("--pending") << QStringLiteral("--emit") << QStringLiteral("--timeout")
          << QString::fromLatin1(kPushTimeout);
-    start_cli(QStringLiteral("sync --pending"), args, [](QProcess *p) {
+    start_cli(QStringLiteral("sync --pending"), args, [asked](QProcess *p) {
         g_pending_running = false;
-        pending_finished(p);
+        pending_finished(p, asked);
     });
 }
 
@@ -1997,6 +2021,508 @@ void _nh_ReadingView__leavingReadingExperience(ReadingView *self)
     when_online(kWifiLeaveWaitS, [id] { start_push(id); });
 }
 
+// ---- Stage C6: the dialog, "sync now", mapping a book on the device ------
+//
+// Entry points, all through the same checks as opening a book (g_active,
+// Kobo, no Kobalt): a file `trigger` in the plugin's folder that a
+// NickelMenu entry writes (`nickelinksync device trigger menu|sync|map`,
+// .adds/nm/NickelInkSync), and an entry in a sideloaded book's menu. The
+// dialog is Nickel's ConfirmationDialog with up to three answers, built as
+// in C5 (the third button an N3ButtonLabel of ours, the answer named by the
+// tap's tapped(bool), not by the dialog's result).
+
+static const char kTrigger[] = "/mnt/onboard/.adds/NickelInkSync/trigger";
+static const int kTriggerDelayMs = 300;
+
+// A dialog of ours is on screen: a second one waits for the first.
+static bool g_dialog_up = false;
+
+static QStringList device_args(const char *sub, const QString &id = QString())
+{
+    QStringList args{
+        QStringLiteral("device"), QString::fromLatin1(sub),
+        QStringLiteral("--live"),
+        QStringLiteral("--device"), QString::fromLatin1(kOnboard),
+    };
+    if (!id.isEmpty()) {
+        args << QStringLiteral("--content-id") << id;
+    }
+    return args;
+}
+
+// What a dialog of ours shows and answers: 1 accept, 2 the third button,
+// 0 reject or close. `intent` is what a tap on one of the connected buttons
+// asked for, or -1 (see ConflictAsk: the dialog's own result cannot be
+// trusted on the device, the tap can).
+struct Ask {
+    int intent;
+    bool answered;
+    std::function<void(int)> done;
+};
+
+static void ask_answered(const std::shared_ptr<Ask> &a, int dialog_ended_with)
+{
+    if (a->answered) {
+        return;
+    }
+    a->answered = true;
+    g_dialog_up = false;
+    const int result = a->intent >= 0 ? a->intent : dialog_ended_with;
+    log_line(QStringLiteral("dialog: answered %1 (the dialog itself ended with %2)").arg(result).arg(dialog_ended_with));
+    a->done(result == QDialog::Accepted ? 1 : result == 2 ? 2 : 0);
+}
+
+// A tap on `button` ends the dialog with `code` and names it as the answer.
+static void tap_answers(QWidget *button, QDialog *dialog, const std::shared_ptr<Ask> &a, int code)
+{
+    QAction *action = new QAction(button);
+    QObject::connect(button, SIGNAL(tapped(bool)), action, SLOT(trigger()));
+    QObject::connect(action, &QAction::triggered, dialog, [dialog, a, code] {
+        a->intent = code;
+        dialog->done(code);
+    });
+}
+
+// Shows the dialog and returns at once; `done` gets the answer from the event
+// loop once it is over. `third` may be empty (two answers). False if the
+// dialog cannot be shown now.
+static bool ask(const QString &title, const QString &html, const QString &accept, const QString &third,
+                const QString &reject, std::function<void(int)> done)
+{
+    if (!can_ask() || g_dialog_up) {
+        log_line(QStringLiteral("dialog '%1': not shown (symbols %2, another one up %3)").arg(title).arg(can_ask()).arg(g_dialog_up));
+        return false;
+    }
+    QWidget *d = ConfirmationDialogFactory__getConfirmationDialog(nullptr);
+    QDialog *dialog = qobject_cast<QDialog *>(d);
+    if (!dialog) {
+        log_line(QStringLiteral("dialog '%1': not a QDialog").arg(title));
+        delete d;
+        return false;
+    }
+    ConfirmationDialog__setTitle(d, title);
+    ConfirmationDialog__setText(d, html);
+    ConfirmationDialog__setAcceptButtonText(d, accept);
+    ConfirmationDialog__setRejectButtonText(d, reject);
+    QWidget *extra = nullptr;
+    if (!third.isEmpty()) {
+        extra = third_button(d, third);
+        if (!extra) {
+            delete d;
+            return false;
+        }
+    }
+    std::shared_ptr<Ask> a(new Ask{-1, false, done});
+    tap_answers(ConfirmationDialog__acceptButton(d), dialog, a, QDialog::Accepted);
+    if (extra) {
+        tap_answers(extra, dialog, a, 2);
+    }
+    tap_answers(ConfirmationDialog__rejectButton(d), dialog, a, QDialog::Rejected);
+    QObject::connect(dialog, &QDialog::finished, qApp, [a, dialog](int result) {
+        dialog->hide();
+        dialog->deleteLater();
+        QTimer::singleShot(kAnswerDelayMs, qApp, [a, result] { ask_answered(a, result); });
+    });
+    QObject::connect(dialog, &QObject::destroyed, qApp, [a] { ask_answered(a, QDialog::Rejected); });
+    g_dialog_up = true;
+    log_line(QStringLiteral("dialog '%1': shown").arg(title));
+    dialog->open();
+    return true;
+}
+
+// A book the CLI reports as not syncing (`device unsynced`).
+struct UnsyncedBook {
+    QString id;
+    QString title;
+    QString author;
+    QString state;  // "not-mapped" or "waits"
+
+    QString label() const
+    {
+        const QString name = title.isEmpty() ? id.section(QLatin1Char('/'), -1) : title;
+        return author.isEmpty() ? name : name + QStringLiteral(" – ") + author;
+    }
+};
+
+static QList<UnsyncedBook> unsynced_from(const QByteArray &out)
+{
+    QList<UnsyncedBook> books;
+    for (const QList<QByteArray> &f : machine_lines(out, "UNSYNCED")) {
+        UnsyncedBook b;
+        b.id = QString::fromUtf8(f.value(0));
+        b.title = QString::fromUtf8(f.value(1));
+        b.author = QString::fromUtf8(f.value(2));
+        b.state = QString::fromUtf8(f.value(3));
+        books << b;
+    }
+    return books;
+}
+
+// The books state.json holds a pending push for, by title.
+static QStringList pending_titles()
+{
+    QStringList titles;
+    QJsonObject root;
+    if (!read_state(&root)) {
+        return titles;
+    }
+    const QJsonObject books = root.value(QStringLiteral("books")).toObject();
+    for (auto it = books.constBegin(); it != books.constEnd(); ++it) {
+        const QJsonObject entry = it.value().toObject();
+        if (!entry.contains(QStringLiteral("pending"))) {
+            continue;
+        }
+        const QString title = entry.value(QStringLiteral("title")).toString();
+        titles << (title.isEmpty() ? it.key().section(QLatin1Char('/'), -1) : title);
+    }
+    return titles;
+}
+
+// The CLI of a dialog step failed (exit code, no answer line): says why.
+static bool cli_failed(QProcess *p, const QByteArray &out)
+{
+    if (!machine_lines(out, "NO_INDEX").isEmpty()) {
+        toast(true, kNotPrepared, kPrepareHint);
+        return true;
+    }
+    if (p->exitCode() != 0 || p->exitStatus() != QProcess::NormalExit) {
+        log_line(QStringLiteral("device command failed (exit %1): %2").arg(p->exitCode()).arg(QString::fromUtf8(out).trimmed()));
+        toast(true, QStringLiteral("Fehlgeschlagen"), error_reason(out));
+        return true;
+    }
+    return false;
+}
+
+// "Jetzt synchronisieren": sends the pending list now, over Wi-Fi switched
+// on silently, and says what came of it.
+static void sync_now()
+{
+    if (!g_active || kobalt_blocks()) {
+        return;
+    }
+    if (!has_pending()) {
+        toast(false, QStringLiteral("Nichts vorgemerkt"), QStringLiteral("Alles ist abgeglichen"));
+        return;
+    }
+    toast(false, QStringLiteral("Sende Vorgemerktes …"), QString());
+    when_online(kWifiLeaveWaitS, [] { sync_pending(true); });
+}
+
+// Mapping the books that do not sync, one after the other: for each, the
+// library originals that fit it by title and author (from the index on the
+// device), best first; the reader takes one, steps on or stops. The mapping
+// is written as `added` in mappings.json; the translation table comes from
+// the computer at the next "Gerät vorbereiten" (the EPUB is not on the
+// device), until then the book waits.
+struct MapAsk {
+    QList<UnsyncedBook> books;
+    int book;
+    // checksum, title, authors, percent
+    QList<QList<QByteArray>> suggestions;
+    int at;
+};
+
+static void map_next_book(const std::shared_ptr<MapAsk> &m);
+
+static void map_show_suggestion(const std::shared_ptr<MapAsk> &m)
+{
+    const UnsyncedBook &b = m->books.at(m->book);
+    const QList<QByteArray> &s = m->suggestions.at(m->at);
+    const QString title = QString::fromUtf8(s.value(1));
+    const QString authors = QString::fromUtf8(s.value(2));
+    const bool more = m->at + 1 < m->suggestions.size();
+    const QString text = QStringLiteral("<b>Auf dem Gerät:</b> %1<br><br><b>Passt zu:</b> %2<br>%3 % Übereinstimmung von Titel und Autor "
+                                        "(Vorschlag %4 von %5)<br><br>Die Tabelle für dieses Buch entsteht am Rechner "
+                                        "(„Gerät vorbereiten“), erst dann wird gesendet.")
+                             .arg(b.label().toHtmlEscaped(),
+                                  (authors.isEmpty() ? title : title + QStringLiteral(" – ") + authors).toHtmlEscaped(),
+                                  QString::fromUtf8(s.value(3)))
+                             .arg(m->at + 1)
+                             .arg(m->suggestions.size());
+    const bool shown = ask(QStringLiteral("Buch zuordnen"), text, QStringLiteral("Zuordnen"),
+                           more ? QStringLiteral("Nächster Vorschlag") : QStringLiteral("Überspringen"),
+                           QStringLiteral("Abbrechen"), [m, s, more](int answer) {
+        if (kobalt_blocks()) {
+            return;
+        }
+        if (answer == 1) {
+            const QString id = m->books.at(m->book).id;
+            QStringList args = device_args("map-book", id);
+            args << QStringLiteral("--original") << QString::fromUtf8(s.value(0));
+            start_cli(QStringLiteral("device map-book"), args, [m](QProcess *p) {
+                const QByteArray out = p->readAll();
+                log_line(QStringLiteral("device map-book (exit %1): %2").arg(p->exitCode()).arg(QString::fromUtf8(out).trimmed()));
+                if (cli_failed(p, out)) {
+                    return;
+                }
+                toast(false, QStringLiteral("Zugeordnet"), QStringLiteral("Am Rechner „Gerät vorbereiten“"));
+                ++m->book;
+                QTimer::singleShot(kToastMs / 2, qApp, [m] { map_next_book(m); });
+            });
+        } else if (answer == 2) {
+            if (more) {
+                ++m->at;
+            } else {
+                ++m->book;
+            }
+            QTimer::singleShot(0, qApp, [m, more] { more ? map_show_suggestion(m) : map_next_book(m); });
+        }
+    });
+    if (!shown) {
+        toast(true, QStringLiteral("Kein Dialog"), QStringLiteral("Siehe NickelInkSync.log"));
+    }
+}
+
+// The next book of the list: asks the CLI for its suggestions.
+static void map_next_book(const std::shared_ptr<MapAsk> &m)
+{
+    if (!g_active || kobalt_blocks()) {
+        return;
+    }
+    if (m->book >= m->books.size()) {
+        return;
+    }
+    const UnsyncedBook b = m->books.at(m->book);
+    start_cli(QStringLiteral("device suggest"), device_args("suggest", b.id), [m, b](QProcess *p) {
+        const QByteArray out = p->readAll();
+        log_line(QStringLiteral("device suggest (exit %1): %2").arg(p->exitCode()).arg(QString::fromUtf8(out).trimmed()));
+        if (cli_failed(p, out)) {
+            return;
+        }
+        m->suggestions = machine_lines(out, "SUGGEST");
+        m->at = 0;
+        if (m->suggestions.isEmpty()) {
+            toast(true, QStringLiteral("Kein Vorschlag"), b.label().left(45));
+            ++m->book;
+            QTimer::singleShot(kToastMs / 2, qApp, [m] { map_next_book(m); });
+            return;
+        }
+        map_show_suggestion(m);
+    });
+}
+
+static void begin_map(const QList<UnsyncedBook> &books)
+{
+    if (books.isEmpty()) {
+        toast(false, QStringLiteral("Alles zugeordnet"), QStringLiteral("Kein Buch ohne Zuordnung"));
+        return;
+    }
+    std::shared_ptr<MapAsk> m(new MapAsk{books, 0, QList<QList<QByteArray>>(), 0});
+    map_next_book(m);
+}
+
+static QList<UnsyncedBook> not_mapped(const QList<UnsyncedBook> &books)
+{
+    QList<UnsyncedBook> found;
+    for (const UnsyncedBook &b : books) {
+        if (b.state == QLatin1String("not-mapped")) {
+            found << b;
+        }
+    }
+    return found;
+}
+
+// The main dialog: what is pending and what does not sync, with "Jetzt
+// synchronisieren" and "Zuordnen".
+static void menu_dialog(QProcess *p)
+{
+    const QByteArray out = p->readAll();
+    log_line(QStringLiteral("device unsynced (exit %1): %2").arg(p->exitCode()).arg(QString::fromUtf8(out).trimmed()));
+    if (cli_failed(p, out)) {
+        return;
+    }
+    const QList<UnsyncedBook> books = unsynced_from(out);
+    const QList<UnsyncedBook> open = not_mapped(books);
+    const int waiting = books.size() - open.size();
+    const QStringList pending = pending_titles();
+    QStringList lines;
+    if (pending.isEmpty()) {
+        lines << QStringLiteral("<b>Vorgemerkt:</b> nichts");
+    } else {
+        lines << QStringLiteral("<b>Vorgemerkt:</b> %1").arg(pending.size());
+        for (int i = 0; i < pending.size() && i < 5; ++i) {
+            lines << pending.at(i).left(45).toHtmlEscaped();
+        }
+        if (pending.size() > 5) {
+            lines << QStringLiteral("… und %1 weitere").arg(pending.size() - 5);
+        }
+    }
+    lines << QString();
+    lines << QStringLiteral("<b>Ohne Zuordnung:</b> %1").arg(open.size());
+    for (int i = 0; i < open.size() && i < 5; ++i) {
+        lines << open.at(i).label().left(45).toHtmlEscaped();
+    }
+    if (open.size() > 5) {
+        lines << QStringLiteral("… und %1 weitere").arg(open.size() - 5);
+    }
+    if (waiting > 0) {
+        lines << QString();
+        lines << QStringLiteral("<b>Zugeordnet, wartet auf den Rechner:</b> %1<br>(„Gerät vorbereiten“)").arg(waiting);
+    }
+    const bool shown = ask(QStringLiteral("NickelInkSync"), lines.join(QStringLiteral("<br>")),
+                           QStringLiteral("Jetzt synchronisieren"),
+                           open.isEmpty() ? QString() : QStringLiteral("Zuordnen …"), QStringLiteral("Schließen"),
+                           [open](int answer) {
+        if (answer == 1) {
+            sync_now();
+        } else if (answer == 2) {
+            begin_map(open);
+        }
+    });
+    if (!shown) {
+        toast(true, QStringLiteral("Kein Dialog"), QStringLiteral("Siehe NickelInkSync.log"));
+    }
+}
+
+static void show_menu()
+{
+    if (!g_active || !g_kobo || kobalt_blocks()) {
+        notice_kobalt(0);
+        return;
+    }
+    start_cli(QStringLiteral("device unsynced"), device_args("unsynced"), [](QProcess *p) { menu_dialog(p); });
+}
+
+// Mapping from NickelMenu or the dialog: all books that need it.
+static void map_all()
+{
+    if (!g_active || !g_kobo || kobalt_blocks()) {
+        notice_kobalt(0);
+        return;
+    }
+    start_cli(QStringLiteral("device unsynced"), device_args("unsynced"), [](QProcess *p) {
+        const QByteArray out = p->readAll();
+        if (!cli_failed(p, out)) {
+            begin_map(not_mapped(unsynced_from(out)));
+        }
+    });
+}
+
+// The entry in a book's menu: map this book if it needs it, else say how it
+// stands.
+static void book_entry(const QString &id)
+{
+    if (!g_active || !g_kobo || kobalt_blocks()) {
+        notice_kobalt(0);
+        return;
+    }
+    start_cli(QStringLiteral("device unsynced"), device_args("unsynced", id), [](QProcess *p) {
+        const QByteArray out = p->readAll();
+        if (cli_failed(p, out)) {
+            return;
+        }
+        const QList<UnsyncedBook> books = unsynced_from(out);
+        if (books.isEmpty()) {
+            toast(false, QStringLiteral("Wird synchronisiert"), QStringLiteral("Original oder zugeordnet"));
+        } else if (books.first().state == QLatin1String("waits")) {
+            toast(false, QStringLiteral("Zugeordnet, wartet"), QStringLiteral("Am Rechner „Gerät vorbereiten“"));
+        } else {
+            begin_map(books);
+        }
+    });
+}
+
+// The NickelMenu entry wrote `trigger` (menu, sync or map).
+static void handle_trigger()
+{
+    QFile f(QString::fromLatin1(kTrigger));
+    if (!f.exists()) {
+        return;
+    }
+    QByteArray what;
+    if (f.open(QIODevice::ReadOnly)) {
+        what = f.readAll().trimmed();
+        f.close();
+    }
+    QFile::remove(QString::fromLatin1(kTrigger));
+    log_line(QStringLiteral("trigger: %1").arg(QString::fromUtf8(what)));
+    if (what == "sync") {
+        if (!g_active || !g_kobo || kobalt_blocks()) {
+            notice_kobalt(0);
+            return;
+        }
+        sync_now();
+    } else if (what == "map") {
+        map_all();
+    } else {
+        show_menu();
+    }
+}
+
+// Watches the plugin's folder for `trigger` (inotify, no polling). A file
+// left from before the start is not an order.
+static void watch_trigger()
+{
+    QFile::remove(QString::fromLatin1(kTrigger));
+    QFileSystemWatcher *watcher = new QFileSystemWatcher(qApp);
+    if (!watcher->addPath(QString::fromLatin1(kDir))) {
+        log_line(QStringLiteral("trigger: cannot watch %1, NickelMenu entries do nothing").arg(QString::fromLatin1(kDir)));
+        return;
+    }
+    // The file is created empty and written a moment later.
+    QObject::connect(watcher, &QFileSystemWatcher::directoryChanged, qApp,
+                     [](const QString &) { QTimer::singleShot(kTriggerDelayMs, qApp, [] { handle_trigger(); }); });
+}
+
+// The book menu (ActionProxyMixin::setupBookListMenu, docs/nickel-6.0-symbols.md):
+// after Nickel built the menu of a book, the plugin adds "NickelInkSync"
+// to a sideloaded book's (as Kobalt does).
+static QWidget *(*AbstractNickelMenuController__createMenuTextItem)(void *self, QMenu *, const QString &, bool, bool,
+                                                                    const QString &);
+static QAction *(*AbstractMenuController__createAction)(void *self, QMenu *, QWidget *, bool, bool, bool);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+static void (*ActionProxyMixin__setupBookListMenu)(void *, void *, const Volume *, QMenu *, const QString &,
+                                                   const QString &, bool, const void *);
+#else
+static void (*ActionProxyMixin__setupBookListMenu)(void *, void *, const Volume *, QMenu *, const QString &,
+                                                   const QString &, const void *);
+#endif
+
+static void add_book_menu_item(void *controller, const Volume *volume, QMenu *menu)
+{
+    if (!g_active || !g_kobo || kobalt_blocks() || !menu || !AbstractNickelMenuController__createMenuTextItem
+        || !AbstractMenuController__createAction || !Content__getId) {
+        return;
+    }
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    const QString id = Content__getId(volume, QString());
+#else
+    const QString id = Content__getId(volume);
+#endif
+    if (!id.startsWith(QString::fromLatin1(kSideloaded))) {
+        return;
+    }
+    QWidget *item = AbstractNickelMenuController__createMenuTextItem(controller, menu, QStringLiteral("NickelInkSync"),
+                                                                     false, false, QStringLiteral("nickelinksyncItem"));
+    QAction *action = item ? AbstractMenuController__createAction(controller, menu, item, true, true, false) : nullptr;
+    if (!action) {
+        log_line(QStringLiteral("book menu: no entry for %1").arg(id));
+        return;
+    }
+    QObject::connect(action, &QAction::triggered, qApp, [id] {
+        // From the event loop, after Nickel closed its menu.
+        QTimer::singleShot(0, qApp, [id] { book_entry(id); });
+    });
+}
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+extern "C" __attribute__((visibility("default")))
+void _nh_ActionProxyMixin__setupBookListMenu(void *self, void *controller, const Volume *volume, QMenu *menu,
+                                             const QString &a, const QString &b, bool c, const void *tab)
+{
+    ActionProxyMixin__setupBookListMenu(self, controller, volume, menu, a, b, c, tab);
+    add_book_menu_item(controller, volume, menu);
+}
+#else
+extern "C" __attribute__((visibility("default")))
+void _nh_ActionProxyMixin__setupBookListMenu(void *self, void *controller, const Volume *volume, QMenu *menu,
+                                             const QString &a, const QString &b, const void *tab)
+{
+    ActionProxyMixin__setupBookListMenu(self, controller, volume, menu, a, b, tab);
+    add_book_menu_item(controller, volume, menu);
+}
+#endif
+
 // NickelHook's GOT patcher (plugin/NickelHook/nh.c, linked into this
 // library): puts `target` into libnickel's slot for `symname` and returns
 // what the slot called before (another mod's hook, kept), NULL if `target`
@@ -2088,6 +2614,9 @@ static int nickelinksync_init()
     // the event loop does, and once more when the home screen is up.
     if (QCoreApplication::instance()) {
         QTimer::singleShot(0, qApp, [] { keep_open_hook(); });
+        if (g_kobo) {
+            QTimer::singleShot(0, qApp, [] { watch_trigger(); });
+        }
         QTimer::singleShot(kKobaltToastDelayMs, qApp, [] { keep_open_hook(); });
     }
     return 0;
@@ -2113,6 +2642,18 @@ static struct nh_hook NickelInkSyncHook[] = {
         .lib     = "libnickel.so.1.0.0",
         .out     = nh_symoutptr(ReadingView__leavingReadingExperience),
         .desc    = "Push the position when a book is left",
+    },
+    {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+        .sym     = "_ZN16ActionProxyMixin17setupBookListMenuEP28AbstractNickelMenuControllerRK6VolumeP15NickelTouchMenuRK7QStringS9_bRK3Tab",
+#else
+        .sym     = "_ZN16ActionProxyMixin17setupBookListMenuEP28AbstractNickelMenuControllerRK6VolumeP15NickelTouchMenuRK7QStringS9_RK3Tab",
+#endif
+        .sym_new = "_nh_ActionProxyMixin__setupBookListMenu",
+        .lib     = "libnickel.so.1.0.0",
+        .out     = nh_symoutptr(ActionProxyMixin__setupBookListMenu),
+        .desc    = "Book menu entry (Kobo)",
+        .optional = true,
     },
     {0},
 };
@@ -2179,6 +2720,8 @@ static struct nh_dlsym NickelInkSyncDlsym[] = {
     {.name = "_ZNK18ConfirmationDialog12acceptButtonEv", .out = nh_symoutptr(ConfirmationDialog__acceptButton), .desc = "Conflict dialog", .optional = true},
     {.name = "_ZNK18ConfirmationDialog12rejectButtonEv", .out = nh_symoutptr(ConfirmationDialog__rejectButton), .desc = "Conflict dialog", .optional = true},
     {.name = "_ZN18ConfirmationDialog9addWidgetEP7QWidget", .out = nh_symoutptr(ConfirmationDialog__addWidget), .desc = "Conflict dialog", .optional = true},
+    {.name = "_ZN28AbstractNickelMenuController18createMenuTextItemEP5QMenuRK7QStringbbS4_", .out = nh_symoutptr(AbstractNickelMenuController__createMenuTextItem), .desc = "Book menu entry", .optional = true},
+    {.name = "_ZN22AbstractMenuController12createActionEP5QMenuP7QWidgetbbb", .out = nh_symoutptr(AbstractMenuController__createAction), .desc = "Book menu entry", .optional = true},
     {.name = "_ZN13N3ButtonLabelC1EP7QWidget", .out = nh_symoutptr(N3ButtonLabel__ctor), .desc = "Conflict dialog", .optional = true},
     {0},
 };

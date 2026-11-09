@@ -108,6 +108,18 @@ impl DeviceMappings {
   }
 }
 
+/// Whether a book on a prepared device syncs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Standing {
+  /// An original, the original of a mapping, or mapped with a table.
+  Syncs,
+  /// Mapped, but without a table: the computer builds it from the original
+  /// at the next `device prepare` (the EPUB never goes onto the device).
+  Waits,
+  /// Neither mapped nor an original in the index.
+  NotMapped,
+}
+
 /// What the device holds of the desktop's library and mappings.
 #[derive(Debug, Clone)]
 pub struct Prepared {
@@ -139,6 +151,26 @@ impl Prepared {
   /// The file with checksum `hash` is an original in the library.
   pub fn is_original(&self, hash: &str) -> bool {
     self.hashes.contains(hash)
+  }
+
+  /// Whether the book with checksum `hash` syncs from this device, as the
+  /// CLI decides it with `--live`. `kepub`: a kepub never syncs under its
+  /// own checksum.
+  pub fn standing(&self, hash: &str, kepub: bool) -> Standing {
+    if self.mappings.for_file(hash).is_some() {
+      return match self.table_path(hash).exists() {
+        true => Standing::Syncs,
+        false => Standing::Waits,
+      };
+    }
+    if kepub {
+      return Standing::NotMapped;
+    }
+    if self.is_original(hash) || self.mappings.holding().any(|m| m.epub.hash == hash) {
+      Standing::Syncs
+    } else {
+      Standing::NotMapped
+    }
   }
 
   /// The table file for the device file with checksum `hash`.
@@ -472,4 +504,45 @@ pub fn put_mapping(root: &Path, mapping: &Mapping) -> Result<()> {
   device.removed.retain(|r| r != hash);
   write_atomic(&dir.join(MAPPINGS), &json(&device, true))?;
   Ok(())
+}
+
+/// Maps the device file with checksum `device_hash` (at `path`) on the
+/// device itself, to the library original with checksum `original_hash`
+/// (which must be in the index): as `added` in `mappings.json`, for the
+/// next [`prepare`] on the computer to take over and build the table. The
+/// original's path is not known here. Returns the mapping.
+pub fn add_mapping(root: &Path, device: DeviceBook, original_hash: &str) -> Result<Mapping> {
+  let DeviceBook::File { hash, .. } = &device else {
+    return Err("only a Kobo or Tolino book can be mapped here".into());
+  };
+  let hash = hash.clone();
+  let dir = root.join(DIR);
+  let index = read::<Index>(&dir.join(LIBRARY))?.ok_or("the device was not prepared")?;
+  let original = index
+    .books
+    .iter()
+    .find(|b| b.hash == original_hash)
+    .ok_or("that book is not in the library index")?;
+  if hash == original_hash {
+    return Err("the book is that original itself and needs no mapping".into());
+  }
+  let mapping = Mapping {
+    device,
+    epub: Original {
+      path: String::new(),
+      hash: original_hash.to_string(),
+      title: original.title.clone(),
+      author: (!original.authors.is_empty()).then(|| original.authors.join(", ")),
+    },
+    created: now(),
+  };
+  let mut mappings = read::<DeviceMappings>(&dir.join(MAPPINGS))?.unwrap_or_default();
+  mappings.format = FORMAT;
+  mappings
+    .added
+    .retain(|m| !m.device.same_as(&mapping.device));
+  mappings.added.push(mapping.clone());
+  mappings.removed.retain(|r| *r != hash);
+  write_atomic(&dir.join(MAPPINGS), &json(&mappings, true))?;
+  Ok(mapping)
 }

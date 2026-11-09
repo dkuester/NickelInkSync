@@ -475,6 +475,21 @@ ist; der nächste `pull`, beim Öffnen oder per USB, übernimmt wieder die
 Server-Position, auch wenn „zuletzt gelesen“ auf dem Gerät jetzt neuer
 aussieht.
 
+**Dialog, „Jetzt synchronisieren“, Zuordnen am Gerät (nur Kobo).** Das Plugin
+hat einen eigenen Dialog: was auf der Vormerkliste steht, welche Bücher auf
+dem Gerät nicht synchronisiert werden, **Jetzt synchronisieren** (sendet die
+Vormerkliste und sagt immer, was daraus wurde) und **Zuordnen …**, das Buch
+für Buch die Originale der Bibliothek anbietet, die nach Titel und Autor
+passen (aus dem Index, den „Gerät vorbereiten“ hinterlassen hat). Eine hier
+gemachte Zuordnung steht als `added` in `mappings.json`; die Übersetzungstabelle
+entsteht aus dem Original, das nie aufs Gerät kommt, das Buch wartet also
+(„Zuordnung nicht vorbereitet“), bis am Rechner wieder `device prepare`
+läuft. Geöffnet wird der Dialog über einen NickelMenu-Eintrag (die Datei
+`.adds/nm/nickelinksync` aus dem Gerätepaket nach `.adds/nm/` auf dem E-Reader
+kopieren; auf Kobo 6.0 gibt es NickelMenu nur als Qt-6-Fork von nicoverbruggen,
+auf 4.x als NickelMenu von pgaskin) oder über den Eintrag **NickelInkSync** im
+Menü (⋯) eines Buchs vom Gerät. Mit Kobalt tut keiner von beiden etwas.
+
 Jedes Ergebnis zeigt das Plugin als kurze Meldung unten auf dem Bildschirm
 (vorerst auf Deutsch), etwa „Fortschritt übernommen“ mit Prozent und dem
 Gerät, von dem die Position kam, „Fortschritt vorgemerkt“, wenn sie später

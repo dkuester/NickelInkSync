@@ -151,11 +151,49 @@ Entscheidung des Besitzers (2026-11-07): C5, C6 und C7 kommen erst nach 0.1.0. I
       meldet nichts ohne sie.
   - Nicht belegt: der Dialog am Tolino (bis C7), die Fassung gegen weitere
     Firmwarestände.
-- [ ] **C6 Oberfläche** (braucht C5)
-  - [ ] **ich:** Vormerkliste, „Jetzt synchronisieren“, Zuordnen am Gerät
+- [ ] **C6 Oberfläche** (braucht C5) · PR offen (Branch `claude/c6-surface`)
+  - [x] **ich:** Vormerkliste, „Jetzt synchronisieren“, Zuordnen am Gerät
     aus dem Index (Vorschläge nach Titel und Autor); Einstieg über
     NickelMenu-Datei und Buchmenü.
-  - [ ] **du:** Am Kobo: vorgemerkte Bücher senden, ein kepub zuordnen.
+    - CLI (`src/ondevice.rs`, `tests/ondevice.rs`): `device unsynced`
+      (Bücher ohne Sync: `not-mapped` oder `waits`), `device suggest`
+      (Originale aus `library.json` nach Titel und Autor, höchstens 5,
+      ab 50 %), `device map-book` (schreibt `added` in `mappings.json`),
+      `device trigger menu|sync|map` (schreibt `.adds/NickelInkSync/trigger`).
+      Kobalt stoppt alle drei.
+    - Plugin (Kobo, Qt6 und Qt5 aus einem Quelltext): ein
+      `ConfirmationDialog` mit bis zu drei Antworten wie in C5 (dritter Knopf
+      ein `N3ButtonLabel`, Antwort über `tapped(bool)`, kein veränderlicher
+      Zustand in Signal-Lambdas). Hauptdialog: Vorgemerktes (aus
+      `state.json`), Bücher ohne Zuordnung, „Jetzt synchronisieren“
+      (`sync --pending`, meldet immer, was daraus wurde), „Zuordnen …“
+      (Vorschläge der Reihe nach, „Zuordnen“ / „Nächster Vorschlag“ /
+      „Abbrechen“). Einstieg: die Datei `trigger` (ein
+      `QFileSystemWatcher` auf `.adds/NickelInkSync`), die ein NickelMenu-Eintrag
+      über `nickelinksync device trigger …` schreibt
+      (`plugin/nickelmenu.nm` → `.adds/nm/nickelinksync` im Paket), und ein
+      Eintrag „NickelInkSync“ im Buchmenü eines Buchs vom Gerät
+      (`setupBookListMenu`). Nur Kobo; der Tolino folgt in C7.
+    - Belegt in der Kobo-VM (6.0.279225): Trigger, Hauptdialog, Zuordnen mit
+      Vorschlägen und `added` in `mappings.json`, „Kein Vorschlag“,
+      „Jetzt synchronisieren“ mit leerer und mit nicht erreichbarer
+      Vormerkliste, Buchmenü-Eintrag und sein Toast. Nicht belegt: die
+      Qt5-Fassung (nur gebaut), NickelMenu selbst (nicht im Repository: die
+      Zeilen in `plugin/nickelmenu.nm` sind nach der Dokumentation
+      geschrieben), der Erfolgsfall von „Jetzt synchronisieren“.
+    - Ein am Gerät zugeordnetes Buch **wartet** (`waits`): Die Tabelle
+      entsteht aus dem Original, und das liegt nie auf dem Gerät. Sie kommt
+      beim nächsten „Gerät vorbereiten“ am Rechner; bis dahin „Zuordnung
+      nicht vorbereitet“.
+    - **Entscheidung des Besitzers (2026-11-09):** Für 0.1.1 bleibt das
+      Zuordnen am Gerät wie gebaut (Variante a: Zuordnung vormerken, die
+      Tabelle kommt beim nächsten „Gerät vorbereiten“). Später soll
+      Variante (b), Tabellen der besten Vorschläge je Buch vorab zu
+      erzeugen, eine **Option des Clients** werden (Messung: Tabelle etwa
+      0,5 bis 0,8 Mal so groß wie das Buch, Dateiname dann
+      `<Gerät>-<Original>.json`; siehe [Optional](#optional-später)).
+  - [ ] **du:** Am Kobo: vorgemerkte Bücher senden, ein kepub zuordnen
+    (Termin je Gerät, [Clara BW](docs/device-tests/kobo-clara-bw-6.0-c6.md), [Libra 2](docs/device-tests/kobo-libra-2-4.38-c6.md)).
 - [ ] **C7 Tolino** (braucht C4 bis C6)
   - [ ] **ich:** Dasselbe Plugin auf dem Shine Color; Kobalts Schreibweg
     dort prüfen (Kobalt schreibt auf `develop` seit 8b144d2 auch auf dem
@@ -1747,6 +1785,14 @@ Auf dem Kobo ist das Plugin inaktiv.
     lesbar.
 
 ## Optional (später)
+
+- [ ] **Tabellen der besten Vorschläge vorab (Option im Client)**: `device
+  prepare` erzeugt für jedes nicht zugeordnete Buch auf dem Gerät die
+  Tabellen seiner besten Vorschläge (höchstens 5), damit „Zuordnen“ am
+  Gerät sofort wirkt. Braucht ein neues Dateiformat
+  (`tables/<Gerät>-<Original>.json`, `Session::table` prüft heute
+  `table.original`), Aufräumen und eine Einstellung. Entscheidung des
+  Besitzers am 2026-11-09 (Variante b der C6-Vorlage).
 
 - [x] **O1 Manuelle Zuordnung** von Büchern (kepub ↔ EPUB), Testfall Heat 2.
   **Geht in D1 auf** (CLI mit manueller Buchzuordnung, höchste Priorität).

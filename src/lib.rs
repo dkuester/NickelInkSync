@@ -25,6 +25,7 @@ pub mod krds;
 pub mod library;
 pub mod map;
 pub mod mapping;
+pub mod ondevice;
 pub mod position;
 pub mod prepare;
 pub mod restore;

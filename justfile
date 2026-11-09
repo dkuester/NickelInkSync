@@ -60,11 +60,12 @@ plugin-qt5:
 # Kobo.tgz for .kobo/ and the folder for .adds/
 package: build-device plugin
   rm -rf dist/NickelInkSync
-  mkdir -p dist/NickelInkSync/.adds/NickelInkSync
+  mkdir -p dist/NickelInkSync/.adds/NickelInkSync dist/NickelInkSync/.adds/nm
   cp plugin/Kobo.tgz dist/NickelInkSync/Kobo.tgz
   cp {{ device_bin }} dist/NickelInkSync/.adds/NickelInkSync/nickelinksync
   chmod 755 dist/NickelInkSync/.adds/NickelInkSync/nickelinksync
   cp plugin/config.ini.example dist/NickelInkSync/.adds/NickelInkSync/config.ini.example
+  cp plugin/nickelmenu.nm dist/NickelInkSync/.adds/nm/nickelinksync
   find dist/NickelInkSync -type f | sort
 
 # Before a device test: look at the mounted device (read-only) and compare
