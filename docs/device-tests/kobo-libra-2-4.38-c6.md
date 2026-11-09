@@ -1,49 +1,45 @@
-# Gerätetest: Kobo, Oberfläche (C6)
+# Gerätetest: Kobo Libra 2 4.38 (C6)
 
-Ein Termin je Gerät: **Kobo Clara BW** (Firmware 6.0.279225, Qt 6) und **Kobo Libra 2** (Firmware 4.38.23852,
-Qt 5). Dieselben Schritte, nur das Paket ist ein anderes. Der Tolino kommt in C7. Trage in der Spalte „Ergebnis“
-ein, was du siehst, und schick mir die Tabelle (bei Abweichungen die Zeilen aus `NickelInkSync.log`, **nie** `config.ini`).
+Gerät: Kobo Libra 2, Firmware **4.38.23852** (Qt 5.2). Ein Termin deckt die Oberfläche (C6) ab. Trage in der Spalte „Ergebnis“ ein, was du siehst, und schick mir die Tabelle
+(bei Abweichungen die Zeilen aus `NickelInkSync.log`, **nie** `config.ini`). Der Tolino kommt in C7.
 
 ## Voraussetzungen
 
-1. **Rechner, Ordner und Branch** (Terminal):
+1. **Rechner, Ordner und Branch:**
 
    ```bash
    cd ~/GitHub/inksync
    git fetch && git switch claude/c6-surface && git pull
    ```
 
-   Der Ordner muss sauber sein (`git status`). Nach dem Merge gilt stattdessen `git switch main && git pull`.
+   Der Ordner muss sauber sein (`git status`). Nach dem Merge: `git switch main && git pull`.
 
 2. **Paket frisch bauen** (Docker muss laufen):
 
-   - Clara BW: `just plugin && just package` → `dist/NickelInkSync/Kobo.tgz`
-   - Libra 2: `just plugin-qt5 && just package` → `plugin/KoboRoot.tgz` (statt `Kobo.tgz`)
+   ```bash
+   just plugin-qt5 && just package
+   ```
 
 3. **E-Reader** per USB anschließen (hier `/Volumes/KOBOeReader`), `just device-check /Volumes/KOBOeReader` ansehen.
 
-4. **Auf das Gerät kopieren** (überschreibt nichts Eigenes; `config.ini`, `library.json`, `state.json` bleiben):
+4. **Kopieren** (`config.ini`, `library.json`, `state.json` bleiben):
 
    ```bash
    cp -R dist/NickelInkSync/.adds/NickelInkSync /Volumes/KOBOeReader/.adds/
-   cp plugin/KoboRoot.tgz /Volumes/KOBOeReader/.kobo/    # Libra 2
-   cp dist/NickelInkSync/Kobo.tgz /Volumes/KOBOeReader/.kobo/    # Clara BW
+   cp plugin/KoboRoot.tgz /Volumes/KOBOeReader/.kobo/   # nur diese Datei, nicht Kobo.tgz
    ```
 
-   **NickelMenu** (nur wenn es installiert ist; Clara BW: der Qt-6-Fork von nicoverbruggen, Libra 2: NickelMenu von
-   pgaskin): `cp dist/NickelInkSync/.adds/nm/nickelinksync /Volumes/KOBOeReader/.adds/nm/`. Ohne NickelMenu die
-   Schritte 1 bis 3 überspringen und über das Buchmenü gehen.
+   **NickelMenu:** NickelMenu von pgaskin (upstream, Qt 5). Ist es nicht installiert, die Schritte 1 bis 4 und 11 bis 12 über das Buchmenü (Schritt 10) ersetzen. Dann `cp dist/NickelInkSync/.adds/nm/nickelinksync /Volumes/KOBOeReader/.adds/nm/`.
 
 5. **Konfiguration:** `config.ini` mit Konto; `confirm = backwards` oder weglassen, `notify = all` oder weglassen.
 
-6. **Gerät vorbereiten** (Book R als kepub auf dem Gerät, **nicht** zugeordnet: vorher in der GUI oder mit
-   `nickelinksync map remove` die Zuordnung dieses kepubs entfernen; ein zweites, nicht zugeordnetes Buch ist gut):
+6. **Gerät vorbereiten** (Book R als kepub auf dem Gerät, **nicht** zugeordnet; ein zweites nicht zugeordnetes Buch ist gut):
 
    ```bash
    cargo run -q -- device prepare --device /Volumes/KOBOeReader
    ```
 
-   Dann auswerfen. Das Gerät installiert das Plugin und startet neu; warten, WLAN an.
+   Auswerfen; das Gerät installiert das Plugin und startet neu. Warten, WLAN an.
 
 ## Schritte
 

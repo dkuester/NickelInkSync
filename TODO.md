@@ -193,7 +193,7 @@ Entscheidung des Besitzers (2026-11-07): C5, C6 und C7 kommen erst nach 0.1.0. I
       0,5 bis 0,8 Mal so groß wie das Buch, Dateiname dann
       `<Gerät>-<Original>.json`; siehe [Optional](#optional-später)).
   - [ ] **du:** Am Kobo: vorgemerkte Bücher senden, ein kepub zuordnen
-    (Termin je Gerät, [`docs/device-tests/kobo-c6-surface.md`](docs/device-tests/kobo-c6-surface.md)).
+    (Termin je Gerät, [Clara BW](docs/device-tests/kobo-clara-bw-6.0-c6.md), [Libra 2](docs/device-tests/kobo-libra-2-4.38-c6.md)).
 - [ ] **C7 Tolino** (braucht C4 bis C6)
   - [ ] **ich:** Dasselbe Plugin auf dem Shine Color; Kobalts Schreibweg
     dort prüfen (Kobalt schreibt auf `develop` seit 8b144d2 auch auf dem
