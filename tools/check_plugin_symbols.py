@@ -33,6 +33,8 @@ SOURCE = Path(__file__).resolve().parent.parent / "plugin" / "src" / "nickelinks
 # `\s*=` right after the field name excludes `.sym_new = "..."`.
 HOOK_RE = re.compile(r'\.sym\s*=\s*"([^"]+)"')
 DLSYM_RE = re.compile(r'\.name\s*=\s*"(_Z[^"]+)"')
+ENTRY_RE = re.compile(r"\{[^{}]*\}")
+EXTRA_RE = re.compile(r'\.desc\s*=\s*"[^"]*[Bb]ook menu entry')
 QT6_IF = re.compile(r"#\s*if\s+QT_VERSION\s*(>=|<)\s*QT_VERSION_CHECK\(\s*6\s*,\s*0\s*,\s*0\s*\)")
 
 
@@ -80,8 +82,23 @@ def main() -> int:
             kind, _, name = line.strip().partition(" ")
             (defined if kind == "D" else imported).add(name)
     hooks, dlsyms = HOOK_RE.findall(src), DLSYM_RE.findall(src)
-    errors = [f"hook symbol not in {label}: {s}" for s in hooks if s not in defined | imported]
-    errors += [f"dlsym symbol not defined in {label}: {s}" for s in dlsyms if s not in defined]
+    # The book menu entry is a Kobo-only extra (the plugin runs without it):
+    # its symbols may be missing from the Tolino build, which is only said.
+    # Every other symbol, `.optional` or not, must exist.
+    extra = set()
+    for entry in ENTRY_RE.findall(src):
+        if EXTRA_RE.search(entry):
+            extra.update(HOOK_RE.findall(entry) + DLSYM_RE.findall(entry))
+    errors = []
+    for s in hooks:
+        if s not in defined | imported:
+            errors.append(f"hook symbol not in {label}: {s}")
+    for s in dlsyms:
+        if s not in defined:
+            errors.append(f"dlsym symbol not defined in {label}: {s}")
+    for s in [e for e in errors if e.rsplit(": ", 1)[1] in extra]:
+        errors.remove(s)
+        print(f"{s} (book menu entry, optional)", file=sys.stderr)
     if not hooks or not dlsyms:
         errors.append("no hooks or dlsym entries found in the plugin source")
     for e in errors:
