@@ -12,6 +12,7 @@ use nickelinksync::kosync::{self, Client, Progress, Update};
 use nickelinksync::library::{self, Library, LibraryBook};
 use nickelinksync::map::{self, candidates, DeviceChapters, OnDevice, Outcome};
 use nickelinksync::mapping::{DeviceBook, EpubState, Store};
+use nickelinksync::ondevice;
 use nickelinksync::prepare;
 use nickelinksync::session::{
   self, Action, Identity, KindleSession, Options, Plugin, PullOutcome, PushOutcome, Server,
@@ -221,6 +222,35 @@ enum DeviceCommand {
     #[command(flatten)]
     library: LibraryArgs,
   },
+  /// For the plugin's dialog (on the device, `--live` is the default
+  /// there): the books that do not sync, one line `NICKELINKSYNC_UNSYNCED<tab>
+  /// ContentID<tab>title<tab>author<tab>not-mapped|waits` each (`waits`:
+  /// mapped on the device, the table comes with the next `device prepare`
+  /// on the computer); `NICKELINKSYNC_NO_INDEX<tab>message` if the device
+  /// was not prepared. Writes nothing
+  Unsynced {
+    #[command(flatten)]
+    on: OnDeviceArgs,
+  },
+  /// For the plugin's dialog: the originals in the library index that fit
+  /// the book --content-id best (title and author), one line
+  /// `NICKELINKSYNC_SUGGEST<tab>checksum<tab>title<tab>authors<tab>percent`
+  /// each, best first. Writes nothing
+  Suggest {
+    #[command(flatten)]
+    on: OnDeviceArgs,
+  },
+  /// For the plugin's dialog: map the book --content-id to the original
+  /// with checksum --original from the index, as `added` in `mappings.json`
+  /// (the computer builds the table at the next `device prepare`); prints
+  /// `NICKELINKSYNC_MAPPED<tab>ContentID<tab>title<tab>not-mapped|waits|syncs`
+  MapBook {
+    #[command(flatten)]
+    on: OnDeviceArgs,
+    /// Checksum of the original, from `device suggest`
+    #[arg(long)]
+    original: String,
+  },
   /// Look at a mounted device before a test, and write nothing: model and
   /// firmware, plugin and program (against a new build), config.ini
   /// (never the password), Kobalt, whether it is prepared, what is pending
@@ -236,6 +266,20 @@ enum DeviceCommand {
     #[arg(long)]
     qt5_plugin: Option<PathBuf>,
   },
+}
+
+#[derive(Args)]
+struct OnDeviceArgs {
+  /// Mount point of the device (/mnt/onboard on the device itself)
+  #[arg(long)]
+  device: PathBuf,
+  /// The book with exactly this ContentID (file:///mnt/onboard/…)
+  #[arg(long)]
+  content_id: Option<String>,
+  /// Nickel is running (on the device): read its database as it is being
+  /// written
+  #[arg(long)]
+  live: bool,
 }
 
 #[derive(Args)]
@@ -306,7 +350,15 @@ fn main() -> ExitCode {
       emit,
     } => (sync_pending(&target, emit), emit),
     Command::Map { command } => (map(command), false),
-    Command::Device { command } => (device(command), false),
+    Command::Device { command } => {
+      let emit = matches!(
+        command,
+        DeviceCommand::Unsynced { .. }
+          | DeviceCommand::Suggest { .. }
+          | DeviceCommand::MapBook { .. }
+      );
+      (device(command), emit)
+    }
     #[cfg(feature = "mtp")]
     Command::KindleCopy {
       to,
@@ -1693,6 +1745,9 @@ fn open_library(args: &LibraryArgs) -> Result<Option<Library>> {
 fn device(command: DeviceCommand) -> Result<bool> {
   let (device, library) = match command {
     DeviceCommand::Prepare { device, library } => (device, library),
+    DeviceCommand::Unsynced { on } => return device_unsynced(&on),
+    DeviceCommand::Suggest { on } => return device_suggest(&on),
+    DeviceCommand::MapBook { on, original } => return device_map(&on, &original),
     DeviceCommand::Check {
       device,
       package,
@@ -1747,6 +1802,87 @@ fn device(command: DeviceCommand) -> Result<bool> {
   );
   println!("          in {}", device.join(prepare::DIR).display());
   Ok(report.failed.is_empty())
+}
+
+/// The plugin's entry points: Kobalt stops them like everything else on the
+/// device.
+fn on_device_guard(on: &OnDeviceArgs) -> Result<()> {
+  if on.live {
+    kobalt::Kobalt::detect_live(&on.device).check()?;
+  }
+  Ok(())
+}
+
+fn device_unsynced(on: &OnDeviceArgs) -> Result<bool> {
+  on_device_guard(on)?;
+  let Some(books) = ondevice::unsynced(&on.device, on.live)? else {
+    emit_line("NO_INDEX", &["Gerät nicht vorbereitet"]);
+    return Ok(false);
+  };
+  for b in books.iter().filter(|b| {
+    on.content_id
+      .as_deref()
+      .map_or(true, |id| b.content_id == id)
+  }) {
+    emit_line(
+      "UNSYNCED",
+      &[
+        &b.content_id,
+        b.title.as_deref().unwrap_or(""),
+        b.author.as_deref().unwrap_or(""),
+        standing_word(b.standing),
+      ],
+    );
+  }
+  Ok(true)
+}
+
+fn standing_word(standing: prepare::Standing) -> &'static str {
+  match standing {
+    prepare::Standing::Syncs => "syncs",
+    prepare::Standing::Waits => "waits",
+    prepare::Standing::NotMapped => "not-mapped",
+  }
+}
+
+fn device_suggest(on: &OnDeviceArgs) -> Result<bool> {
+  on_device_guard(on)?;
+  let id = on.content_id.as_deref().ok_or("--content-id is required")?;
+  if prepare::Prepared::load(&on.device)?.is_none() {
+    emit_line("NO_INDEX", &["Gerät nicht vorbereitet"]);
+    return Ok(false);
+  }
+  for s in ondevice::suggest(&on.device, id, on.live)? {
+    emit_line(
+      "SUGGEST",
+      &[
+        &s.hash,
+        s.title.as_deref().unwrap_or(""),
+        &s.authors.join(", "),
+        &format!("{:.0}", s.score * 100.0),
+      ],
+    );
+  }
+  Ok(true)
+}
+
+fn device_map(on: &OnDeviceArgs, original: &str) -> Result<bool> {
+  on_device_guard(on)?;
+  let id = on.content_id.as_deref().ok_or("--content-id is required")?;
+  if prepare::Prepared::load(&on.device)?.is_none() {
+    emit_line("NO_INDEX", &["Gerät nicht vorbereitet"]);
+    return Ok(false);
+  }
+  let b = ondevice::map(&on.device, id, original, on.live)?;
+  emit_line(
+    "MAPPED",
+    &[
+      &b.content_id,
+      b.title.as_deref().unwrap_or(""),
+      standing_word(b.standing),
+    ],
+  );
+  Ok(true)
 }
 
 fn print_library(library: &Library) {
