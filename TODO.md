@@ -126,28 +126,31 @@ die Schritte stehen in den Tabellen unter [`docs/device-tests/`](docs/device-tes
 Entscheidung des Besitzers (2026-11-07): C5, C6 und C7 kommen erst nach 0.1.0. Inhalt, Abhängigkeiten und Status bleiben wie sie waren; die übrigen Etappen
 (C0–C4, C8–C10) stehen im Abschnitt [Kobo-Client](#kobo-client).
 
-- [ ] **C5 Dialog bei Konflikten** (braucht C4) · **PR #80 (offen, nicht auf `main`)**; Stand und Übergabe dort und in der Notiz `2026-11-02-kobo-c5-handover.md`
-  - [ ] **ich:** Qt-Dialog beim Öffnen mit beiden Ständen und drei Knöpfen
-    (`ConfirmationDialog` hat zwei eigene; der dritte muss ein
-    Nickel-Widget sein, siehe C0).
-  - [ ] **du:** Konflikt am Kobo nachstellen (KOReader und Kobo offline
-    an verschiedenen Stellen), alle drei Knöpfe.
-  - Stand 2026-11-08 (PR, TODO und Notizen vom 2026-11-02 und 2026-11-07 gelesen):
-    Der Dialog erscheint am Clara BW mit beiden Ständen richtig. **Aber:** Kein
-    Tap auf „Später“, „Gerät behalten“ oder „Server übernehmen“ ist je
-    angekommen, nur das × wirkt (im Log nie `answered 1` oder `2`); in der VM
-    gehen alle drei. Der PR ist nicht mergebar (`CONFLICTING`). Es fehlt:
-    - [ ] **ich:** `main` in den Branch `claude/c5-conflict-dialog-c17794`
-      holen (Konflikte in `nickelinksync.cc`; `syms.gz` neu erzeugen).
-    - [ ] **ich:** Knöpfe auf `tapped(bool)` verbinden, jeden Tap mit Uhrzeit
-      loggen, Dialog statt in `exec()` im `setVolume`-Hook per `open()` zeigen
-      und die Antwort asynchron behandeln (die Vermutung dazu ist ungeprüft).
-    - [ ] **ich:** Knopfgrößen und -texte; Fehler „Später → erneutes Öffnen
-      überschreibt die Server-Position“ (laut C5-Session mit `90b9085`
-      behoben, am Gerät ungeprüft) im Test abdecken.
-    - [ ] **ich:** Qt5-Fassung für den Libra 2 (`just plugin-qt5`).
-    - [ ] **du:** Gerätetest Clara BW (alle drei Knöpfe und ×; das Gerät vorher
-      von den 0.1.0-Testständen zurücksetzen) und Libra 2 (Qt5).
+- [x] **C5 Dialog bei Konflikten** (braucht C4) · **PR #80, wartet auf Review und Merge durch den Besitzer** (Stand 2026-11-08; Übergabe in der Notiz `2026-11-02-kobo-c5-handover.md`)
+  - [x] **ich:** Qt-Dialog beim Öffnen mit beiden Ständen und drei Knöpfen
+    (`ConfirmationDialog` hat zwei eigene; der dritte ist ein selbst gebautes
+    `N3ButtonLabel`), Antwort an die CLI über `--answered`, Qt5- und
+    Qt6-Fassung aus einem Quelltext. Nur auf dem Kobo (Tolino: Konflikt wie
+    bisher nur gemeldet, bis C7).
+  - [x] **du:** Konflikt am Kobo nachgestellt, alle drei Knöpfe: **Clara BW
+    (Qt6, 6.0.279225) und Libra 2 (Qt5, 4.38.23852) bestanden**, beide am
+    2026-11-08 (Stand `f354740` und `a77493c`). Belegt im Log:
+    „Später“ fragt beim erneuten Öffnen wieder, auch wenn ein anderer
+    Client dieselbe Stelle mit neuer Zeit sendet (`deferred_at` in
+    `state.json`); „Gerät behalten“ sendet (KOReader lädt den Stand);
+    „Server übernehmen“ öffnet an der Stelle; die Toasts stimmen.
+  - Auf dem Weg gefunden und behoben:
+    - Nickels Dialog endet bei jedem Tap mit 0 (Ursache nicht bewiesen); die
+      Antwort bestimmt der Tap selbst (`intent`), der Dialog kommt per
+      `open()` aus der Event-Loop, nicht in `exec()` im Hook.
+    - Eine gecachte Seite, die die Stelle nur umschließt, reicht Nickel nicht
+      (Kapitelanfang statt Stelle): Die CLI verwirft die Seiten des
+      Kapitels jetzt, außer eine beginnt an der Stelle (`8478f21`, wirkt
+      auch beim normalen Pull, `docs/nickel-6.0-symbols.md`).
+    - Die Prüfung nach dem Öffnen wartet bis 48 s auf Nickels Stelle und
+      meldet nichts ohne sie.
+  - Nicht belegt: der Dialog am Tolino (bis C7), die Fassung gegen weitere
+    Firmwarestände.
 - [ ] **C6 Oberfläche** (braucht C5)
   - [ ] **ich:** Vormerkliste, „Jetzt synchronisieren“, Zuordnen am Gerät
     aus dem Index (Vorschläge nach Titel und Autor); Einstieg über
@@ -160,7 +163,11 @@ Entscheidung des Besitzers (2026-11-07): C5, C6 und C7 kommen erst nach 0.1.0. I
     `ignore-kobalt` anlegen, N7). Wenn
     er geht, ersetzt er dort den heutigen Weg B (CLI schreibt, verwirft die
     Seiten im Cache, N5); sonst bleibt Weg B.
-  - [ ] **du:** Dieselben Tests wie C4 bis C6 am Tolino.
+  - [ ] **du:** Dieselben Tests wie C4 bis C6 am Tolino. **Der Test wird
+    größer (ein Termin am Shine Color):** Tests C4 bis C6; der C5-Dialog (drei
+    Knöpfe und ×, „Später“ mit erneutem Öffnen, `deferred_at`); und der Pull
+    mit gecachten Kapitelseiten (`8478f21`, Weg B: eine gecachte Seite, die
+    die Stelle umschließt, darf nicht zum Kapitelanfang führen).
 
 ## Release 0.2.0
 

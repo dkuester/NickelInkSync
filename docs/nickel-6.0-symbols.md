@@ -99,6 +99,41 @@ is drawn, unstyled, but never gets a tap (Nickel's own touch handling), so
 a third button has to be a Nickel widget; and `setText` showed `\n` as a
 space.
 
+### The conflict dialog (C5)
+
+| Purpose | Symbol | Signature (checked) |
+|---|---|---|
+| Its buttons | `_ZNK18ConfirmationDialog12acceptButtonEv`, `…12rejectButtonEv` | `QWidget* acceptButton() const`, `rejectButton() const`: the two `N3ButtonLabel`s (object names `acceptButton`, `rejectButton`), in a `QHBoxLayout` of their own row widget |
+| Third button | `_ZN13N3ButtonLabelC1EP7QWidget` | `N3ButtonLabel(QWidget* parent)`; `Ui_ConfirmationDialog::setupUi` allocates 0x88 bytes for one (5.18 and 6.0; 0x98 on 4.38). A `TouchLabel` and so a `QLabel`; its signal `tapped(bool)` connects by name |
+
+The plugin builds the third button itself (`operator new` with room to
+spare, then the constructor, parented to the buttons' row) and inserts it
+in front of the reject button. Checked in the Kobo VM on 2026-11-02:
+
+- The `N3ButtonLabel` gets taps: `tapped(bool)`, connected by name to a
+  `QAction`'s `trigger()`, ends the dialog with our own result (2).
+  Accept gives 1, reject and the close button 0.
+- The dialog's own style sheet makes its two buttons primary buttons
+  (`#acceptButton,#rejectButton{qproperty-primaryButton:true}`), which
+  Nickel's application style sheet draws grey and centred; the property
+  `primaryButton` set on ours does the same. Copying the reject button's
+  dynamic properties instead is wrong: they are Qt's style sheet caches
+  (`_q_stylesheet_minh` and so on).
+- `setText` takes HTML: `<br>` breaks the line and `<b>` is bold.
+- Nickel shrinks a button's text to fit; with three buttons "Server
+  übernehmen" is drawn smaller than "Später".
+- A tap on a button arrives in the VM as `TouchBegin` (main window),
+  `GestureOverride`/`Gesture` (button), `TouchEnd`; Nickel's own accept and
+  reject connections end the dialog first, the `tapped(bool)` signal comes
+  about 400 ms later (checked 2026-11-08 with an event filter on `qApp`).
+  On the Clara BW no tap on a button ever arrived while the dialog ran in
+  `exec()` inside the `setVolume` hook (only the close cross worked); the
+  plugin now shows it with `open()` from the event loop and opens the book
+  after the answer (a fresh `Volume` and a `Bookmark()`).
+- `getConfirmationDialog(nullptr)` parents the dialog to the main window;
+  `QDialog::exec()` inside the `setVolume` hook shows it over the library
+  and blocks the opening until it is answered.
+
 ## The write path in the VM
 
 A throwaway plugin (not in this repository) did Kobalt's sequence above in
@@ -155,8 +190,7 @@ device pattern "the first opening after a start fails, the second works".
 **Result:** Kobalt's write path works on 6.0 for kepub and EPUB, also on
 the first opening after a start, but it does **not** get around the page
 cache: Nickel opens from its cache whatever wrote the row. Dropping the
-target chapter's cached pages when none holds the place, as the CLI has
-done since N5, fixes it (D, H), here on Nickel's own connection inside the
+target chapter's cached pages when none starts at the place (since 8 Nov 2026; before, when none held it: see below), fixes it (D, H), here on Nickel's own connection inside the
 same transaction and without a restart.
 
 Limits of the VM: everything is emulated and slow; before this test the
@@ -258,7 +292,7 @@ the Tolino check before it.
    `updateBookmark` with `ContentLocation::create(…).toString()` (refuse a
    position for which `isValid()` is false or `toString()` differs),
    `setPercentRead`, `updateFields` with only the changed columns, then
-   **drop the target chapter's cached pages** if none holds the place
+   **drop the target chapter's cached pages** unless one starts at the place
    (`drop_stale_pages`' rule, on `dbConnection(db, false)` in the same
    transaction), `endTransaction`; on any failure roll back and
    `refreshCache<Volume>`. Then hand the original a `Volume` from a fresh
@@ -284,3 +318,18 @@ the Tolino check before it.
    that chapter, restart the Kobo, open. And one opening of a book already
    opened in that session, to see whether Nickel's in-memory pages undo the
    drop (the device test of 31.10.).
+
+## A cached page that holds the place is not enough (8 Nov 2026)
+
+Clara BW, 6.0.279225, Book R (kepub), "Server übernehmen" in the C5 dialog
+wrote `kobo.87.1` through Nickel, 0 cached pages dropped, and Nickel
+opened at the chapter start `kobo.1.1:0`. The cached page `86.1:236` to
+`89.1:0` (last used 18:25 UTC, when the book was read to 85 %) held the
+place, so the old rule dropped nothing. Three other pulls whose place no
+cached page held (`109.1:49`, `41.1:47`, `15.1:53`) opened right: Nickel
+rendered live and the new pages are dated at the opening. Not settled
+whether Nickel fails to find a page that only wraps the place or the missing
+offset (`kobo.87.1`, no `:0`) is the cause. `stale_pages` therefore drops
+the chapter's pages unless one starts at the place (a missing offset equals
+`:0`). To confirm on the device: read on to a place, have the server move
+the position inside a cached page, open.

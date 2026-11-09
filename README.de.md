@@ -38,8 +38,8 @@ nickelinksync pull --device /Volumes/KOBOeReader
 | Befehl | Was er tut |
 |---|---|
 | `status` | Listet die seitengeladenen Bücher mit Prüfsumme, gespeicherter Position, KOReader-XPointer und, falls eingerichtet, der Position auf dem Server. |
-| `push` | Überträgt die Position jedes Buchs zum Server. Eine Position, die der Server erst nach dem letzten Lesen auf dem Gerät bekommen hat, wird nie überschrieben; außerdem fragt `push` standardmäßig nach, bevor es den Server an eine frühere Stelle im Buch zurücksetzt (siehe `confirm` unten). `--force` überträgt ohne Rückfrage, `--dry-run` zeigt nur, was gesendet würde. |
-| `pull` | Zeigt, für welche Bücher der Server eine neuere Position hat, wie das Gerät sie speichern würde und wo es nachfragen würde. Nur mit `--write` wird sie aufs Gerät geschrieben (Tolino und Kobo, experimentell, siehe unten); `--force` übernimmt die Server-Position ohne Rückfrage. |
+| `push` | Überträgt die Position jedes Buchs zum Server. Eine Position, die der Server erst nach dem letzten Lesen auf dem Gerät bekommen hat, wird nie überschrieben; außerdem fragt `push` standardmäßig nach, bevor es den Server an eine frühere Stelle im Buch zurücksetzt (siehe `confirm` unten). `--force` überträgt ohne Rückfrage, `--dry-run` zeigt nur, was gesendet würde. `--answered <Server-Zeit>` (für den Konfliktdialog des Plugins, ein Buch mit `--content-id`) sendet wie `--force`, aber nur, solange der Server noch die Position von dieser Zeit hat. |
+| `pull` | Zeigt, für welche Bücher der Server eine neuere Position hat, wie das Gerät sie speichern würde und wo es nachfragen würde. Nur mit `--write` wird sie aufs Gerät geschrieben (Tolino und Kobo, experimentell, siehe unten); `--force` übernimmt die Server-Position ohne Rückfrage; `--answered <Server-Zeit>` (Konfliktdialog des Plugins) tut das nur, solange der Server noch die Position von dieser Zeit hat. |
 | `sync --pending` | Sendet die Bücher, deren Push auf dem Gerät gescheitert ist (kein Netz, Server-Fehler), wie sie in `.adds/NickelInkSync/state.json` vorgemerkt sind, sofern sie noch gesendet werden sollen (siehe [Zuletzt abgeglichene Position](#zuletzt-abgeglichene-position)). |
 
 Alle drei nehmen `--book <Text>` (nur Bücher, deren Titel oder Dateipfad den
@@ -393,18 +393,22 @@ seitengeladenen Buchs holt es eine neuere Position vom Server, und das Buch
 Programm `nickelinksync` auf dem Gerät auf und folgt derselben Regel
 `confirm` und dem [zuletzt abgeglichenen Position](#zuletzt-abgeglichene-position).
 
-**Was 0.1.0 kann und was nicht.** Das Plugin ist experimentell und nur auf
+**Was das Plugin kann und was nicht.** Das Plugin ist experimentell und nur auf
 dem Kobo Clara BW (Firmware 6.0.279225), dem Kobo Libra 2 (4.38.23852) und
 dem Tolino Shine Color (5.18.279364) getestet; auf anderer Firmware hat es
 niemand geprüft.
 
 - **Ein Konflikt** (ein Buch, das seit dem letzten Abgleich auf beiden
   Seiten weitergelesen wurde, und die Stelle des Servers liegt weiter
-  hinten) **hat noch keinen Dialog**: Das Buch bleibt unverändert, nichts
-  wird geholt und nichts gesendet, eine Meldung („Konflikt, nicht
-  geladen“, später „Nicht gesendet“) und ein Logeintrag sagen das.
-  Aufgelöst wird am Rechner, im Desktop-Client oder mit `pull` / `push`
-  (`--force` entscheidet). Der Dialog ist für 0.1.1 geplant.
+  hinten) wird vor dem Öffnen in einem Dialog von Nickel mit beiden
+  Ständen (Prozent, Abschnitt, Gerät, Zeit) erfragt: „Server übernehmen“
+  öffnet das Buch an der Position vom Server, „Gerät behalten“ sendet die
+  des Geräts, „Später“ (oder Schließen des Dialogs) lässt beide
+  unverändert und fragt beim nächsten Öffnen wieder. Hat sich der Server
+  geändert, während der Dialog offen war, wird nichts überschrieben. Fehlen
+  die Symbole des Dialogs, bleibt das Buch unverändert, und eine Meldung
+  und ein Logeintrag sagen das; dann am Rechner auflösen (`pull` / `push`,
+  `--force` entscheidet).
 - **Das Gerät muss am Rechner [vorbereitet](#buchzuordnung-im-aufbau)
   sein** (`device prepare`, wieder nach dem Zuordnen oder Hinzufügen von
   Büchern): Ohne das holt das Plugin weiterhin, sendet aber nichts und sagt

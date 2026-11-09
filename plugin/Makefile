@@ -9,6 +9,8 @@ override LIBRARY  := libnickelinksync.so
 override SOURCES  += src/nickelinksync.cc
 # QSqlDatabase: Nickel's own connection, for its cached pages (Kobo).
 override PKGCONF  += Qt$(NH_QT_MAJOR)Sql
+# QWidget, QDialog: Nickel's conflict dialog.
+override PKGCONF  += Qt$(NH_QT_MAJOR)Widgets
 override CFLAGS   += -Wall -Wextra -Werror -Wno-missing-field-initializers -fvisibility=hidden
 override CXXFLAGS += -Wall -Wextra -Werror -Wno-missing-field-initializers -fvisibility=hidden -fvisibility-inlines-hidden
 

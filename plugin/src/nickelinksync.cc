@@ -41,8 +41,18 @@
  *   and the place in the chapter from the row it loads again, so they have
  *   to agree (docs/nickel-5.18-symbols.md).
  *
- *   A conflict (both sides moved since the base, NICKELINKSYNC_CONFLICT) is
- *   only reported for now and left alone; the book is not pushed on leaving.
+ *   A conflict (both sides moved since the base, or a position the rule
+ *   asks about, NICKELINKSYNC_CONFLICT) is asked about before Nickel opens
+ *   the book, in Nickel's ConfirmationDialog with both sides (percent,
+ *   section, time, device) and three buttons: "take the server's" (its
+ *   accept button) pulls again with `--answered <server time>` and goes on
+ *   as with any pulled position; "keep the device's" (an N3ButtonLabel of
+ *   ours: C0 found that a plain QPushButton gets no taps) pushes with
+ *   `--answered` in the background, and the CLI keeps the base; "later"
+ *   (its reject button, also the close button and a tap outside) leaves
+ *   both alone, and the book is not pushed on leaving. `--answered` does
+ *   nothing if the server moved again meanwhile. Without the dialog's
+ *   symbols the conflict is only reported.
  *
  * Leaving (ReadingView::leavingReadingExperience()):
  *   The original saves the position (saveProgress); after it returns, the CLI
@@ -111,14 +121,18 @@
 
 #include <NickelHook.h>
 
+#include <QAction>
+#include <QBoxLayout>
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QDialog>
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLabel>
 #include <QLocale>
 #include <QMap>
 #include <QProcess>
@@ -129,9 +143,12 @@
 #include <QString>
 #include <QVariant>
 #include <QStringList>
+#include <QTime>
 #include <QTimer>
+#include <QWidget>
 
 #include <cstdio>
+#include <memory>
 #include <dlfcn.h>
 #include <unistd.h>
 
@@ -195,10 +212,12 @@ static const size_t kBookmarkBytes = 64;
 // test), so the check asks again every second, kCheckOpenTries times, up to
 // 15 s in all. Since stale cached pages are dropped (PR #48) Nickel renders
 // the chapter fresh and knew its place only after 8 s in a device test
-// (31.10.), close to the old limit of 11 s; a bigger book takes longer.
+// (31.10.), close to the old limit of 11 s; a bigger book takes longer. On
+// the Clara BW (8.11.) it took longer than 15 s after 51 dropped pages, so
+// the check waits up to 48 s and flags nothing if Nickel still has no place.
 static const int kCheckOpenMs = 3000;
 static const int kCheckOpenRetryMs = 1000;
-static const int kCheckOpenTries = 12;
+static const int kCheckOpenTries = 45;
 // Toasts: how long they stay (Nickel's own use 1500 ms), and how long after
 // setVolume the one about opening is queued, once the reading view is up.
 static const int kToastMs = 5000;
@@ -235,9 +254,11 @@ static void (*Volume__copy)(Volume *, const Volume *);  // Volume(Volume const&)
 #else
 // 4.38 has no Bookmark::isNull; on 5.x it is `*this == Bookmark()`, which
 // 4.38 has both parts of (docs/nickel-4.38-symbols.md).
-static void (*Bookmark__ctor)(Bookmark *);
 static bool (*Bookmark__equals)(const Bookmark *, const Bookmark *);
 #endif
+// A Bookmark() is what Nickel opens a book with when nothing points into it;
+// the conflict dialog opens the book later with one.
+static void (*Bookmark__ctor)(Bookmark *);
 static void (*Volume__dtor)(Volume *);
 static void (*Content__setChapterIdBookmarked)(Volume *, const QVariant &);
 static void (*Content__setPercentRead)(Volume *, const QVariant &);
@@ -333,6 +354,24 @@ static bool g_no_index_noticed = false;
 // push would ask (confirm = backwards) although nothing was read.
 static QString g_taken_id;
 static QString g_taken_page;
+
+// Optional: the conflict dialog (docs/nickel-6.0-symbols.md, the same names
+// on 4.38, 5.18 and 6.0). getConfirmationDialog returns a
+// ConfirmationDialog, a QDialog; acceptButton and rejectButton its two
+// N3ButtonLabels. An N3ButtonLabel (a TouchLabel, a QLabel) is 0x88 bytes on
+// 5.18 and 6.0 and 0x98 on 4.38 (what Ui_ConfirmationDialog::setupUi
+// allocates); kButtonBytes leaves room to spare. Its signal tapped(bool) is
+// connected by name.
+static QWidget *(*ConfirmationDialogFactory__getConfirmationDialog)(QWidget *);
+static void (*ConfirmationDialog__setTitle)(QWidget *, const QString &);
+static void (*ConfirmationDialog__setText)(QWidget *, const QString &);
+static void (*ConfirmationDialog__setAcceptButtonText)(QWidget *, const QString &);
+static void (*ConfirmationDialog__setRejectButtonText)(QWidget *, const QString &);
+static QWidget *(*ConfirmationDialog__acceptButton)(const QWidget *);
+static QWidget *(*ConfirmationDialog__rejectButton)(const QWidget *);
+static void (*ConfirmationDialog__addWidget)(QWidget *, QWidget *);
+static void (*N3ButtonLabel__ctor)(QWidget *, QWidget *);
+static const size_t kButtonBytes = 512;
 
 static void log_line(const QString &msg)
 {
@@ -452,6 +491,11 @@ static QString skip_reason(const QByteArray &reason)
     }
     if (reason == "no-table") {
         return QStringLiteral("Zuordnung nicht vorbereitet");
+    }
+    // An answer to the conflict dialog about a server position that
+    // changed while it was open.
+    if (reason == "server-changed") {
+        return QStringLiteral("Server hat sich inzwischen geändert");
     }
     return QStringLiteral("Buch oder Position nicht lesbar");
 }
@@ -695,7 +739,8 @@ static bool update_state(const QString &id, F change)
     QJsonObject entry = books.value(id).toObject();
     change(entry);
     if (entry.contains(QStringLiteral("base")) || entry.contains(QStringLiteral("not_in_line"))
-        || entry.contains(QStringLiteral("pending"))) {
+        || entry.contains(QStringLiteral("pending")) || entry.contains(QStringLiteral("deferred"))
+        || entry.contains(QStringLiteral("deferred_at"))) {
         books.insert(id, entry);
     } else {
         books.remove(id);
@@ -742,6 +787,20 @@ static bool set_base(const QString &id, const QJsonObject &base)
         entry.insert(QStringLiteral("base"), base);
         entry.remove(QStringLiteral("not_in_line"));
         entry.remove(QStringLiteral("pending"));
+        entry.remove(QStringLiteral("deferred"));
+        entry.remove(QStringLiteral("deferred_at"));
+    });
+}
+
+// "Later" in the conflict dialog: the server time of the position it showed.
+// The CLI asks again while the server holds that position, however Nickel's
+// DateLastRead moves (opening and leaving bump it, which would make the
+// device the newer side).
+static void set_deferred(const QString &id, qint64 server_time, const QString &server_position)
+{
+    update_state(id, [server_time, server_position](QJsonObject &entry) {
+        entry.insert(QStringLiteral("deferred"), static_cast<double>(server_time));
+        entry.insert(QStringLiteral("deferred_at"), server_position);
     });
 }
 
@@ -832,6 +891,10 @@ static void check_open(const QString &id, const QString &target, const QString &
         return;
     }
     log_line(QStringLiteral("after opening (%1 ms): Nickel is at %2, pulled %3").arg(waited_ms).arg(at, target));
+    if (at.isEmpty()) {
+        log_line(QStringLiteral("after opening: Nickel still shows no place, nothing flagged"));
+        return;
+    }
     if (near(at, target)) {
         log_line(QStringLiteral("after opening: Nickel is at %1, on the page with the pulled point").arg(at));
         taken_from_server(id, at, taken);
@@ -940,8 +1003,8 @@ static void notice_no_index(const QByteArray &out)
 }
 
 // NICKELINKSYNC_CONFLICT (ContentID, why, device percent, time, position,
-// server percent, time, device, XPointer), for the log; the dialog that
-// answers it comes later (stage C5).
+// server percent, time, device, XPointer, device XPointer), for the log;
+// on opening, ask() shows it.
 static void log_conflicts(const QByteArray &out)
 {
     for (const QList<QByteArray> &f : machine_lines(out, "CONFLICT")) {
@@ -959,8 +1022,10 @@ struct Pulled {
     QByteArray error_kind;
     // A position would need an answer the plugin cannot give.
     bool unanswered = false;
-    // Both sides moved since the base (NICKELINKSYNC_CONFLICT).
+    // Both sides moved since the base, or a position needs an answer:
+    // NICKELINKSYNC_CONFLICT, and its fields for the dialog.
     bool conflict = false;
+    QList<QByteArray> conflict_fields;
     // The server's position cannot be taken (NICKELINKSYNC_NOT_TAKEN): why.
     QByteArray not_taken;
     // The device was not prepared (NICKELINKSYNC_NO_INDEX): a mapped book is
@@ -982,13 +1047,14 @@ struct Pulled {
 // --nickel-writes --emit`, which only decides and makes the day's backup,
 // on a Tolino `pull --live --write --emit`, which also writes. Both print
 // a position to take as `NICKELINKSYNC_POSITION<tab>percent<tab>position`.
-// Found only if the CLI finished with exit 0.
-static Pulled pull(const QString &id)
+// Found only if the CLI finished with exit 0. `extra`: more arguments
+// (`--answered`).
+static Pulled pull(const QString &id, const QStringList &extra = QStringList())
 {
     Pulled result;
     QStringList args = book_args("pull", id);
     args << (g_kobo ? QStringLiteral("--nickel-writes") : QStringLiteral("--write")) << QStringLiteral("--emit")
-         << QStringLiteral("--timeout") << QString::fromLatin1(kPullTimeout);
+         << QStringLiteral("--timeout") << QString::fromLatin1(kPullTimeout) << extra;
     QProcess p;
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     env.insert(QStringLiteral("NICKELINKSYNC_BACKUP_DIR"), QString::fromLatin1(kBackups));
@@ -1021,7 +1087,11 @@ static Pulled pull(const QString &id)
     result.ok = true;
     result.no_index = !machine_lines(out, "NO_INDEX").isEmpty();
     result.unanswered = !machine_lines(out, "UNANSWERED").isEmpty();
-    result.conflict = !machine_lines(out, "CONFLICT").isEmpty();
+    const QList<QList<QByteArray>> conflicts = machine_lines(out, "CONFLICT");
+    result.conflict = !conflicts.isEmpty();
+    if (result.conflict) {
+        result.conflict_fields = conflicts[0];
+    }
     log_conflicts(out);
     const QList<QList<QByteArray>> not_taken = machine_lines(out, "NOT_TAKEN");
     if (!not_taken.isEmpty()) {
@@ -1253,6 +1323,132 @@ static void sync_pending()
     });
 }
 
+// The conflict dialog (stage C5): what the reader answered.
+enum class Answer { Later, Server, Device };
+
+static bool can_ask()
+{
+    return ConfirmationDialogFactory__getConfirmationDialog && ConfirmationDialog__setTitle
+        && ConfirmationDialog__setText && ConfirmationDialog__setAcceptButtonText
+        && ConfirmationDialog__setRejectButtonText && ConfirmationDialog__acceptButton
+        && ConfirmationDialog__rejectButton && ConfirmationDialog__addWidget && N3ButtonLabel__ctor;
+}
+
+// "Abschnitt 12" from a KOReader XPointer (`/body/DocFragment[12]/…`, the
+// spine item), empty without one.
+static QString section_of(const QByteArray &xpointer)
+{
+    const QByteArray key("DocFragment[");
+    const int start = xpointer.indexOf(key);
+    const int end = start < 0 ? -1 : xpointer.indexOf(']', start);
+    bool ok = false;
+    const int n = end < 0 ? 0 : xpointer.mid(start + key.size(), end - start - key.size()).toInt(&ok);
+    return ok ? QStringLiteral("Abschnitt %1").arg(n) : QString();
+}
+
+// Unix seconds as the device's local time, empty without them.
+static QString time_of(const QByteArray &seconds)
+{
+    bool ok = false;
+    const qint64 s = seconds.toLongLong(&ok);
+    if (!ok || s <= 0) {
+        return QString();
+    }
+    // fromSecsSinceEpoch came only in Qt 5.8.
+    const QDateTime when = QDateTime::fromMSecsSinceEpoch(s * 1000).toLocalTime();
+    const bool this_year = when.date().year() == QDate::currentDate().year();
+    return when.toString(this_year ? QStringLiteral("dd.MM. HH:mm") : QStringLiteral("dd.MM.yyyy HH:mm"));
+}
+
+// One side for the dialog: `percent %, section, device, time`, leaving out
+// what is unknown.
+static QString side_of(const QByteArray &percent, const QByteArray &xpointer, const QString &device,
+                       const QByteArray &time)
+{
+    QStringList parts;
+    parts << QStringLiteral("%1 %").arg(QString::fromUtf8(percent));
+    for (const QString &part : {section_of(xpointer), device, time_of(time)}) {
+        if (!part.isEmpty()) {
+            parts << part;
+        }
+    }
+    return parts.join(QStringLiteral(", "));
+}
+
+// A third button for the dialog, a Nickel widget like its own two (an
+// N3ButtonLabel: a QPushButton gets no taps, C0), next to the reject
+// button and looking like it. Null if it cannot be made.
+static QWidget *third_button(QWidget *dialog, const QString &text)
+{
+    QWidget *reject = ConfirmationDialog__rejectButton(dialog);
+    QWidget *row = reject ? reject->parentWidget() : nullptr;
+    QWidget *button = static_cast<QWidget *>(::operator new(kButtonBytes));
+    N3ButtonLabel__ctor(button, row ? row : dialog);
+    QLabel *label = qobject_cast<QLabel *>(button);
+    if (!label || !reject) {
+        log_line(QStringLiteral("conflict dialog: no button of Nickel's (%1, %2)")
+                     .arg(QLatin1String(button->metaObject()->className()))
+                     .arg(QLatin1String(reject ? reject->metaObject()->className() : "no reject button")));
+        delete button;
+        return nullptr;
+    }
+    // The dialog's style sheet makes its two buttons primary buttons
+    // (`#acceptButton,#rejectButton{qproperty-primaryButton:true}`), which
+    // Nickel's style sheet draws grey and centred.
+    button->setProperty("primaryButton", true);
+    label->setText(text);
+    QBoxLayout *layout = row ? qobject_cast<QBoxLayout *>(row->layout()) : nullptr;
+    const int at = layout ? layout->indexOf(reject) : -1;
+    if (at >= 0) {
+        layout->insertWidget(at, button);
+        // Nickel fits a button's text to the width it gets, so three side by
+        // side showed three sizes (VM, device test); one under the other
+        // each gets the dialog's width and the same size. Server's, then
+        // the device's, then later.
+        QWidget *accept = ConfirmationDialog__acceptButton(dialog);
+        QWidget *order[] = {accept, button, reject};
+        layout->setDirection(QBoxLayout::TopToBottom);
+        for (QWidget *w : order) {
+            layout->removeWidget(w);
+        }
+        for (int i = 0; i < 3; ++i) {
+            layout->insertWidget(i, order[i]);
+        }
+        QStringList items;
+        for (int i = 0; i < layout->count(); ++i) {
+            QWidget *w = layout->itemAt(i)->widget();
+            items << (w ? w->objectName() + QLatin1Char('/') + QString::number(w->font().pixelSize()) : QStringLiteral("spacer"));
+        }
+        log_line(QStringLiteral("conflict dialog: layout %1").arg(items.join(QLatin1Char(' '))));
+    } else {
+        ConfirmationDialog__addWidget(dialog, button);
+    }
+    log_line(QStringLiteral("conflict dialog: button %1 in %2 (%3 at %4), reject button %5")
+                 .arg(QLatin1String(button->metaObject()->className()))
+                 .arg(QLatin1String(row ? row->metaObject()->className() : "the dialog"))
+                 .arg(QLatin1String(layout ? layout->metaObject()->className() : "no box layout"))
+                 .arg(at)
+                 .arg(reject->objectName()));
+    return button;
+}
+
+static void push_finished(const QString &id, QProcess *p);
+
+// "Keep the device's": pushes the book in the background with the answer;
+// the CLI sends only while the server holds what the dialog showed, and
+// keeps the base.
+static void push_answered(const QString &id, const QByteArray &server_time)
+{
+    if (kobalt_blocks()) {
+        return;
+    }
+    log_line(QStringLiteral("push %1 --answered %2").arg(id, QString::fromLatin1(server_time)));
+    QStringList args = book_args("push", id);
+    args << QStringLiteral("--emit") << QStringLiteral("--timeout") << QString::fromLatin1(kPushTimeout)
+         << QStringLiteral("--answered") << QString::fromLatin1(server_time);
+    start_cli(QStringLiteral("push --answered"), args, [id](QProcess *p) { push_finished(id, p); });
+}
+
 // Nickel's own ReadingController::setVolume, once keep_open_hook() put this
 // hook in front of another mod's, and whether the hook is inside its call of
 // the original (that mod's hook, Nickel's, or one between them).
@@ -1265,6 +1461,244 @@ static void open_original(ReadingController *self, const Volume *volume, const B
     g_in_original = true;
     ReadingController__setVolume(self, volume, bookmark);
     g_in_original = false;
+}
+
+// How long after the dialog ended its answer is carried out: a tap's slot
+// follows within a few milliseconds and may name the answer (ConflictAsk).
+static const int kAnswerDelayMs = 400;
+
+// What the conflict dialog shows and answers (stage C5). The book is not
+// opened when the CLI reports the conflict: the hook returns, the dialog
+// comes up from the event loop (not from inside the tap that opened the
+// book: on the Clara BW no tap on its buttons ever arrived while it ran in
+// a nested loop there, only the close cross worked), and the book opens
+// once it is answered, from a fresh Volume and an empty Bookmark.
+struct ConflictAsk {
+    ReadingController *self;
+    QString id;
+    Pulled pulled;
+    bool answered;
+    // What a tap on one of our connected buttons asked for (the dialog's
+    // result code), or -1. On the Clara BW the dialog ended with 0 on every
+    // tap, also on "Server übernehmen" and our own button, before the tap
+    // reached its slot: the dialog's result cannot be trusted, the tap is.
+    int intent;
+};
+
+// A fresh Volume from Nickel's cache opens the book; false if Nickel does
+// not know it.
+static bool open_fresh(ReadingController *self, const QString &id)
+{
+    alignas(8) unsigned char fresh[kVolumeBytes];
+    alignas(8) unsigned char empty[kBookmarkBytes];
+    VolumeManager__getById(fresh, id, Device__getDbName(Device__getCurrentDevice()));
+    const bool known = Volume__isValid(fresh);
+    if (known) {
+        g_open_row = row_of(fresh);
+        Bookmark__ctor(empty);
+        open_original(self, fresh, empty);
+        Bookmark__dtor(empty);
+    } else {
+        log_line(QStringLiteral("open %1: Nickel does not know the book, nothing opened").arg(id));
+    }
+    Volume__dtor(fresh);
+    return known;
+}
+
+// "Server übernehmen": pulls again with the answer and takes the position
+// as a normal opening does, then opens the book.
+static void take_server_answer(const std::shared_ptr<ConflictAsk> &c)
+{
+    const QString id = c->id;
+    // Nickel may have switched Wi-Fi off while the dialog was open (in the
+    // VM it did).
+    wait_online(kOpenWifiMs);
+    const QByteArray server_time = c->pulled.conflict_fields.value(6);
+    const Pulled p = pull(id, QStringList{QStringLiteral("--answered"), QString::fromLatin1(server_time)});
+    if (!p.ok || p.conflict || !p.found) {
+        g_not_synced = id;
+        g_not_synced_why = QStringLiteral("Konflikt, bleibt liegen");
+        log_line(QStringLiteral("open %1 unchanged: the answer could not be carried out").arg(id));
+        open_fresh(c->self, id);
+        toast(true, QStringLiteral("Nicht übernommen"),
+              p.ok ? (p.not_taken.isEmpty() ? g_not_synced_why : skip_reason(p.not_taken)) : p.error, kOpenToastDelayMs);
+        return;
+    }
+    log_line(QStringLiteral("open %1 at %2 (%3 %), the reader took the server's").arg(id, QString::fromUtf8(p.position)).arg(p.percent));
+    g_not_synced = id;
+    g_not_synced_why = QStringLiteral("Beim Öffnen nicht abgeglichen");
+    if (!write_through_nickel(id, p)) {
+        open_fresh(c->self, id);
+        toast(true, QStringLiteral("Nicht übernommen"), QStringLiteral("Nickel schreibt nicht, siehe Log"),
+              kOpenToastDelayMs);
+        return;
+    }
+    if (p.base.isEmpty() || !set_base(id, p.base)) {
+        log_line(QStringLiteral("no base kept for %1: the next sync decides without it").arg(id));
+    }
+    open_fresh(c->self, id);
+    const QString target = QString::fromUtf8(p.position);
+    const QString taken = p.from.isEmpty() ? QStringLiteral("%1 %").arg(p.percent)
+                                           : QStringLiteral("%1 %, von %2").arg(p.percent).arg(p.from);
+    QTimer::singleShot(kCheckOpenMs, qApp, [id, target, taken] { check_open(id, target, taken, kCheckOpenTries); });
+}
+
+// The dialog is over: carries out the answer and opens the book.
+static void conflict_answered(const std::shared_ptr<ConflictAsk> &c, int dialog_ended_with)
+{
+    if (c->answered) {
+        return;
+    }
+    c->answered = true;
+    const int dialog_result = dialog_ended_with;
+    const int result = c->intent >= 0 ? c->intent : dialog_ended_with;
+    const Answer answer = result == QDialog::Accepted ? Answer::Server : result == 2 ? Answer::Device : Answer::Later;
+    log_line(QStringLiteral("conflict dialog: answered %1 (%2), the dialog itself ended with %3")
+                 .arg(result)
+                 .arg(QLatin1String(answer == Answer::Server ? "take the server's"
+                                    : answer == Answer::Device ? "keep the device's" : "later"))
+                 .arg(dialog_result));
+    const QString id = c->id;
+    if (answer == Answer::Server && !kobalt_blocks()) {
+        take_server_answer(c);
+    } else if (answer == Answer::Device && !kobalt_blocks()) {
+        log_line(QStringLiteral("open %1 unchanged: the reader keeps the device's position").arg(id));
+        open_fresh(c->self, id);
+        // The pending list follows the push.
+        const QByteArray server_time = c->pulled.conflict_fields.value(6);
+        when_online(kWifiLeaveWaitS, [id, server_time] { push_answered(id, server_time); });
+        return;
+    } else {
+        if (answer == Answer::Later) {
+            set_deferred(id, c->pulled.conflict_fields.value(6).toLongLong(),
+                         QString::fromUtf8(c->pulled.conflict_fields.value(8)));
+        }
+        g_not_synced = id;
+        g_not_synced_why = QStringLiteral("Konflikt, später entscheiden");
+        log_line(QStringLiteral("open %1 unchanged: a conflict, left alone; leaving it will not push").arg(id));
+        open_fresh(c->self, id);
+    }
+    QTimer::singleShot(kPendingDelayMs, qApp, [] { sync_pending(); });
+}
+
+static const char *event_name(QEvent::Type type)
+{
+    switch (type) {
+    case QEvent::MouseButtonPress: return "MouseButtonPress";
+    case QEvent::MouseButtonRelease: return "MouseButtonRelease";
+    case QEvent::MouseButtonDblClick: return "MouseButtonDblClick";
+    case QEvent::TouchBegin: return "TouchBegin";
+    case QEvent::TouchEnd: return "TouchEnd";
+    case QEvent::TouchCancel: return "TouchCancel";
+    case QEvent::Gesture: return "Gesture";
+    case QEvent::GestureOverride: return "GestureOverride";
+    default: return nullptr;
+    }
+}
+
+// While the dialog is up, logs every press, release, touch and gesture
+// with its time and the widget it goes to (the first 60), to see on a
+// device what reaches the buttons.
+class TapLog : public QObject {
+public:
+    TapLog() : m_left(60) {}
+    bool eventFilter(QObject *object, QEvent *event) override
+    {
+        const char *name = event_name(event->type());
+        if (name && m_left > 0) {
+            --m_left;
+            log_line(QStringLiteral("tap log %1 %2 -> %3 '%4'")
+                         .arg(QTime::currentTime().toString(QStringLiteral("HH:mm:ss.zzz")), QLatin1String(name),
+                              QLatin1String(object->metaObject()->className()), object->objectName()));
+        }
+        return false;
+    }
+
+private:
+    int m_left;
+};
+
+// A tap on one of the dialog's buttons ends it with `code`: connected by
+// name to a QAction's trigger(), because tapped(bool) is a signal of
+// Nickel's TouchLabel and not known here.
+static void answer_on_tap(QWidget *button, QDialog *dialog, const std::shared_ptr<ConflictAsk> &c, int code,
+                          const QString &what)
+{
+    QAction *action = new QAction(button);
+    const bool connected = QObject::connect(button, SIGNAL(tapped(bool)), action, SLOT(trigger()));
+    QObject::connect(action, &QAction::triggered, dialog, [dialog, c, code, what] {
+        c->intent = code;
+        log_line(QStringLiteral("conflict dialog: tapped %1 at %2").arg(what, QTime::currentTime().toString(QStringLiteral("HH:mm:ss.zzz"))));
+        dialog->done(code);
+    });
+    log_line(QStringLiteral("conflict dialog: %1 button '%2' connected %3").arg(what, button->objectName()).arg(connected));
+}
+
+// Shows NICKELINKSYNC_CONFLICT (see log_conflicts()) in Nickel's
+// ConfirmationDialog: accept = take the server's, the third button = keep
+// the device's, reject (also its close button) = later. Returns at once;
+// the answer opens the book. False if the dialog cannot be shown (the book
+// then opens as it is).
+static bool show_conflict_dialog(const std::shared_ptr<ConflictAsk> &c)
+{
+    const QList<QByteArray> &f = c->pulled.conflict_fields;
+    if (!can_ask() || f.size() < 9) {
+        log_line(QStringLiteral("conflict dialog: not available (symbols %1, %2 fields)").arg(can_ask()).arg(f.size()));
+        return false;
+    }
+    QWidget *d = ConfirmationDialogFactory__getConfirmationDialog(nullptr);
+    QDialog *dialog = qobject_cast<QDialog *>(d);
+    if (!dialog) {
+        log_line(QStringLiteral("conflict dialog: not a QDialog"));
+        delete d;
+        return false;
+    }
+    const QByteArray why = f.value(1);
+    const QString reason = why == "both-moved"
+        ? QStringLiteral("Seit dem letzten Abgleich wurde hier und auf einem anderen Gerät weitergelesen.")
+        : why == "always" ? QStringLiteral("Jede Änderung wird bestätigt (confirm = always).")
+                          : QStringLiteral("Die Stelle vom Server liegt vor der auf diesem Gerät.");
+    // ConfirmationDialog shows "\n" as a space (C0); the label takes HTML.
+    const QString text = QStringLiteral("%1<br><br><b>Dieses Gerät:</b> %2<br><b>Server:</b> %3")
+                             .arg(reason.toHtmlEscaped(),
+                                  side_of(f.value(2), f.value(9), QString(), f.value(3)).toHtmlEscaped(),
+                                  side_of(f.value(5), f.value(8), QString::fromUtf8(f.value(7)), f.value(6))
+                                      .toHtmlEscaped());
+    ConfirmationDialog__setTitle(d, why == "both-moved" ? QStringLiteral("Lesestand: Konflikt")
+                                                        : QStringLiteral("Lesestand vom Server übernehmen?"));
+    ConfirmationDialog__setText(d, text);
+    ConfirmationDialog__setAcceptButtonText(d, QStringLiteral("Server übernehmen"));
+    ConfirmationDialog__setRejectButtonText(d, QStringLiteral("Später"));
+    QWidget *keep = third_button(d, QStringLiteral("Gerät behalten"));
+    if (!keep) {
+        delete d;
+        return false;
+    }
+    answer_on_tap(ConfirmationDialog__acceptButton(d), dialog, c, QDialog::Accepted, QStringLiteral("accept (server)"));
+    answer_on_tap(keep, dialog, c, 2, QStringLiteral("keep (device)"));
+    answer_on_tap(ConfirmationDialog__rejectButton(d), dialog, c, QDialog::Rejected, QStringLiteral("reject (later)"));
+    // Nickel's own connections end the dialog too (its reject and close
+    // buttons); the first done() wins, and finished() comes once.
+    // The answer is carried out from the event loop, after the dialog is
+    // gone: the pull and the write take seconds.
+    QObject::connect(dialog, &QDialog::finished, qApp, [c, dialog](int result) {
+        dialog->hide();
+        dialog->deleteLater();
+        QTimer::singleShot(kAnswerDelayMs, qApp, [c, result] { conflict_answered(c, result); });
+    });
+    // Without a finished() (the dialog destroyed by Nickel) the book would
+    // never open: that counts as "later".
+    QObject::connect(dialog, &QObject::destroyed, qApp, [c] { conflict_answered(c, QDialog::Rejected); });
+    TapLog *taplog = new TapLog;
+    qApp->installEventFilter(taplog);
+    QObject::connect(dialog, &QObject::destroyed, taplog, [taplog] {
+        qApp->removeEventFilter(taplog);
+        taplog->deleteLater();
+    });
+    log_line(QStringLiteral("conflict dialog: shown (%1) at %2")
+                 .arg(QString::fromUtf8(why), QTime::currentTime().toString(QStringLiteral("HH:mm:ss.zzz"))));
+    dialog->open();
+    return true;
 }
 
 extern "C" __attribute__((visibility("default")))
@@ -1317,7 +1751,7 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     if (!wifi) {
         log_line(QStringLiteral("Nickel reports no internet; trying anyway"));
     }
-    const Pulled p = pull(id);
+    Pulled p = pull(id);
     if (!p.ok) {
         // Pushed on leaving only if the position moved; without a network
         // the CLI then keeps it pending.
@@ -1333,17 +1767,35 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
               no_wifi ? QStringLiteral("Kein WLAN oder kein Server") : p.error, kOpenToastDelayMs);
         return;
     }
-    // The server answered: send what is pending once the book is up.
-    QTimer::singleShot(kPendingDelayMs, qApp, [] { sync_pending(); });
+    // The server answered: send what is pending once the book is up (after
+    // the conflict dialog, which may answer for a pending book itself).
     if (p.conflict) {
+        if (g_kobo && !kobalt_blocks()) {
+            // Not from inside this call, which Nickel makes from the tap on
+            // the book: the dialog comes from the event loop, and the book
+            // opens once it is answered. Without a dialog it opens as it is.
+            auto ask = std::make_shared<ConflictAsk>(ConflictAsk{self, id, p, false, -1});
+            QTimer::singleShot(0, qApp, [ask] {
+                if (!show_conflict_dialog(ask)) {
+                    g_not_synced = ask->id;
+                    g_not_synced_why = QStringLiteral("Konflikt, bleibt liegen");
+                    open_fresh(ask->self, ask->id);
+                    toast(true, QStringLiteral("Konflikt, nicht geladen"),
+                          QStringLiteral("Server und Gerät bewegt, bleibt liegen"), kOpenToastDelayMs);
+                }
+            });
+            return;
+        }
         g_not_synced = id;
         g_not_synced_why = QStringLiteral("Konflikt, bleibt liegen");
         log_line(QStringLiteral("open %1 unchanged: a conflict, left alone; leaving it will not push").arg(id));
         open_original(self, volume, bookmark);
         toast(true, QStringLiteral("Konflikt, nicht geladen"), QStringLiteral("Server und Gerät bewegt, bleibt liegen"),
               kOpenToastDelayMs);
+        QTimer::singleShot(kPendingDelayMs, qApp, [] { sync_pending(); });
         return;
     }
+    QTimer::singleShot(kPendingDelayMs, qApp, [] { sync_pending(); });
     if (p.unanswered) {
         g_not_synced = id;
         g_not_synced_why = kUnansweredReason;
@@ -1676,9 +2128,9 @@ static struct nh_dlsym NickelInkSyncDlsym[] = {
     // 4.38 has no Bookmark::isNull, no exported Volume copy constructor (no
     // Tolino to copy for) and no ContentLocation (docs/nickel-4.38-symbols.md).
     {.name = "_ZNK7Content5getIdEv", .out = nh_symoutptr(Content__getId), .desc = "Book ID"},
-    {.name = "_ZN8BookmarkC1Ev", .out = nh_symoutptr(Bookmark__ctor), .desc = "Opened without a bookmark"},
     {.name = "_ZNK8BookmarkeqERKS_", .out = nh_symoutptr(Bookmark__equals), .desc = "Opened without a bookmark"},
 #endif
+    {.name = "_ZN8BookmarkC1Ev", .out = nh_symoutptr(Bookmark__ctor), .desc = "Opened without a bookmark"},
     {.name = "_ZN6VolumeD1Ev", .out = nh_symoutptr(Volume__dtor), .desc = "Copy of the book to open"},
     {.name = "_ZN7Content22setChapterIdBookmarkedERK8QVariant", .out = nh_symoutptr(Content__setChapterIdBookmarked), .desc = "Pulled position"},
     {.name = "_ZN7Content14setPercentReadERK8QVariant", .out = nh_symoutptr(Content__setPercentRead), .desc = "Pulled percentage"},
@@ -1718,6 +2170,16 @@ static struct nh_dlsym NickelInkSyncDlsym[] = {
     {.name = "_ZN15DatabaseAdapter12dbConnectionE7QStringb", .out = nh_symoutptr(DatabaseAdapter__dbConnection), .desc = "Write (Kobo)", .optional = true},
     {.name = "_ZN13VolumeManager14updateBookmarkER6VolumeRK7QStringiRK9QDateTime", .out = nh_symoutptr(VolumeManager__updateBookmark), .desc = "Write (Kobo)", .optional = true},
 #endif
+    // The conflict dialog (the same names on 4.38, 5.18 and 6.0).
+    {.name = "_ZN25ConfirmationDialogFactory21getConfirmationDialogEP7QWidget", .out = nh_symoutptr(ConfirmationDialogFactory__getConfirmationDialog), .desc = "Conflict dialog", .optional = true},
+    {.name = "_ZN18ConfirmationDialog8setTitleERK7QString", .out = nh_symoutptr(ConfirmationDialog__setTitle), .desc = "Conflict dialog", .optional = true},
+    {.name = "_ZN18ConfirmationDialog7setTextERK7QString", .out = nh_symoutptr(ConfirmationDialog__setText), .desc = "Conflict dialog", .optional = true},
+    {.name = "_ZN18ConfirmationDialog19setAcceptButtonTextERK7QString", .out = nh_symoutptr(ConfirmationDialog__setAcceptButtonText), .desc = "Conflict dialog", .optional = true},
+    {.name = "_ZN18ConfirmationDialog19setRejectButtonTextERK7QString", .out = nh_symoutptr(ConfirmationDialog__setRejectButtonText), .desc = "Conflict dialog", .optional = true},
+    {.name = "_ZNK18ConfirmationDialog12acceptButtonEv", .out = nh_symoutptr(ConfirmationDialog__acceptButton), .desc = "Conflict dialog", .optional = true},
+    {.name = "_ZNK18ConfirmationDialog12rejectButtonEv", .out = nh_symoutptr(ConfirmationDialog__rejectButton), .desc = "Conflict dialog", .optional = true},
+    {.name = "_ZN18ConfirmationDialog9addWidgetEP7QWidget", .out = nh_symoutptr(ConfirmationDialog__addWidget), .desc = "Conflict dialog", .optional = true},
+    {.name = "_ZN13N3ButtonLabelC1EP7QWidget", .out = nh_symoutptr(N3ButtonLabel__ctor), .desc = "Conflict dialog", .optional = true},
     {0},
 };
 

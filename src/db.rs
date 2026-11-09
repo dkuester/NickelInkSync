@@ -346,7 +346,7 @@ fn update_rows(conn: &mut Connection, writes: &[Write]) -> Result<usize, Error> 
 /// docs/nickel-5.18-symbols.md): if no cached page holds the bookmarked
 /// place, it takes the chapter's first page if that one is cached
 /// (`getByChapterInPersistence` in the log). It looks the pages up in the
-/// database at every opening, so dropping them needs no restart. So when no cached page holds `position`, this drops the cached
+/// database at every opening, so dropping them needs no restart. So unless a cached page starts at `position`, this drops the cached
 /// pages of its chapter, and Nickel renders the page at the place. The other
 /// chapters keep theirs. Returns how many pages it dropped; 0 without those
 /// tables (older firmware).
@@ -366,8 +366,11 @@ fn drop_stale_pages(tx: &Connection, content_id: &str, position: &str) -> Result
 }
 
 /// The ids (`CachePersistenceRenderedPageData.id`) of the cached pages
-/// [`drop_stale_pages`] drops for `position`: those of its chapter if none
-/// of them holds it, else none.
+/// [`drop_stale_pages`] drops for `position`: those of its chapter unless one
+/// of them starts exactly at it, else none. A page that only holds the place
+/// is not enough: on the Clara BW (6.0) Nickel opened such a book at the
+/// chapter start (device test 8 Nov 2026, `kobo.87.1` inside the cached page
+/// `86.1:236`–`89.1:0`, 0 dropped).
 fn stale_pages(conn: &Connection, content_id: &str, position: &str) -> Result<Vec<String>, Error> {
   let has_cache: bool = conn.query_row(
     "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table'
@@ -394,21 +397,26 @@ fn stale_pages(conn: &Connection, content_id: &str, position: &str) -> Result<Ve
     ))
   })? {
     let (id, start, end) = row?;
-    let (Some((start_file, start)), Some((_, end))) =
-      (split_location(&start), split_location(&end))
+    let (Some((start_file, start)), Some(_)) = (split_location(&start), split_location(&end))
     else {
       continue;
     };
     if start_file != file {
       continue;
     }
-    if start <= target && target <= end {
+    if same_place(&start, &target) {
       // Nickel finds this page by the place itself.
       return Ok(Vec::new());
     }
     chapter.push(id);
   }
   Ok(chapter)
+}
+
+/// Whether two places are the same, `kobo.87.1` and `kobo.87.1:0` included.
+fn same_place(a: &[i64], b: &[i64]) -> bool {
+  let trim = |x: &[i64]| x.iter().rposition(|n| *n != 0).map_or(0, |i| i + 1);
+  a[..trim(a)] == b[..trim(b)]
 }
 
 /// A location's chapter file and the numbers after it, to compare places in
@@ -757,14 +765,25 @@ mod tests {
            ('c', 'c3.xhtml#kobo.1.1', 'c3.xhtml#kobo.4.1:7', 'book');",
       )
       .unwrap();
-    // In page b: nothing goes.
+    // Where page b starts, with or without the offset: nothing goes.
     assert_eq!(
-      drop_stale_pages(&conn, "book", "c2.xhtml#kobo.6.1:3").unwrap(),
+      drop_stale_pages(&conn, "book", "c2.xhtml#kobo.3.1:121").unwrap(),
       0
     );
     assert_eq!(
-      drop_stale_pages(&conn, "book", "c2.xhtml#kobo.3.1").unwrap(),
+      drop_stale_pages(&conn, "book", "c2.xhtml#kobo.1.1:0").unwrap(),
       0
+    );
+    assert_eq!(
+      drop_stale_pages(&conn, "book", "c2.xhtml#kobo.1.1").unwrap(),
+      0
+    );
+    // Inside page b but not at its start (device test 8 Nov 2026): both go.
+    assert_eq!(
+      stale_pages(&conn, "book", "c2.xhtml#kobo.6.1:3")
+        .unwrap()
+        .len(),
+      2
     );
     // Behind both pages of c2: they go, c3 stays.
     assert_eq!(

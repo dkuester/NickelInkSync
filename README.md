@@ -36,8 +36,8 @@ nickelinksync pull --device /Volumes/KOBOeReader
 | Command | What it does |
 |---|---|
 | `status` | Lists the sideloaded books with hash, stored position, KOReader XPointer and, if configured, the position on the server. |
-| `push` | Sends each book's position to the server. A position the server got after the book was last read on the device is never overwritten; by default it also asks before moving the server back to an earlier place in the book (see `confirm` below). `--force` sends without asking, `--dry-run` only shows what would be sent. |
-| `pull` | Shows which books have a newer position on the server, how the device would store it and where it would ask first. Only with `--write` is it written to the device (Tolino and Kobo, experimental, see below); `--force` takes the server position without asking. |
+| `push` | Sends each book's position to the server. A position the server got after the book was last read on the device is never overwritten; by default it also asks before moving the server back to an earlier place in the book (see `confirm` below). `--force` sends without asking, `--dry-run` only shows what would be sent. `--answered <server time>` (for the plugin's conflict dialog, one book with `--content-id`) sends as `--force` does, but only while the server still holds the position it stored at that time. |
+| `pull` | Shows which books have a newer position on the server, how the device would store it and where it would ask first. Only with `--write` is it written to the device (Tolino and Kobo, experimental, see below); `--force` takes the server position without asking; `--answered <server time>` (the plugin's conflict dialog) does so only while the server still holds the position it stored at that time. |
 | `sync --pending` | Sends the books whose push failed on the device (no network, a server error), as kept in `.adds/NickelInkSync/state.json`, if they still should be sent (see [The last agreed position](#the-last-agreed-position)). |
 
 All three take `--book <text>` to limit them to books whose title or file
@@ -81,10 +81,10 @@ rollback journal (`-journal`) lies next to the database. The `-wal` and
 `-shm` files that Tolino 5.18.279364 leaves on the USB partition are folded
 into the database (the backup then holds their content too). Eject the device before you open
 the book. On Kobo 6.0 and Tolino 5.18.279364 Nickel opens a book from its
-cache of rendered pages and, when no cached page holds the written place,
+cache of rendered pages and, when no cached page starts at the written place,
 at the first page of that chapter if that page is cached. So the write also
 drops the cached pages of that chapter (only of that chapter, and only when
-none holds the place) and says so. Nickel looks these pages up in the
+none starts at the place) and says so. Nickel looks these pages up in the
 database each time it opens a book, so ejecting is enough; should the book
 still open at the start of the chapter, restart the device.
 
@@ -409,17 +409,22 @@ opens there, when you leave the book it sends yours. It calls the same
 `nickelinksync` program on the device and follows the same `confirm` rule
 and [last agreed position](#the-last-agreed-position).
 
-**What 0.1.0 does and does not do.** The plugin is experimental and is
+**What the plugin does and does not do.** The plugin is experimental and is
 tested only on the Kobo Clara BW (firmware 6.0.279225), the Kobo Libra 2
 (4.38.23852) and the Tolino Shine Color (5.18.279364); on any other
 firmware nobody has checked it.
 
 - **A conflict** (a book read on both sides since they last agreed, and
-  the server's place lies further back) **has no dialog yet**: the book
-  stays as it is, nothing is fetched and nothing is sent, a message
-  ("Konflikt, nicht geladen", later "Nicht gesendet") and a line in the
-  log say so. Settle it on the computer, in the desktop client or with
-  `pull` / `push` (`--force` to decide). The dialog is planned for 0.1.1.
+  the server's place lies further back) is asked about before the book
+  opens, in one of Nickel's dialogs with both sides (percent, section,
+  device, time): "Server übernehmen" opens the book at the server's
+  position, "Gerät behalten" sends the device's, "Später" (or closing the
+  dialog) leaves both alone and asks again at the next opening. If the
+  server changed while the dialog was open, nothing is overwritten. The
+  dialog is German only, like the plugin's messages. Without the dialog's
+  symbols the book stays as it is and a message and a line in the log say
+  so; settle it then on the computer (`pull` / `push`, `--force` to
+  decide).
 - **The device has to be [prepared](#book-mapping-in-progress)** on the
   computer first (`device prepare`, again after mapping or adding
   books): without it the plugin still fetches, but sends nothing and says
@@ -464,8 +469,8 @@ runs: on a Kobo through Nickel's own database functions, as the reader
 [Kobalt](https://github.com/nicoverbruggen/kobalt) does, on a Tolino with
 the `nickelinksync` program. Either way it first keeps one backup of the
 database a day in `.adds/NickelInkSync/backups/` (the two newest), and
-drops the pages of that chapter Nickel has kept rendered when none of them
-holds the place (else Nickel would open at the chapter start).
+drops the pages of that chapter Nickel has kept rendered unless one of them
+starts at the place (else Nickel would open at the chapter start).
 
 Leaving a book never waits: the push follows when Wi-Fi is up, or after
 15 seconds anyway. If it cannot reach the server (no Wi-Fi, a server

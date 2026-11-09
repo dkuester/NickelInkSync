@@ -29,7 +29,8 @@ use crate::prepare::Prepared;
 use crate::restore;
 use crate::state::{Base, Entry, State};
 use crate::sync::{
-  decide, decide_since, iso_timestamp, parse_timestamp, Confirm, Decision, Direction, Local, Moved,
+  decide, decide_since, goes_backwards, iso_timestamp, parse_timestamp, Confirm, Decision,
+  Direction, Local, Moved,
 };
 use crate::table::Table;
 use crate::transfer::{step_back, transfer, How};
@@ -862,7 +863,52 @@ impl Session {
       Err(_) => local,
     };
     let moved = |remote: &Progress| self.moved(book, document, remote);
-    push_ready(local, note, remote, moved, confirm, (force, forced))
+    let mut outcome = push_ready(local, note, remote, moved, confirm, (force, forced));
+    // A conflict the reader put off is asked again.
+    if let PushOutcome::Ready {
+      local,
+      remote: Some(remote),
+      moved,
+      action,
+      ..
+    } = &mut outcome
+    {
+      if !force && matches!(action, Action::Apply | Action::Keep) {
+        let decision = self.ask_again(book, remote, *moved, local, Direction::Push, Decision::Keep);
+        if let Decision::Ask { backwards, .. } = decision {
+          *action = Action::Ask { backwards };
+        }
+      }
+    }
+    outcome
+  }
+
+  /// A conflict the reader put off with "later" (`deferred` in
+  /// `state.json`) stays one while the server holds the position it was
+  /// about: both moved, so Nickel's `DateLastRead`, which opening and
+  /// leaving bump, must not decide. `decision` is what the usual rule
+  /// said; an apply or keep becomes an ask.
+  fn ask_again(
+    &self,
+    book: &Book,
+    remote: &Progress,
+    moved: Option<Moved>,
+    local: &Local,
+    direction: Direction,
+    decision: Decision,
+  ) -> Decision {
+    let deferred = moved == Some(Moved::Both)
+      && self
+        .state
+        .borrow()
+        .deferred(&book.content_id, remote.timestamp, &remote.progress);
+    match decision {
+      Decision::Apply | Decision::Keep if deferred => Decision::Ask {
+        backwards: goes_backwards(direction, local, remote),
+        newer: decision == Decision::Apply,
+      },
+      _ => decision,
+    }
   }
 
   /// What `pull` would do with `book`; asks the server. `force` takes the
@@ -927,7 +973,14 @@ impl Session {
         )
       }
       (Some(local), None) => (
-        decide_since(Direction::Pull, local, &remote, moved, confirm),
+        self.ask_again(
+          book,
+          &remote,
+          moved,
+          local,
+          Direction::Pull,
+          decide_since(Direction::Pull, local, &remote, moved, confirm),
+        ),
         None,
       ),
       (None, _) => (Decision::Apply, None),
