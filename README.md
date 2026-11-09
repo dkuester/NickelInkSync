@@ -489,6 +489,21 @@ sent, not by the plugin and not by `push` on the computer (unless
 on opening or over USB, takes the server's position again, even though
 the device's "last read" now looks newer.
 
+**Dialog, "sync now", mapping on the device (Kobo only).** The plugin has
+its own dialog: what is on the pending list, which books on the device do
+not sync, **Jetzt synchronisieren** (sends the pending list and always says
+what came of it) and **Zuordnen …**, which offers, book by book, the library
+originals that fit by title and author (from the index `device prepare`
+left, so the library has to be in it). A mapping made here is saved as
+`added` in `mappings.json`; the translation table comes from the original,
+which never goes onto the device, so the book waits ("Zuordnung nicht
+vorbereitet") until `device prepare` runs on the computer again. Open it from
+a NickelMenu entry (copy `.adds/nm/nickelinksync` of the device package to
+`.adds/nm/` on the e-reader; on Kobo 6.0 NickelMenu exists only as the Qt 6
+fork of nicoverbruggen, on 4.x as upstream NickelMenu) or from the
+**NickelInkSync** entry in the menu (⋯) of a book on the device. With Kobalt
+installed neither does anything.
+
 Each outcome shows as a short message at the bottom of the screen (in
 German for now), for example "Fortschritt übernommen" with the percentage
 and the device that sent it, "Fortschritt vorgemerkt" when it will be sent

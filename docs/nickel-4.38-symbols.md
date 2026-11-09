@@ -164,3 +164,12 @@ file is for which firmware.
    `isTolino()` is always false).
 6. The release workflow's device package gets `KoboRoot.tgz` next to
    `Kobo.tgz` (`tools/build_plugin_qt5.sh`, see the C9 handover note).
+
+## The surface (C6)
+
+The Qt 5 build of the C6 plugin (dialog, trigger file, book menu entry)
+compiles with the 4.38 signature of `setupBookListMenu` (no `bool`) and its
+symbols are in the reference list; it has not run on 4.38 yet (the Libra 2
+test of C6 is the first). The NickelMenu entry on 4.x is upstream
+NickelMenu (pgaskin), not the Qt 6 fork. See the section of the same name in
+[nickel-6.0-symbols.md](nickel-6.0-symbols.md#the-surface-c6).

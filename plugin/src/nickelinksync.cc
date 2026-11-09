@@ -101,6 +101,13 @@
  * Nickel's reader (with Kobalt as the default reader Nickel's own is not
  * used); `ignore-kobalt` next to the CLI syncs anyway (tests).
  *
+ * Surface (Kobo, stage C6): a dialog (pending books, books that do not
+ * sync, "Jetzt synchronisieren", mapping a book on the device from the
+ * library index by title and author), opened from a file `trigger` that a
+ * NickelMenu entry writes (`nickelinksync device trigger …`) or from an entry
+ * in a sideloaded book's menu. A mapping made here waits for the table the
+ * computer builds at the next `device prepare`. Kobalt stops every entry.
+ *
  * Symbols and signatures: docs/nickel-6.0-symbols.md (Kobo 6.0, the write
  * path) and docs/nickel-5.18-symbols.md (Tolino 5.18).
  *
@@ -2224,7 +2231,7 @@ static void map_show_suggestion(const std::shared_ptr<MapAsk> &m)
     const QString title = QString::fromUtf8(s.value(1));
     const QString authors = QString::fromUtf8(s.value(2));
     const bool more = m->at + 1 < m->suggestions.size();
-    const QString text = QStringLiteral("<b>Auf dem Gerät:</b> %1<br><br><b>Passt zu:</b> %2<br>%3 %% Übereinstimmung von Titel und Autor "
+    const QString text = QStringLiteral("<b>Auf dem Gerät:</b> %1<br><br><b>Passt zu:</b> %2<br>%3 % Übereinstimmung von Titel und Autor "
                                         "(Vorschlag %4 von %5)<br><br>Die Tabelle für dieses Buch entsteht am Rechner "
                                         "(„Gerät vorbereiten“), erst dann wird gesendet.")
                              .arg(b.label().toHtmlEscaped(),

@@ -333,3 +333,29 @@ offset (`kobo.87.1`, no `:0`) is the cause. `stale_pages` therefore drops
 the chapter's pages unless one starts at the place (a missing offset equals
 `:0`). To confirm on the device: read on to a place, have the server move
 the position inside a cached page, open.
+
+## The surface (C6)
+
+Checked in the Kobo VM on 2026-11-09 (the plugin from the C6 branch):
+
+- **Book menu entry.** The hook on `ActionProxyMixin::setupBookListMenu`
+  calls the original, then for a sideloaded book
+  `createMenuTextItem(menu, "NickelInkSync", false, false, "nickelinksyncItem")`
+  and `createAction(menu, item, true, true, false)`, both called on the
+  `AbstractNickelMenuController` the hook was given. The entry is the last
+  of the book's menu (after "Entfernen"), and a tap fires the action's
+  `triggered()`. The values of the `bool`s are the ones that worked, not
+  derived from the disassembly. Their symbols and the hook are marked
+  optional (`Book menu entry` in `plugin/src/nickelinksync.cc`;
+  `tools/check_plugin_symbols.py` only says when they are missing from a
+  firmware, as the Tolino 5.18 list might lack them).
+- **Trigger file.** A NickelMenu entry cannot call into the plugin, so it
+  runs `nickelinksync device trigger menu|sync|map`, which writes
+  `.adds/NickelInkSync/trigger`; a `QFileSystemWatcher` on that folder
+  (inotify, no polling) picks it up 300 ms later, removes the file and
+  goes through the same checks as an opening (active, Kobo, no Kobalt).
+- **Dialogs.** `getConfirmationDialog(nullptr)`, `open()` from the event
+  loop, a third `N3ButtonLabel` and the answer by `tapped(bool)`, as in C5;
+  one at a time (a second waits). In the VM the dialog needs about 30 s to
+  be drawn completely (qemu); a screenshot taken earlier shows the home
+  screen or half a dialog.
