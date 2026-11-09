@@ -251,6 +251,18 @@ enum DeviceCommand {
     #[arg(long)]
     original: String,
   },
+  /// What a NickelMenu entry runs (`.adds/nm/NickelInkSync`): asks the
+  /// plugin to open its dialog by putting `menu`, `sync` or `map` into
+  /// `.adds/NickelInkSync/trigger`, which the plugin picks up and removes
+  Trigger {
+    /// `menu` (the dialog), `sync` (send what is pending now) or `map`
+    /// (map the books that do not sync)
+    #[arg(value_parser = ["menu", "sync", "map"])]
+    what: String,
+    /// Mount point of the device
+    #[arg(long, default_value = "/mnt/onboard")]
+    device: PathBuf,
+  },
   /// Look at a mounted device before a test, and write nothing: model and
   /// firmware, plugin and program (against a new build), config.ini
   /// (never the password), Kobalt, whether it is prepared, what is pending
@@ -1745,6 +1757,12 @@ fn open_library(args: &LibraryArgs) -> Result<Option<Library>> {
 fn device(command: DeviceCommand) -> Result<bool> {
   let (device, library) = match command {
     DeviceCommand::Prepare { device, library } => (device, library),
+    DeviceCommand::Trigger { what, device } => {
+      let dir = device.join(prepare::DIR);
+      std::fs::create_dir_all(&dir)?;
+      std::fs::write(dir.join("trigger"), format!("{what}\n"))?;
+      return Ok(true);
+    }
     DeviceCommand::Unsynced { on } => return device_unsynced(&on),
     DeviceCommand::Suggest { on } => return device_suggest(&on),
     DeviceCommand::MapBook { on, original } => return device_map(&on, &original),
@@ -1819,11 +1837,10 @@ fn device_unsynced(on: &OnDeviceArgs) -> Result<bool> {
     emit_line("NO_INDEX", &["Gerät nicht vorbereitet"]);
     return Ok(false);
   };
-  for b in books.iter().filter(|b| {
-    on.content_id
-      .as_deref()
-      .map_or(true, |id| b.content_id == id)
-  }) {
+  for b in books
+    .iter()
+    .filter(|b| on.content_id.as_deref().is_none_or(|id| b.content_id == id))
+  {
     emit_line(
       "UNSYNCED",
       &[

@@ -69,7 +69,10 @@ impl Setup {
     let mut command = Command::new(env!("CARGO_BIN_EXE_nickelinksync"));
     command.args(args).arg("--device").arg(&self.root);
     // The plugin's dialog commands take no configuration file.
-    if !matches!(args.get(1), Some(&("unsynced" | "suggest" | "map-book"))) {
+    if !matches!(
+      args.get(1),
+      Some(&("unsynced" | "suggest" | "map-book" | "trigger"))
+    ) {
       command.arg("--config").arg(&self.config);
     }
     let output = command
@@ -225,7 +228,7 @@ fn an_original_is_not_mapped_to_itself_and_an_unknown_one_is_refused() {
   assert!(out.contains("not in the library index"), "{out}");
   assert!(s.device_mappings()["added"]
     .as_array()
-    .map_or(true, |a| a.is_empty()));
+    .is_none_or(|a| a.is_empty()));
 }
 
 #[test]
@@ -258,4 +261,17 @@ fn kobalt_stops_the_dialogs_commands() {
     assert!(!output.status.success(), "{out}");
     assert!(out.contains("NICKELINKSYNC_ERROR\tkobalt"), "{out}");
   }
+}
+
+#[test]
+fn trigger_writes_the_order_for_the_plugin() {
+  let s = Setup::new("trigger");
+  let (output, out) = s.run(&["device", "trigger", "sync"]);
+  assert!(output.status.success(), "{out}");
+  assert_eq!(
+    fs::read_to_string(s.dir().join("trigger")).unwrap(),
+    "sync\n"
+  );
+  let (output, _) = s.run(&["device", "trigger", "other"]);
+  assert!(!output.status.success());
 }
