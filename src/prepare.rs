@@ -270,20 +270,25 @@ pub fn prepare(
   let mut on_device: HashMap<String, OnDevice> = HashMap::new();
   for book in device.db.sideloaded_books()? {
     let file = device.book_file(&book);
+    // Libra Colour keeps stale UUID rows in `content` after a book is gone;
+    // do not report those as read errors when resolving its `.kobo/kepub`
+    // layout. Missing legacy paths remain errors because they indicate a
+    // damaged or unexpectedly changed device database.
+    if book.is_kepub() && book.onboard_path() == book.content_id && !file.is_file() {
+      continue;
+    }
     match partial_md5(&file) {
       Ok(hash) => {
         on_device.insert(
           hash,
           OnDevice {
-            path: book.onboard_path().to_string(),
+            path: book.storage_path(),
             title: book.title.clone(),
             file,
           },
         );
       }
-      Err(e) => report
-        .failed
-        .push((book.onboard_path().to_string(), e.to_string())),
+      Err(e) => report.failed.push((book.storage_path(), e.to_string())),
     }
   }
 

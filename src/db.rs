@@ -84,7 +84,7 @@ impl Device {
 
   /// Where the book file is on the mounted storage.
   pub fn book_file(&self, book: &Book) -> PathBuf {
-    self.root.join(book.onboard_path())
+    self.root.join(book.storage_path())
   }
 
   pub fn db_path(&self) -> PathBuf {
@@ -580,6 +580,7 @@ impl Firmware {
     match self.model_id.rsplit('-').next()?.trim_start_matches('0') {
       "388" => Some("Kobo Libra 2"),
       "391" => Some("Kobo Clara BW"),
+      "390" => Some("Kobo Libra Colour"),
       "693" => Some("Tolino Shine Color"),
       _ => None,
     }
@@ -606,12 +607,20 @@ pub struct Book {
 }
 
 impl Book {
-  /// Path relative to the root of the device storage.
+  /// ContentID with the old Kobo `file:` prefix removed.
   pub fn onboard_path(&self) -> &str {
     self
       .content_id
       .strip_prefix(ONBOARD)
       .unwrap_or(&self.content_id)
+  }
+
+  /// Path relative to the root of the device storage.
+  pub fn storage_path(&self) -> String {
+    if self.onboard_path() == self.content_id && self.is_kepub() && !self.content_id.contains('/') {
+      return format!(".kobo/kepub/{}", self.content_id);
+    }
+    self.onboard_path().to_string()
   }
 
   /// Nickel reads the file as a kepub. A Tolino reads a `.kepub.epub` as a
@@ -680,13 +689,15 @@ impl DeviceDb {
     )
   }
 
-  /// Books with a `ContentID` under `file:///mnt/onboard/`, by path.
+  /// Sideloaded books, including kepubs stored by newer Kobo firmware under
+  /// `.kobo/kepub/<UUID>` rather than as a `file:///mnt/onboard/` URI.
   pub fn sideloaded_books(&self) -> Result<Vec<Book>, rusqlite::Error> {
     let mut stmt = self.conn.prepare(
       "SELECT ContentID, Title, Attribution, MimeType, ChapterIDBookmarked,
               ___PercentRead, DateLastRead, ReadStatus
        FROM content
-       WHERE ContentType = '6' AND ContentID LIKE ?1 || '%'
+       WHERE ContentType = '6' AND (ContentID LIKE ?1 || '%'
+         OR (MimeType = 'application/x-kobo-epub+zip' AND ContentID NOT LIKE '%/%'))
        ORDER BY ContentID",
     )?;
     let books = stmt.query_map([ONBOARD], |row| {
@@ -737,7 +748,30 @@ mod tests {
     )
     .unwrap();
     assert_eq!(fw.model_name(), Some("Kobo Libra 2"));
+    let fw = Firmware::parse(
+      "N4283C0008498,4.9.77,4.46.23852,4.9.77,4.9.77,00000000-0000-0000-0000-000000000390\n",
+    )
+    .unwrap();
+    assert_eq!(fw.model_name(), Some("Kobo Libra Colour"));
     assert!(Firmware::parse("garbage").is_none());
+  }
+
+  #[test]
+  fn uuid_kepub_uses_kobo_cache_path() {
+    let book = Book {
+      content_id: "01234567-89ab-cdef-0123-456789abcdef".into(),
+      title: Some("Test book".into()),
+      author: Some("Test author".into()),
+      mime_type: "application/x-kobo-epub+zip".into(),
+      position: None,
+      percent_read: 0,
+      last_read: None,
+      read_status: 0,
+    };
+    assert_eq!(
+      book.storage_path(),
+      ".kobo/kepub/01234567-89ab-cdef-0123-456789abcdef"
+    );
   }
 
   #[test]

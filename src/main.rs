@@ -527,7 +527,7 @@ fn status(target: &Target) -> Result<bool> {
   for book in &session.books {
     heading(book);
     let format = if book.is_kepub() { "kepub" } else { "EPUB" };
-    println!("  file      {} ({format})", book.onboard_path());
+    println!("  file      {} ({format})", book.storage_path());
     let identity = session.identity(book);
     if let Some(hash) = identity.device_hash() {
       println!("  hash      {hash}");

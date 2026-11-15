@@ -90,7 +90,7 @@ pub fn device_books(
       chapters,
       book: DeviceBook::File {
         hash,
-        path: book.onboard_path().to_string(),
+        path: book.storage_path(),
         title: book.title,
         author: book.author,
       },
