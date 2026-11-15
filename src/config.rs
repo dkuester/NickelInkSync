@@ -53,11 +53,14 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Config {
   /// Base URL, e.g. `https://kosync.eu`.
   pub server: String,
   pub user: String,
+  /// Plaintext password when it was supplied in config.ini. CWA uses HTTP
+  /// Basic authentication in addition to the KOSync headers.
+  pub(crate) password: Option<String>,
   /// MD5 of the password, as sent in `x-auth-key`.
   pub key: String,
   /// Device name shown on the server; defaults to the model of the device.
@@ -72,6 +75,23 @@ pub struct Config {
   pub library: Option<PathBuf>,
   /// Which place `push` sends.
   pub position: PushPosition,
+}
+
+impl fmt::Debug for Config {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    f.debug_struct("Config")
+      .field("server", &self.server)
+      .field("user", &self.user)
+      .field("password", &self.password.as_ref().map(|_| "<redacted>"))
+      .field("key", &self.key)
+      .field("device", &self.device)
+      .field("device_id", &self.device_id)
+      .field("confirm", &self.confirm)
+      .field("notify", &self.notify)
+      .field("library", &self.library)
+      .field("position", &self.position)
+      .finish()
+  }
 }
 
 /// `position`: which place `push` sends. The reading position is where the
@@ -267,6 +287,7 @@ impl Config {
     let library = take("library").map(|l| expand_home(&l));
     let position = push_position(path, take("position"))?;
     let missing = |key| Error::Missing(path.to_path_buf(), key);
+    let password_for_basic = password.clone();
     let key = match (password, key) {
       (Some(_), Some(_)) => {
         return Err(Error::Invalid(
@@ -314,6 +335,7 @@ impl Config {
     Ok(Config {
       server: server.ok_or_else(|| missing("server"))?,
       user: user.ok_or_else(|| missing("user"))?,
+      password: password_for_basic,
       key,
       device,
       device_id,
@@ -747,6 +769,14 @@ mod tests {
     assert_eq!(c.key, "5ebe2294ecd0e0f08eab7690d2a6ee69");
     assert_eq!(c.device, None);
     assert_eq!(c.confirm, Confirm::Backwards);
+  }
+
+  #[test]
+  fn debug_redacts_password() {
+    let config = parse("server=https://example.org\nuser=alice\npassword=secret").unwrap();
+    let debug = format!("{config:?}");
+    assert!(debug.contains("<redacted>"));
+    assert!(!debug.contains("secret"));
   }
 
   #[test]
