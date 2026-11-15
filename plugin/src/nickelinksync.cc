@@ -232,6 +232,34 @@ static const char kPushTimeout[] = "15";
 static const int kPushWaitMs = 60000;
 // How long after opening the pending list is sent: the book is drawn by then.
 static const int kPendingDelayMs = 5000;
+// Libra Colour 4.46 can return from saveProgress before its SQLite WAL is
+// visible to the helper process; let Nickel finish the close transaction.
+static const int kPushAfterLeaveDelayMs = 1000;
+
+static bool is_sideloaded_id(const QString &id)
+{
+    if (id.startsWith(QString::fromLatin1(kSideloaded))) {
+        return true;
+    }
+    if (id.size() != 36) {
+        return false;
+    }
+    for (int i = 0; i < id.size(); ++i) {
+        if (i == 8 || i == 13 || i == 18 || i == 23) {
+            if (id.at(i) != QLatin1Char('-')) {
+                return false;
+            }
+            continue;
+        }
+        const ushort c = id.at(i).unicode();
+        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+              (c >= 'A' && c <= 'F'))) {
+            return false;
+        }
+    }
+    return QFile::exists(QString::fromLatin1(kOnboard) +
+                         QStringLiteral("/.kobo/kepub/") + id);
+}
 
 // Originals, filled by NickelHook (.out).
 static void (*ReadingController__setVolume)(ReadingController *, const Volume *, const Bookmark *);
@@ -1235,6 +1263,9 @@ static bool write_through_nickel(const QString &id, const Pulled &p)
         Repository__refreshCache_Volume(db);
         return false;
     }
+    // Libra Colour 4.46 keeps a stale Volume in Nickel's repository after
+    // updateFields; refresh it before getById hands the book back to Nickel.
+    Repository__refreshCache_Volume(db);
     log_line(QStringLiteral("write: %1 through Nickel, %2 cached page(s) dropped").arg(position).arg(p.stale_pages.size()));
     return true;
 }
@@ -1730,7 +1761,7 @@ void _nh_ReadingController__setVolume(ReadingController *self, const Volume *vol
     g_unasked_id.clear();
     g_taken_id.clear();
     g_taken_page.clear();
-    if (!id.startsWith(QString::fromLatin1(kSideloaded))) {
+    if (!is_sideloaded_id(id)) {
         open_original(self, volume, bookmark);
         return;
     }
@@ -1966,7 +1997,7 @@ void _nh_ReadingView__leavingReadingExperience(ReadingView *self)
     const bool on_unasked_page = !g_unasked_at.isEmpty() && g_unasked_id == g_open_id && leaving_at == g_unasked_at;
     // First Nickel saves the position.
     ReadingView__leavingReadingExperience(self);
-    if (!g_open_id.startsWith(QString::fromLatin1(kSideloaded))) {
+    if (!is_sideloaded_id(g_open_id)) {
         return;
     }
     const QString id = g_open_id;
@@ -1994,7 +2025,9 @@ void _nh_ReadingView__leavingReadingExperience(ReadingView *self)
         }
         return;
     }
-    when_online(kWifiLeaveWaitS, [id] { start_push(id); });
+    when_online(kWifiLeaveWaitS, [id] {
+        QTimer::singleShot(kPushAfterLeaveDelayMs, qApp, [id] { start_push(id); });
+    });
 }
 
 // NickelHook's GOT patcher (plugin/NickelHook/nh.c, linked into this

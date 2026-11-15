@@ -489,7 +489,7 @@ impl Session {
     }
     // A kepub never reaches the server under its own checksum: KOReader
     // knows the book by its original EPUB, so only a mapping syncs it.
-    if book.is_kepub() || book.onboard_path().ends_with(".kepub.epub") {
+    if book.is_kepub() || book.storage_path().ends_with(".kepub.epub") {
       return Identity::Skip {
         hash: Some(hash),
         kind: "not-mapped",
@@ -552,7 +552,7 @@ impl Session {
         },
       };
     }
-    if book.is_kepub() || book.onboard_path().ends_with(".kepub.epub") {
+    if book.is_kepub() || book.storage_path().ends_with(".kepub.epub") {
       return Identity::Skip {
         hash: Some(hash),
         kind: "not-mapped",
@@ -1239,7 +1239,7 @@ pub fn select(mut books: Vec<Book>, filter: Option<&str>, content_id: Option<&st
   if let Some(filter) = filter {
     let filter = filter.to_lowercase();
     books.retain(|b| {
-      b.onboard_path().to_lowercase().contains(&filter)
+      b.storage_path().to_lowercase().contains(&filter)
         || b
           .title
           .as_deref()
