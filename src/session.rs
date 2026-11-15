@@ -109,7 +109,13 @@ impl Server {
       false => config::permission_warning(&path),
     };
     let timeout = options.timeout.max(Duration::from_secs(1));
-    let client = Client::with_timeout(&config.server, &config.user, &config.key, timeout);
+    let client = Client::with_timeout_and_password(
+      &config.server,
+      &config.user,
+      &config.key,
+      config.password.as_deref(),
+      timeout,
+    );
     Ok(Some(Server {
       config,
       client,

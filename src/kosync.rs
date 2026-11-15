@@ -19,6 +19,7 @@
 use std::fmt;
 use std::time::Duration;
 
+use base64::Engine as _;
 use md5::{Digest, Md5};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -108,6 +109,7 @@ pub struct Client {
   base: String,
   user: String,
   key: String,
+  basic_auth: Option<String>,
 }
 
 impl Client {
@@ -119,6 +121,19 @@ impl Client {
 
   /// Like [`Client::new`], with a limit for each request as a whole.
   pub fn with_timeout(server: &str, user: &str, key: &str, timeout: Duration) -> Self {
+    Self::with_timeout_and_password(server, user, key, None, timeout)
+  }
+
+  /// Like [`Client::with_timeout`], also sending HTTP Basic credentials when
+  /// a plaintext password is present. Some KOSync-compatible servers need
+  /// this alongside the standard KOSync headers.
+  pub fn with_timeout_and_password(
+    server: &str,
+    user: &str,
+    key: &str,
+    password: Option<&str>,
+    timeout: Duration,
+  ) -> Self {
     let agent = Agent::config_builder()
       .http_status_as_error(false)
       .timeout_global(Some(timeout))
@@ -130,14 +145,27 @@ impl Client {
       base: server.trim_end_matches('/').to_string(),
       user: user.to_string(),
       key: key.to_string(),
+      basic_auth: password.map(|password| {
+        let credentials = format!("{user}:{password}");
+        format!(
+          "Basic {}",
+          base64::engine::general_purpose::STANDARD.encode(credentials)
+        )
+      }),
+    }
+  }
+
+  fn auth<B>(&self, request: ureq::RequestBuilder<B>) -> ureq::RequestBuilder<B> {
+    match &self.basic_auth {
+      Some(value) => request.header("authorization", value),
+      None => request,
     }
   }
 
   /// Checks user and key (`GET /users/auth`).
   pub fn authorize(&self) -> Result<(), Error> {
     let response = self
-      .agent
-      .get(format!("{}/users/auth", self.base))
+      .auth(self.agent.get(format!("{}/users/auth", self.base)))
       .header("x-auth-user", &self.user)
       .header("x-auth-key", &self.key)
       .header("accept", ACCEPT)
@@ -148,8 +176,11 @@ impl Client {
   /// The stored progress of `document`, `None` if the server has none.
   pub fn progress(&self, document: &str) -> Result<Option<Progress>, Error> {
     let response = self
-      .agent
-      .get(format!("{}/syncs/progress/{document}", self.base))
+      .auth(
+        self
+          .agent
+          .get(format!("{}/syncs/progress/{document}", self.base)),
+      )
       .header("x-auth-user", &self.user)
       .header("x-auth-key", &self.key)
       .header("accept", ACCEPT)
@@ -161,8 +192,7 @@ impl Client {
   /// one.
   pub fn update(&self, update: &Update) -> Result<Option<i64>, Error> {
     let response = self
-      .agent
-      .put(format!("{}/syncs/progress", self.base))
+      .auth(self.agent.put(format!("{}/syncs/progress", self.base)))
       .header("x-auth-user", &self.user)
       .header("x-auth-key", &self.key)
       .header("accept", ACCEPT)
@@ -244,6 +274,18 @@ mod tests {
   #[test]
   fn key_is_md5_of_password() {
     assert_eq!(auth_key("secret"), "5ebe2294ecd0e0f08eab7690d2a6ee69");
+  }
+
+  #[test]
+  fn basic_auth_header_is_encoded() {
+    let client = Client::with_timeout_and_password(
+      "https://example.org",
+      "alice",
+      "unused",
+      Some("secret"),
+      Duration::from_secs(1),
+    );
+    assert_eq!(client.basic_auth.as_deref(), Some("Basic YWxpY2U6c2VjcmV0"));
   }
 
   #[test]
